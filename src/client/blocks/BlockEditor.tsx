@@ -53,6 +53,9 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
       return range.empty && view.moveVertically(range, forward).head === range.head
     }
 
+    const runRedo = (view: EditorView) =>
+      redoDepth(view.state) > 0 ? redo(view) : handled({ type: 'redo' })
+
     const keys = keymap.of([
       { key: 'Escape', run: (view) => handled({ type: 'commit', id, text: text(view) }) },
       {
@@ -101,14 +104,8 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
         key: 'Mod-z',
         run: (view) => (undoDepth(view.state) > 0 ? undo(view) : handled({ type: 'undo' })),
       },
-      {
-        key: 'Mod-Shift-z',
-        run: (view) => (redoDepth(view.state) > 0 ? redo(view) : handled({ type: 'redo' })),
-      },
-      {
-        key: 'Mod-y',
-        run: (view) => (redoDepth(view.state) > 0 ? redo(view) : handled({ type: 'redo' })),
-      },
+      { key: 'Mod-Shift-z', run: runRedo },
+      { key: 'Mod-y', run: runRedo },
     ])
 
     const anchor =
