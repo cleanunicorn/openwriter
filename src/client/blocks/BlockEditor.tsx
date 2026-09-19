@@ -6,6 +6,7 @@ import { EditorView, keymap } from '@codemirror/view'
 import { useEffect, useRef } from 'react'
 import type { DocRef } from '../../shared/api-types.ts'
 import { api } from '../api.ts'
+import { editorSelection } from '../jobs/selection.ts'
 import { dispatchDoc } from '../state/app.ts'
 import type { FocusCursor } from '../state/doc-reducer.ts'
 
@@ -131,6 +132,17 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
           EditorView.contentAttributes.of({ 'aria-label': 'Block editor', 'data-block-id': id }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) send({ type: 'draft', id, text: text(update.view) })
+            if (update.selectionSet || update.docChanged) {
+              const range = update.state.selection.main
+              editorSelection.current = range.empty
+                ? null
+                : {
+                    id,
+                    from: range.from,
+                    to: range.to,
+                    text: update.state.sliceDoc(range.from, range.to),
+                  }
+            }
           }),
           EditorView.domEventHandlers({
             blur: (_event, current) => {

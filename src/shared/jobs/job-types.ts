@@ -88,6 +88,8 @@ export const JobSchema = z.object({
   /** Op index → decision. */
   decisions: z.record(z.string(), DecisionSchema),
   progress: z.array(z.string()),
+  /** Bumped on every server-side change; lets the client ignore an older copy of the job. */
+  revision: z.number().int().min(0).default(0),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

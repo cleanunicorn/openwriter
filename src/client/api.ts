@@ -10,6 +10,25 @@ import {
   SaveResponseSchema,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
+import {
+  DecisionsResponseSchema,
+  type JobRequest,
+  JobSchema,
+  JobsResponseSchema,
+} from '../shared/jobs/job-types.ts'
+import { z as zod } from 'zod'
+
+export const SkillInfoSchema = zod.object({
+  name: zod.string(),
+  description: zod.string(),
+  scope: zod.enum(['blocks', 'article', 'research']),
+  task: zod.string().optional(),
+  stub: zod.boolean(),
+  requires: zod.array(zod.string()),
+  document: zod.enum(['current', 'brief', 'article']),
+})
+export type SkillInfo = zod.infer<typeof SkillInfoSchema>
+const Ok = zod.object({ ok: zod.boolean() })
 
 export class ApiError extends Error {
   readonly status: number
@@ -63,6 +82,18 @@ export const api = {
       },
     }),
   config: () => request(ConfigResponseSchema, '/api/config'),
+  jobs: () => request(JobsResponseSchema, '/api/jobs'),
+  createJob: (body: JobRequest) => request(JobSchema, '/api/jobs', { method: 'POST', body }),
+  cancelJob: (id: string) => request(JobSchema, `/api/jobs/${id}/cancel`, { method: 'POST' }),
+  decide: (id: string, accepted: number[], rejected: number[]) =>
+    request(DecisionsResponseSchema, `/api/jobs/${id}/decisions`, {
+      method: 'POST',
+      body: { accepted, rejected },
+    }),
+  staleJob: (id: string, reason: string) =>
+    request(JobSchema, `/api/jobs/${id}/stale`, { method: 'POST', body: { reason } }),
+  dismissJob: (id: string) => request(Ok, `/api/jobs/${id}/dismiss`, { method: 'POST' }),
+  skills: () => request(zod.object({ skills: zod.array(SkillInfoSchema) }), '/api/skills'),
   saveConfig: (config: Config) =>
     request(ConfigResponseSchema, '/api/config', { method: 'PUT', body: config }),
 }

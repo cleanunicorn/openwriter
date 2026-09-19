@@ -85,7 +85,12 @@ export class JobManager {
   }
 
   private update(entry: Entry, patch: Partial<Job>): void {
-    entry.file.job = { ...entry.file.job, ...patch, updatedAt: new Date().toISOString() }
+    entry.file.job = {
+      ...entry.file.job,
+      ...patch,
+      revision: entry.file.job.revision + 1,
+      updatedAt: new Date().toISOString(),
+    }
     saveJobFile(this.jobDir(entry.file.job.id), entry.file)
     this.options.events.emit({ type: 'job.state', job: entry.file.job })
   }
@@ -156,6 +161,7 @@ export class JobManager {
       rawOutput: null,
       decisions: {},
       progress: [],
+      revision: 0,
       createdAt: now,
       updatedAt: now,
     }

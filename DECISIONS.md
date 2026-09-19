@@ -95,6 +95,58 @@ directory keeps the name `.zen/`.
   only; on anything unexpected the line just says "front matter".
 - **Always-visible controls: none.** The notice line appears only when there is something to say.
 
+## Jobs
+
+- **Block-level queueing runs in the client** (`src/shared/jobs/scheduler.ts`, pure and
+  unit-tested). Only the client knows the live document and whether a job was *settled*, so a
+  conflicting request is held there and posted with a fresh snapshot once its blockers are
+  accepted or rejected. The server enforces only the global concurrency limit (FIFO); waiting for
+  review holds no process slot.
+- **The article barrier is per document and FIFO.** Later block jobs cannot pass a waiting
+  `article` job (no starvation); other documents keep running. `research` takes a process slot
+  but no lock, and the writer's own edits never consult the scheduler.
+- **While a decision is being applied the queue does not start jobs.** The `settled` event can
+  arrive before the accepted ops are in the document; a job started in that window would
+  snapshot the old text.
+- **Jobs carry a monotonic `revision`.** Two state changes can share a millisecond timestamp, and
+  the POST response can arrive after newer SSE events; the client keeps the highest revision.
+- **A virtual anchor `b0`** appears in the snapshot of a document without content, so an ordinary
+  `insert_after b0` creates first content ("draft brief", "draft article"). `result.json` keeps
+  exactly the spec's shape.
+- **Validation is two-stage:** zod (strict — unknown ops or keys reject) and then semantic rules
+  (scope, targets, front matter, one replace/delete per block, asset paths inside `assets/`,
+  assets exist as regular files). Both run on the server before anything reaches the UI; the
+  client re-checks targets against the live document.
+- **One repair attempt.** The rejected file is kept as `result.invalid.json`, the errors go into
+  `repair.md`, and auth, exit, and timeout failures are never "repaired".
+- **Marker spoofing is harmless.** Markers exist only in the job's `article.md`; every
+  `block_id` in a result is validated against the snapshot and the targets.
+- **Accept copies, never moves, and never overwrites.** Only assets referenced by accepted ops
+  go into the bundle; identical content reuses the name, different content gets `name-2.ext`.
+  References are rewritten at exact destination spans only, never by global substring replace.
+  No acceptance journal: the worst crash outcome is an unreferenced file in the bundle.
+- **Several inserts at one anchor keep the result's order** whatever order they were accepted
+  in; the client remembers which blocks each op inserted.
+- **Undoing an accepted result is an ordinary edit.** It never resurrects or re-runs the job.
+- **Timeouts live in the job manager,** not in adapters, so the fake and the real adapters behave
+  the same. Cancel is idempotent and keeps whatever output exists; a proposal that is already
+  complete stays reviewable if cancel races with completion.
+- **Restart and reload.** On server start every unsettled job on disk becomes `stale` with its
+  output kept; a dismissed job does not come back. A page reload does the same for that page's
+  jobs (OD3).
+- **The fake adapter reads and writes the real file contract** and picks its scenario from a
+  `fake:<name>` token in the instruction, so the demo and the tests share it. With
+  `--fake-control` it stops at a checkpoint until `POST /api/__fake/release`; the route is mounted
+  only with that flag (404 otherwise, unit-tested). Tests never sleep.
+- **The prompt pill never takes focus by appearing.** A selection stays a selection (copy,
+  extend, type over). Outside an editor, typing goes into the pill; `Ctrl/Cmd+I` enters it from
+  anywhere. It is anchored to its block and repositions when the layout changes.
+- **Review buttons keep the keyboard focus where it is** (`mousedown` is prevented). Otherwise
+  pressing "Accept" blurs an open editor, the block re-renders, the layout shifts, and the click
+  misses the button.
+- **Always-visible control: the job tray,** and only while at least one job exists. It is the
+  one place that shows running, failed, and stale work, so nothing is lost silently.
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point

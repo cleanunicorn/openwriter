@@ -32,10 +32,18 @@ type Props = {
   /** Per-block decorations and extra rows (ghost inserts) from the job layer. */
   decorate?: (blockId: string) => Decoration | undefined
   rowsAfter?: (blockId: string | null) => ReactNode
-  onShiftSelect?: (blockId: string) => void
 }
 
-export function BlockList({ state, decorate, rowsAfter, onShiftSelect }: Props) {
+/** Blocks between two IDs, inclusive, in document order. The front matter is never selected. */
+function rangeOf(state: DocState, fromId: string, toId: string): string[] {
+  const ids = state.doc.blocks.filter((block) => block.kind === 'content').map((block) => block.id)
+  const a = ids.indexOf(fromId)
+  const b = ids.indexOf(toId)
+  if (a === -1 || b === -1) return b === -1 ? [] : [toId]
+  return ids.slice(Math.min(a, b), Math.max(a, b) + 1)
+}
+
+export function BlockList({ state, decorate, rowsAfter }: Props) {
   const { ref: docRef, doc, focusedId, focusCursor, pendingNew, selectedIds } = state
   const assetBase = docRef.kind === 'article' ? `/api/docs/article/${docRef.slug}/assets/` : null
   const sensors = useSensors(
@@ -47,8 +55,25 @@ export function BlockList({ state, decorate, rowsAfter, onShiftSelect }: Props) 
   // one the writer aimed at (a blur elsewhere may re-render before mouseup); a drag that selects
   // text never enters edit mode, so text in a rendered block can be selected for a prompt.
   const pressed = useRef<{ id: string; cursor: number } | null>(null)
+  // Dragging along the left margin selects whole blocks.
+  const marginAnchor = useRef<string | null>(null)
+  const latest = useRef(state)
+  latest.current = state
   useEffect(() => {
+    const onMouseMove = (event: MouseEvent) => {
+      if (marginAnchor.current === null) return
+      const over = document
+        .elementFromPoint(Math.max(event.clientX, 0) + 60, event.clientY)
+        ?.closest<HTMLElement>('[data-testid="block"]')?.dataset.blockId
+      if (over !== undefined) {
+        dispatchDoc(docRef, {
+          type: 'select',
+          ids: rangeOf(latest.current, marginAnchor.current, over),
+        })
+      }
+    }
     const onMouseUp = () => {
+      marginAnchor.current = null
       const press = pressed.current
       pressed.current = null
       if (press === null) return
@@ -57,21 +82,35 @@ export function BlockList({ state, decorate, rowsAfter, onShiftSelect }: Props) 
       dispatchDoc(docRef, { type: 'focus', id: press.id, cursor: press.cursor })
     }
     window.addEventListener('mouseup', onMouseUp)
-    return () => window.removeEventListener('mouseup', onMouseUp)
+    window.addEventListener('mousemove', onMouseMove)
+    return () => {
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('mousemove', onMouseMove)
+    }
   }, [docRef])
 
   const onMouseDown = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return
     const target = event.target as Element
-    if (target.closest('.gutter, .block-editor, .ghost, button, a, input, textarea') !== null)
-      return
     const element = target.closest<HTMLElement>('[data-testid="block"]')
     const id = element?.dataset.blockId
     const block = doc.blocks.find((candidate) => candidate.id === id)
-    if (element == null || block === undefined) return
-    if (event.shiftKey && onShiftSelect !== undefined) {
+    if (target.closest('.gutter') !== null && target.closest('.drag-handle') === null) {
+      if (block === undefined || block.kind === 'frontmatter') return
       event.preventDefault()
-      onShiftSelect(block.id)
+      marginAnchor.current = block.id
+      dispatchDoc(docRef, { type: 'select', ids: [block.id] })
+      return
+    }
+    if (target.closest('.gutter, .block-editor, .ghost, button, a, input, textarea') !== null)
+      return
+    if (element == null || block === undefined) return
+    if (event.shiftKey && block.kind === 'content') {
+      // Shift-click extends a block selection from the focused or first selected block.
+      event.preventDefault()
+      const anchor = selectedIds[0] ?? focusedId ?? block.id
+      dispatchDoc(docRef, { type: 'blur' })
+      dispatchDoc(docRef, { type: 'select', ids: rangeOf(state, anchor, block.id) })
       return
     }
     const cursor =

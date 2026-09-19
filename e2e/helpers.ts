@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import type { Locator, Page } from '@playwright/test'
-import { expect } from './fixtures.ts'
+import { type App, expect } from './fixtures.ts'
 
 export const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
 /** End of the whole block; plain `End` stops at the end of the wrapped visual line. */
@@ -18,6 +18,8 @@ export const notice = (page: Page): Locator => page.getByRole('status', { name: 
 export async function openArticle(page: Page): Promise<void> {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  // The diagram renders asynchronously and shifts everything below it; wait for the layout to settle.
+  await expect(page.locator('.mermaid-block svg')).toBeVisible()
 }
 
 /** Text of every rendered block, in document order (front matter excluded). */
@@ -52,4 +54,60 @@ export async function keyboardMove(
 /** Autosave is debounced, so file assertions poll instead of sleeping. */
 export async function expectFile(path: string, check: (text: string) => void): Promise<void> {
   await expect(() => check(readFileSync(path, 'utf8'))).toPass({ timeout: 5000 })
+}
+
+// ── jobs ──────────────────────────────────────────────────────────────────────────────────
+
+export const pill = (page: Page): Locator =>
+  page.getByRole('textbox', { name: 'Instruction for the agent' })
+export const ghosts = (page: Page): Locator => page.getByTestId('ghost')
+export const tray = (page: Page): Locator => page.getByRole('region', { name: 'Agent jobs' })
+
+/** Select a word in a rendered block (double-click) and wait for the prompt pill. */
+export async function selectWord(page: Page, block: Locator, word: string): Promise<void> {
+  await block.getByText(word, { exact: false }).first().dblclick()
+  await expect(pill(page)).toBeVisible()
+}
+
+/** Type an instruction into the pill and send it; the pill disappears and the writer carries on. */
+export async function ask(page: Page, instruction: string): Promise<void> {
+  await pill(page).fill(instruction)
+  await page.keyboard.press('Enter')
+  await expect(pill(page)).toHaveCount(0)
+}
+
+async function fakeControl(
+  app: App,
+  method: 'GET' | 'POST',
+  route: string,
+  body?: unknown,
+): Promise<string[]> {
+  const response = await fetch(`${app.url}/api/__fake/${route}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+  })
+  const json = (await response.json()) as { waiting?: string[]; released?: string[] }
+  return json.waiting ?? json.released ?? []
+}
+
+/** IDs of the fake jobs that reached their checkpoint. The test decides when they finish. */
+export const waitingJobs = (app: App): Promise<string[]> => fakeControl(app, 'GET', 'waiting')
+
+export async function expectWaiting(app: App, count: number): Promise<string[]> {
+  let ids: string[] = []
+  await expect(async () => {
+    ids = await waitingJobs(app)
+    expect(ids).toHaveLength(count)
+  }).toPass({ timeout: 5000 })
+  return ids
+}
+
+export const release = (app: App, jobId?: string): Promise<string[]> =>
+  fakeControl(app, 'POST', 'release', jobId === undefined ? {} : { jobId })
+
+/** The server's view of one job's state. */
+export async function jobState(app: App, jobId: string): Promise<string> {
+  const response = await fetch(`${app.url}/api/jobs/${jobId}`)
+  return ((await response.json()) as { state: string }).state
 }

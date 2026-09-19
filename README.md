@@ -36,6 +36,24 @@ The server binds `127.0.0.1` only.
 - Changes are saved automatically. If the file changes on disk, the editor reloads it and keeps
   the block you are typing in.
 
+## Working with agents
+
+- Select text in a block, or select whole blocks (click the left margin, shift-click or drag to
+  extend), and a small prompt pill appears. Start typing (or press `Ctrl/Cmd+I` from inside an
+  editor), press `Enter`, and carry on writing. `/skill-name` at the start runs a skill.
+- A job's scope is `selection` (the target blocks), `whole article`, or `research` (no edits; the
+  answer opens in a side panel where any note can be inserted as a block).
+- Results arrive as ghost diffs in place: replacements as inline diffs, insertions as ghost
+  blocks, deletions struck through. Accept or reject per change or for the whole job — by mouse,
+  or focus a change and press `Enter` / `Backspace` (`Ctrl/Cmd+Enter` / `Ctrl/Cmd+Backspace` for
+  the whole job). Nothing enters the article until you accept it.
+- Many jobs run at once. A second job on a busy block waits until the first is accepted or
+  rejected, then runs against the outcome. A whole-article job runs alone. Editing is never
+  blocked; if you edit a block while its job runs, the result is compared with your current
+  text and marked "changed since request".
+- The tray in the bottom-right corner appears while there are jobs: status, streamed progress,
+  cancel, and the raw output of failed or stale jobs.
+
 ## Workspace layout
 
 ```
@@ -52,6 +70,48 @@ The server binds `127.0.0.1` only.
 `contentDir` in `.zen/config.json` is relative to the workspace by default. It may be an absolute
 path to point straight into a Hugo site's `content/` directory; articles then live where Hugo
 wants them and `hugo server` is the true preview.
+
+## The job file contract
+
+The contract between the editor and an agent is files, so it works with any agent. For each job
+the server creates `<workspace>/.zen/jobs/<id>/`:
+
+| File | Written by | Content |
+| --- | --- | --- |
+| `instruction.md` | server | the writer's prompt, the scope and its rules, the skill body if any, the output schema |
+| `article.md` | server | a snapshot of the document, each block wrapped in `<!-- zen:block id=bN -->` … `<!-- /zen:block -->`; targets carry `target`. Markers exist only here, never in the article. An empty document has the virtual block `b0`. |
+| `targets.json` | server | `{ "scope", "blockIds", "selection" }` — `selection` has the selected text and, for a selection made in edit mode, `from`/`to` offsets into the block |
+| `strategy.md`, `brief.md` | server | copies of the workspace strategy and the article's brief |
+| `job.json`, `progress.log` | server | lifecycle state (`version: 1`), the settings the job was launched with, bounded progress log |
+| `result.json` | agent | the proposal (below) |
+| `assets/` | agent | generated files, referenced from markdown as `assets/<file>` |
+| `result.invalid.json`, `repair.md` | server | only after a rejected result: the rejected output and the repair instructions |
+
+The agent runs with the workspace as its working directory (so it can read `sources/`), writes
+`result.json` and `assets/`, and modifies nothing else.
+
+```json
+{
+  "summary": "one line describing what was done",
+  "ops": [
+    { "op": "replace", "block_id": "b12", "markdown": "..." },
+    { "op": "insert_after", "block_id": "b12", "markdown": "..." },
+    { "op": "insert_before", "block_id": "b12", "markdown": "..." },
+    { "op": "delete", "block_id": "b13" }
+  ],
+  "assets": [{ "file": "assets/diagram.png", "alt": "..." }],
+  "notes": "free-form markdown, used for research answers and caveats"
+}
+```
+
+The file is validated with zod (unknown ops or keys reject it) and then against the job: for
+`blocks` scope, ops may only touch the target blocks or insert next to them; `research` must have
+no ops; asset paths must stay inside `assets/` and exist. A rejected result gets one automatic
+repair attempt; after that the job fails and the raw output is shown in the tray.
+
+Job states: `queued → running → validating → (repairing →) ready → settled`, or `failed`
+(`missing-cli`, `missing-tool`, `auth`, `timeout`, `invalid-result`, `exit`), `cancelled`,
+`stale`. A stale job (deleted target, app restart, page reload) keeps its output visible.
 
 ## Development
 

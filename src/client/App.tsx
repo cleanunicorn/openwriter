@@ -1,5 +1,12 @@
 import { useEffect } from 'react'
 import { BlockList } from './blocks/BlockList.tsx'
+import { useGhosts } from './jobs/GhostDiff.tsx'
+import { PromptPill } from './jobs/PromptPill.tsx'
+import { ResearchPanel } from './jobs/ResearchPanel.tsx'
+import { useSelectionPill } from './jobs/selection.ts'
+import { Tray } from './jobs/Tray.tsx'
+import './jobs/commands.ts'
+import { startJobs } from './state/jobs.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
 import {
@@ -22,10 +29,21 @@ export function App() {
   const palette = useApp((state) => state.palette)
   const theme = useApp((state) => state.config?.config.theme)
 
+  const ghosts = useGhosts(doc)
+  const [pill, setPill] = useSelectionPill()
+
   useEffect(() => {
+    startJobs()
     void start()
     return connectEvents()
   }, [])
+
+  // Palette actions open the same pill with a preset scope or skill.
+  useEffect(() => {
+    const onAsk = (event: Event) => setPill((event as CustomEvent).detail)
+    window.addEventListener('openwrite:ask', onAsk)
+    return () => window.removeEventListener('openwrite:ask', onAsk)
+  }, [setPill])
 
   useEffect(() => {
     if (theme !== undefined) applyTheme(theme)
@@ -96,7 +114,7 @@ export function App() {
                 {doc.ref.kind === 'strategy' ? 'strategy.md' : `brief · ${doc.ref.slug}`}
               </p>
             )}
-            <BlockList state={doc} />
+            <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
             {!doc.doc.blocks.some((block) => block.kind === 'content') &&
               doc.focusedId !== NEW_BLOCK_ID && (
                 <button
@@ -109,7 +127,19 @@ export function App() {
               )}
           </>
         )}
+        {pill !== null && (
+          <PromptPill
+            key={`${pill.anchor?.blockId}:${pill.anchor?.offsetTop}:${pill.targets.join()}`}
+            target={pill}
+            onClose={() => {
+              setPill(null)
+              dispatch({ type: 'select', ids: [] })
+            }}
+          />
+        )}
       </main>
+      <ResearchPanel />
+      <Tray />
       {palette !== null && <Palette mode={palette} />}
     </>
   )
