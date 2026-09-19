@@ -1,0 +1,64 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { expect, test } from './fixtures.ts'
+import { mod, openArticle } from './helpers.ts'
+
+test('the palette creates a new article and switches between articles', async ({ page, app }) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+k`)
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await expect(palette).toBeVisible()
+
+  await palette.getByRole('combobox').fill('new art')
+  await expect(palette.getByRole('option')).toHaveCount(1)
+  await page.keyboard.press('Enter')
+  await page.getByRole('combobox', { name: 'Article title' }).fill('Shipping a Block Editor')
+  await page.keyboard.press('Enter')
+
+  await expect(
+    page.getByRole('heading', { name: 'Shipping a Block Editor', level: 1 }),
+  ).toBeVisible()
+  expect(existsSync(app.articlePath('shipping-a-block-editor'))).toBe(true)
+  expect(
+    existsSync(path.join(app.workspace, '.zen', 'articles', 'shipping-a-block-editor', 'brief.md')),
+  ).toBe(true)
+
+  await page.keyboard.press(`${mod}+k`)
+  await page.getByRole('combobox', { name: 'Command palette' }).fill('open hello')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+})
+
+test('Escape closes the palette without running anything', async ({ page }) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+k`)
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('zen layout: a centred column of about 680px, no toolbar, no sidebar, switchable theme', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  const column = await page.getByRole('main').boundingBox()
+  expect(column?.width).toBe(680)
+  const viewport = page.viewportSize()
+  expect(Math.abs((column?.x ?? 0) * 2 + 680 - (viewport?.width ?? 0))).toBeLessThanOrEqual(16)
+  await expect(page.getByRole('toolbar')).toHaveCount(0)
+  await expect(page.getByRole('complementary')).toHaveCount(0)
+  await expect(page.getByRole('navigation')).toHaveCount(0)
+
+  for (const next of ['light', 'dark']) {
+    await page.keyboard.press(`${mod}+k`)
+    await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', next)
+  }
+  const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  expect(background).toBe('rgb(25, 25, 25)')
+  expect(
+    JSON.parse(readFileSync(path.join(app.workspace, '.zen', 'config.json'), 'utf8')).theme,
+  ).toBe('dark')
+})

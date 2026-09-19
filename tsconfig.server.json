@@ -6,5 +6,12 @@
     "moduleResolution": "nodenext",
     "types": ["node"]
   },
-  "include": ["src/shared", "src/server", "scripts", "e2e", "*.config.ts"]
+  "include": [
+    "src/shared",
+    "src/server",
+    "src/client/**/*.test.ts",
+    "scripts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

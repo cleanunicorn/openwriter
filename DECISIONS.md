@@ -38,6 +38,63 @@ directory keeps the name `.zen/`.
   percent-decoded), sibling-prefix, and symlinks via `realpath` of the nearest existing ancestor,
   so it also covers files that are about to be created.
 
+## Block model
+
+- **`Doc = { blocks, gaps }` with `gaps.length === blocks.length + 1`; gaps belong to positions.**
+  Whitespace stored on a block would travel with it: moving the last block (gap `"\n"`) into the
+  middle would fuse two paragraphs.
+- **Blocks end at their last non-whitespace character.** Trailing spaces and blank lines live in
+  the gap, so an editor never shows stray blank lines and byte identity still holds.
+- **Text markdown-it emits no token for (link reference definitions) becomes its own block.**
+  Trusting token maps alone would let that text vanish into a "whitespace" gap.
+- **Front matter is detected before markdown-it, after an optional BOM.** The BOM stays in
+  `gaps[0]`. A `---` that is not at the top, or has no closing fence, is ordinary content.
+- **Lone `\r` counts as a line break** (markdown-it normalises it), so line maps stay aligned
+  with offsets in the original text.
+- **Files that are not valid UTF-8 are refused** (fatal decoder) and never written, instead of
+  being silently repaired with U+FFFD.
+- **Paired shortcodes are merged in a post-pass** (nearest unmatched opener of the same name).
+  Fences, inline code spans, self-closing tags, the commented-out form, and delimiter text inside
+  quoted parameters are skipped. An opener with no closer swallows nothing.
+- **One `reconcile(oldDoc, newText)`** (LCS over raws) serves re-split on blur, the external
+  reload, and the post-condition of structural ops. A split keeps the first ID; a merge keeps the
+  earlier one.
+- **An op that touches a gap adds a blank-line separator only when the gap has none;** after
+  every structural op the result is re-split and, if the raws differ, the re-split wins.
+- **The property test builds documents from known fragments** and asserts that split recovers
+  exactly those fragments (LF, CRLF, lone CR). Round-trip equality alone holds by construction
+  and would pass a splitter that never splits.
+
+## Editor
+
+- **The client owns the live document and the block IDs; the server is stateless about blocks.**
+  Nothing sits between a keystroke and the screen, and accepting an agent's result is one
+  synchronous reducer step, so there is no accept race to guard.
+- **Pure reducers plus a ~30-line store (`useSyncExternalStore`), no state library.**
+- **Two-tier undo.** CodeMirror history inside the focused block; a document-level snapshot stack
+  for commits, reorders, merges, splits, accepted ops, and external reloads. `Mod-z` falls through
+  to the document when the editor has nothing left to undo.
+- **The focused editor's text (the draft) is part of every save and every job snapshot,** so
+  autosave and jobs never miss what is being typed.
+- **Edit mode is entered on mouseup, with the cursor computed at mousedown.** A blur elsewhere can
+  re-render and shift the layout between the two; a drag that selects text never enters edit mode,
+  so text in a rendered block can be selected for a prompt.
+- **Cursor near the click:** block-level tokens carry `data-line`; the text just before the caret
+  is searched inside those source lines. markdown-it has no inline source maps; the fallback is
+  the start of the line.
+- **Saving:** 750 ms debounce, only when the text differs from disk, full text plus the base
+  hash. A stale base is a 409 and triggers the same reconcile as a watcher event. Disk wins except
+  in the focused block. A file deleted from outside pauses autosave and is never recreated.
+- **`fs.watch` on the document's directory** (sees save-by-rename), debounced, compared by
+  content hash; hashes the server itself wrote are ignored. No `chokidar` needed so far.
+- **Mermaid labels are SVG text (`htmlLabels: false`).** HTML labels live in `foreignObject`,
+  which sanitising removes; SVG text also survives the standalone HTML export.
+- **The mermaid source travels as the text of a `<pre>`,** not in a `data-` attribute: DOMPurify
+  drops attribute values that contain `-->`.
+- **Front matter summary and skill headers share one dependency-free key/value reader.** Display
+  only; on anything unexpected the line just says "front matter".
+- **Always-visible controls: none.** The notice line appears only when there is something to say.
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point

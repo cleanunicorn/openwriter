@@ -54,4 +54,6 @@ graph LR
 
 Select some text, type an instruction, and keep writing while the agent works.
 
+Results arrive as ghost diffs in place. Accept what you like and reject the rest.
+
 [hugo]: https://gohugo.io

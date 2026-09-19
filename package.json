@@ -12,7 +12,7 @@
     "prestart": "node scripts/ensure-build.ts",
     "start": "node src/server/main.ts --open",
     "build": "vite build",
-    "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json",
+    "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json && tsc -p tsconfig.e2e.json",
     "lint": "biome lint --error-on-warnings .",
     "format": "biome format --write .",
     "format:check": "biome format .",
