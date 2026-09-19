@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createHerdrAdapter, type HerdrCli } from './herdr.ts'
 import { jobDir, options } from './test-helpers.ts'
+import type { AdapterHandle } from './types.ts'
 
 /** A scripted herdr: records every command and answers like the real CLI's JSON. */
 function stub(
@@ -50,7 +51,7 @@ function stub(
   return { cli, calls, started }
 }
 
-async function finish(handle: ReturnType<ReturnType<typeof createHerdrAdapter>['start']>) {
+async function finish(handle: AdapterHandle) {
   const progress: string[] = []
   for await (const event of handle.progress) progress.push(event.text)
   return { completion: await handle.done, progress }

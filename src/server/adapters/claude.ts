@@ -2,6 +2,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import {
   type CliSpec,
+  type LineRead,
   assertNoBypass,
   clipProgress,
   createProcessAdapter,
@@ -90,7 +91,7 @@ const StreamLineSchema = z.looseObject({
     .optional(),
 })
 
-export function readClaudeLine(line: string): { progress?: string; error?: string } {
+export function readClaudeLine(line: string): LineRead {
   const event = parseLine(StreamLineSchema, line)
   if (event === undefined) return {}
   if (event.type === 'system' && event.subtype === 'init')

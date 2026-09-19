@@ -2,6 +2,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import {
   type CliSpec,
+  type LineRead,
   clipProgress,
   createProcessAdapter,
   parseLine,
@@ -70,7 +71,7 @@ const CodexLineSchema = z.looseObject({
     .optional(),
 })
 
-export function readCodexLine(line: string): { progress?: string; error?: string } {
+export function readCodexLine(line: string): LineRead {
   const event = parseLine(CodexLineSchema, line)
   if (event === undefined) return {}
   if (event.type === 'thread.started') return { progress: 'codex started' }

@@ -21,6 +21,9 @@ export function parseLine<T extends z.ZodType>(schema: T, line: string): z.infer
   return parsed.success ? parsed.data : undefined
 }
 
+/** What a reader makes of one stdout line. The fields are independent: a line may carry either, both, or neither. */
+export type LineRead = { progress?: string; error?: string }
+
 export type CliSpec = {
   name: string
   /** Default executable; `command` in the adapter's settings replaces it. */
@@ -29,7 +32,7 @@ export type CliSpec = {
   /** What goes to stdin; defaults to the manager's prompt. */
   buildPrompt?: (jobDir: string, options: AdapterOptions) => string
   /** One stdout line → progress text (or nothing), plus a fatal error the stream reported. */
-  readLine: (line: string) => { progress?: string; error?: string }
+  readLine: (line: string) => LineRead
   /** Text that means "not signed in" for this CLI, matched against stderr and stream errors. */
   authPattern: RegExp
   loginHint: string
@@ -95,7 +98,7 @@ export function createProcessAdapter(spec: CliSpec): AgentAdapter {
         onLine: (line) => {
           // Runs inside the child's stdout handler: a bug in a reader must not become an uncaught
           // exception that takes the server down.
-          let read: ReturnType<CliSpec['readLine']>
+          let read: LineRead
           try {
             read = spec.readLine(line)
           } catch {
