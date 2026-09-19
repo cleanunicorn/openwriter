@@ -52,3 +52,28 @@ test('a pasted file that is not an image is not uploaded', async ({ page, app })
   await expect(editor(page)).toContainText('still typing')
   expect(readdirSync(path.dirname(app.articlePath())).sort()).toEqual(before)
 })
+
+test('dropping an image onto the editor saves it and inserts a relative reference', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' ')
+  // A synthetic drop, for the same reason the paste above is synthetic.
+  await editor(page).evaluate((element, base64) => {
+    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
+    const data = new DataTransfer()
+    data.items.add(new File([bytes], 'Dropped Diagram.png', { type: 'image/png' }))
+    element.dispatchEvent(
+      new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }),
+    )
+  }, PNG)
+
+  await expect(editor(page)).toContainText('![](dropped-diagram.png)')
+  expect(existsSync(path.join(path.dirname(app.articlePath()), 'dropped-diagram.png'))).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('img[src$="/assets/dropped-diagram.png"]')).toBeVisible()
+  await expectFile(app.articlePath(), (file) => expect(file).toContain('![](dropped-diagram.png)'))
+})
