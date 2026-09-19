@@ -96,18 +96,11 @@ function SourceDiff({ current, proposed }: { current: string; proposed: string }
   const parts = useMemo(() => diffWordsWithSpace(current, proposed), [current, proposed])
   return (
     <div className="ghost-diff">
-      {parts.map((part, index) =>
-        part.added ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff parts are positional
-          <ins key={index}>{part.value}</ins>
-        ) : part.removed ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff parts are positional
-          <del key={index}>{part.value}</del>
-        ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: diff parts are positional
-          <span key={index}>{part.value}</span>
-        ),
-      )}
+      {parts.map((part, index) => {
+        const Tag = part.added ? 'ins' : part.removed ? 'del' : 'span'
+        // biome-ignore lint/suspicious/noArrayIndexKey: diff parts are positional
+        return <Tag key={index}>{part.value}</Tag>
+      })}
     </div>
   )
 }
