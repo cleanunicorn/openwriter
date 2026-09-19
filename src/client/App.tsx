@@ -154,8 +154,8 @@ export function App() {
           </>
         )}
         {pill !== null && (
+          // No key: extending the selection updates the pill in place and keeps what was typed.
           <PromptPill
-            key={`${pill.anchor?.blockId}:${pill.anchor?.offsetTop}:${pill.targets.join()}`}
             target={pill}
             onClose={() => {
               setPill(null)
