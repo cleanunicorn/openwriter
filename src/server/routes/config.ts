@@ -1,6 +1,6 @@
 import type { Hono } from 'hono'
 import { ConfigSchema } from '../../shared/config-schema.ts'
-import { saveConfig } from '../config.ts'
+import { InvalidConfigError, saveConfig } from '../config.ts'
 import type { ServerContext } from '../context.ts'
 import { HttpError, parseBody } from '../http.ts'
 import { Workspace } from '../workspace.ts'
@@ -32,7 +32,10 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     try {
       saveConfig(workspace.root, config)
     } catch (error) {
-      throw new HttpError(409, (error as Error).message)
+      // Only the known refusal is a conflict. A filesystem error carries an absolute path in its
+      // message; it goes to app.onError, which logs it and answers "internal error".
+      if (error instanceof InvalidConfigError) throw new HttpError(409, error.message)
+      throw error
     }
     context.watcher.reset()
     events.emit({ type: 'config.changed' })

@@ -2,6 +2,9 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import path from 'node:path'
 import { type Config, ConfigSchema, DEFAULT_CONFIG } from '../shared/config-schema.ts'
 
+/** The one save failure the writer can act on: the file on disk is invalid and is never overwritten. */
+export class InvalidConfigError extends Error {}
+
 export type LoadedConfig = { config: Config; error: string | null }
 
 export const configPath = (workspace: string) => path.join(workspace, '.zen', 'config.json')
@@ -26,7 +29,9 @@ export function loadConfig(workspace: string): LoadedConfig {
 /** Atomic write. Refuses to replace a file the writer has to repair by hand first. */
 export function saveConfig(workspace: string, config: Config): void {
   if (loadConfig(workspace).error !== null) {
-    throw new Error('config.json is invalid; fix or remove it before changing settings')
+    throw new InvalidConfigError(
+      'config.json is invalid; fix or remove it before changing settings',
+    )
   }
   const file = configPath(workspace)
   mkdirSync(path.dirname(file), { recursive: true })

@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ServerEvent } from '../../shared/events.ts'
@@ -345,6 +353,21 @@ describe('config', () => {
     const repaired = await t.send('PUT', '/api/config', { ...body.config, contentDir: 'content' })
     expect(repaired.status).toBe(200)
     expect((await json(t.get('/api/articles'))).articles).toHaveLength(1)
+  })
+
+  it('does not report a filesystem failure as a conflict, and leaks no path', async () => {
+    const { config } = await json(t.get('/api/config'))
+    const zen = path.join(t.workspace, '.zen')
+    chmodSync(zen, 0o500)
+    try {
+      const res = await t.send('PUT', '/api/config', { ...config, concurrency: 4 })
+      expect(res.status).toBe(500)
+      const body = await res.text()
+      expect(body).toBe('{"error":"internal error"}')
+      expect(body).not.toContain(t.workspace)
+    } finally {
+      chmodSync(zen, 0o700)
+    }
   })
 
   it('saves a valid config and reports an absolute content directory', async () => {
