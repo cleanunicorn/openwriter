@@ -48,7 +48,7 @@ function OpenPanel({ job, result }: { job: Job; result: Result }) {
       {notes.length === 0 && <p className="quiet">The agent returned no notes.</p>}
       <footer className="research-footer">
         <button type="button" className="link" onClick={() => void dismissJob(job.id)}>
-          Done with these notes
+          Discard these notes
         </button>
       </footer>
     </aside>

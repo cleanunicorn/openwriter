@@ -31,7 +31,7 @@ test('a research answer opens in a side panel and a note can be inserted as a bl
     expect(file).toContain('\n\nThe notes say blocks feel calm.\n'),
   )
 
-  await panel.getByRole('button', { name: 'Done with these notes' }).click()
+  await panel.getByRole('button', { name: 'Discard these notes' }).click()
   await expect(page.getByRole('complementary')).toHaveCount(0)
 })
 
