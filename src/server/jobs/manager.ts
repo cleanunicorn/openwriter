@@ -12,7 +12,7 @@ import {
 import { type Result, ResultSchema } from '../../shared/jobs/result-schema.ts'
 import { START_ANCHOR, validateOps } from '../../shared/jobs/validate-ops.ts'
 import type { AdapterRegistry } from '../adapters/registry.ts'
-import type { AdapterHandle } from '../adapters/types.ts'
+import type { AdapterHandle, Completion } from '../adapters/types.ts'
 import { sanitiseFileName, storeWithoutOverwrite } from '../assets.ts'
 import { HttpError } from '../http.ts'
 import { resolveWithin } from '../paths.ts'
@@ -276,12 +276,7 @@ export class JobManager {
     }
   }
 
-  private async attempt(
-    entry: Entry,
-    prompt: string,
-  ): Promise<
-    { ok: true } | { ok: false; reason: FailureReason; message: string; output?: string }
-  > {
+  private async attempt(entry: Entry, prompt: string): Promise<Completion> {
     const job = entry.file.job
     const adapter = this.options.registry.get(job.adapter)
     if (adapter === undefined)
@@ -305,7 +300,7 @@ export class JobManager {
     // A progress stream that throws must fail the run now, not surface later as an unhandled
     // rejection; a stream that simply ends keeps waiting for completion.
     const relayFailure = relay.then(() => new Promise<never>(() => {}))
-    let outcome: Awaited<typeof handle.done> | 'timeout'
+    let outcome: Completion | 'timeout'
     try {
       outcome = await Promise.race([handle.done, timeout, relayFailure])
     } catch (error) {
