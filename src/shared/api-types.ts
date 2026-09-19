@@ -24,7 +24,6 @@ export const DocResponseSchema = z.object({
   hash: z.string().nullable(),
   exists: z.boolean(),
 })
-export type DocResponse = z.infer<typeof DocResponseSchema>
 
 export const SaveRequestSchema = z.object({ text: z.string(), baseHash: z.string().nullable() })
 export const SaveResponseSchema = z.object({ hash: z.string() })

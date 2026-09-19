@@ -12,7 +12,6 @@ export const OpSchema = z.discriminatedUnion('op', [
 export type Op = z.infer<typeof OpSchema>
 
 export const AssetSchema = z.strictObject({ file: z.string().min(1), alt: z.string().optional() })
-export type Asset = z.infer<typeof AssetSchema>
 
 /**
  * `result.json`, exactly the shape in the build spec. `summary` is required; `ops`, `assets` and

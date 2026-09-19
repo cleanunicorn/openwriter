@@ -65,7 +65,6 @@ export const JobRequestSchema = z.object({
 export type JobRequest = z.infer<typeof JobRequestSchema>
 
 export const DecisionSchema = z.enum(['accepted', 'rejected'])
-export type Decision = z.infer<typeof DecisionSchema>
 
 export const JobSchema = z.object({
   id: z.string(),
