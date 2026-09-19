@@ -28,9 +28,9 @@ function readBlocks(jobDir: string): ArticleBlock[] {
 function scenarioResults(
   targets: Targets,
   blocks: ArticleBlock[],
-  byId: Map<string, string>,
   first: string,
 ): Record<string, unknown> {
+  const byId = new Map(blocks.map((block) => [block.id, block.raw]))
   const upper = targets.blockIds.map((id) => ({
     op: 'replace',
     block_id: id,
@@ -167,7 +167,6 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
           readFileSync(path.join(jobDir, 'targets.json'), 'utf8'),
         ) as Targets
         const blocks = readBlocks(jobDir)
-        const byId = new Map(blocks.map((block) => [block.id, block.raw]))
         const first = targets.blockIds[0] ?? 'b0'
         // An empty document can only be drafted into; everything else defaults to `upper`.
         const scenario = named ?? (first === 'b0' ? 'draft' : 'upper')
@@ -192,7 +191,7 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
             message: 'not logged in — run the agent CLI once to sign in',
           }
 
-        const results = scenarioResults(targets, blocks, byId, first)
+        const results = scenarioResults(targets, blocks, first)
 
         channel.push({ text: 'writing result.json' })
         const invalid = scenario === 'invalid-twice' || (scenario === 'invalid-once' && !isRepair)
