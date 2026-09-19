@@ -1,4 +1,5 @@
 import type { Scope } from './job-types.ts'
+import { START_ANCHOR } from './validate-ops.ts'
 
 /** Anything that can hold or want block locks: an unsettled server job or a held request. */
 export type Claim = { id: string; docKey: string; scope: Scope; targets: string[] }
@@ -50,7 +51,7 @@ export function lostItsTargets(scope: Scope, targets: string[], blockIds: string
 /** Targets that no longer exist in the document: the job (or held request) is stale. */
 export function missingTargets(targets: string[], blockIds: string[]): string[] {
   const present = new Set(blockIds)
-  return targets.filter((target) => target !== 'b0' && !present.has(target))
+  return targets.filter((target) => target !== START_ANCHOR && !present.has(target))
 }
 
 /** "Changed since request": the block's current text differs from the job's snapshot. */
