@@ -35,6 +35,11 @@ export type CliSpec = {
   loginHint: string
 }
 
+/** One progress line in the tray: whitespace collapsed, at most this many characters. */
+export const PROGRESS_LINE_MAX = 200
+export const clipProgress = (text: string): string =>
+  text.replace(/\s+/g, ' ').trim().slice(0, PROGRESS_LINE_MAX)
+
 /** Flags that switch a CLI's permission system off. Never part of a default command line. */
 export const BYPASS_FLAGS = [
   '--dangerously-skip-permissions',

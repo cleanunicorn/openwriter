@@ -1,9 +1,13 @@
 import path from 'node:path'
 import { z } from 'zod'
-import { type CliSpec, createProcessAdapter, parseLine, substitute } from './process-adapter.ts'
+import {
+  type CliSpec,
+  clipProgress,
+  createProcessAdapter,
+  parseLine,
+  substitute,
+} from './process-adapter.ts'
 import type { AdapterOptions } from './types.ts'
-
-const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
 
 /**
  * `claude` in headless print mode with streamed JSON. Flags verified against
@@ -92,15 +96,15 @@ export function readClaudeLine(line: string): { progress?: string; error?: strin
       if (part.type === 'tool_use') {
         const input = part.input ?? {}
         const detail = input.file_path ?? input.path ?? input.pattern ?? input.command ?? ''
-        return { progress: clip(`${part.name ?? 'tool'} ${String(detail)}`) }
+        return { progress: clipProgress(`${part.name ?? 'tool'} ${String(detail)}`) }
       }
-      if (part.type === 'text' && part.text?.trim()) return { progress: clip(part.text) }
+      if (part.type === 'text' && part.text?.trim()) return { progress: clipProgress(part.text) }
     }
     return {}
   }
   if (event.type === 'result') {
     return event.is_error
-      ? { error: clip(event.result ?? event.subtype ?? 'error') }
+      ? { error: clipProgress(event.result ?? event.subtype ?? 'error') }
       : { progress: 'claude finished' }
   }
   return {}

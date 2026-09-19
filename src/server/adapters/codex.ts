@@ -1,9 +1,13 @@
 import path from 'node:path'
 import { z } from 'zod'
-import { type CliSpec, createProcessAdapter, parseLine, substitute } from './process-adapter.ts'
+import {
+  type CliSpec,
+  clipProgress,
+  createProcessAdapter,
+  parseLine,
+  substitute,
+} from './process-adapter.ts'
 import type { AdapterOptions } from './types.ts'
-
-const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
 
 /**
  * `codex exec` with JSONL output. Flags verified against `codex exec --help` 0.155.1 — see
@@ -71,14 +75,16 @@ export function readCodexLine(line: string): { progress?: string; error?: string
   if (event === undefined) return {}
   if (event.type === 'thread.started') return { progress: 'codex started' }
   if (event.type === 'error' || event.type === 'turn.failed') {
-    return { error: clip(event.error?.message ?? event.message ?? 'codex reported an error') }
+    return {
+      error: clipProgress(event.error?.message ?? event.message ?? 'codex reported an error'),
+    }
   }
   if (event.type === 'turn.completed') return { progress: 'codex finished' }
   const item = event.item
   if (item === undefined || event.type !== 'item.completed') return {}
-  if (item.command) return { progress: clip(`$ ${item.command}`) }
-  if (item.text?.trim()) return { progress: clip(item.text) }
-  if (item.path) return { progress: clip(`${item.type ?? 'file'} ${item.path}`) }
+  if (item.command) return { progress: clipProgress(`$ ${item.command}`) }
+  if (item.text?.trim()) return { progress: clipProgress(item.text) }
+  if (item.path) return { progress: clipProgress(`${item.type ?? 'file'} ${item.path}`) }
   return {}
 }
 
