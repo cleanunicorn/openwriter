@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../shared/blocks/index.ts'
 import type { JobRequest } from '../shared/jobs/job-types.ts'
 import { buildClaudeArgs } from './adapters/claude.ts'
-import { findSkill, listSkills, missingTools, parseSkill, SKILLS_DIR } from './skills.ts'
+import {
+  findSkill,
+  listSkills,
+  missingTools,
+  parseSkill,
+  SKILLS_DIR,
+  SkillHeaderSchema,
+} from './skills.ts'
 import { createTestApp, json, type TestApp } from './test-helpers.ts'
 
 describe('the shipped skills', () => {
@@ -86,6 +93,16 @@ describe('the shipped skills', () => {
     )
     expect(missingTools(skill, (tool) => tool === 'node')).toEqual(['asciinema', 'agg'])
     expect(missingTools(skill, () => true)).toEqual([])
+  })
+
+  it('the README documents every header key', () => {
+    const readme = readFileSync(path.join(SKILLS_DIR, '..', 'README.md'), 'utf8')
+    const section = readme.slice(readme.indexOf('## Adding a skill'), readme.indexOf('## Export'))
+    for (const key of Object.keys(SkillHeaderSchema.shape)) {
+      expect(section, `README "Adding a skill" does not mention "${key}:"`).toMatch(
+        new RegExp(`^${key}:`, 'm'),
+      )
+    }
   })
 
   it('rejects a header without a name or description', () => {

@@ -164,6 +164,7 @@ requires: [sometool]             # optional; checked on PATH before an agent sta
 allow: [Bash(sometool *)]        # optional; extra tool allowances (claude adds them to its allow list)
 network: false                   # optional; codex opens the network only when true
 stub: false                      # optional; true lists the skill but refuses to run it
+document: current                # optional; current | brief | article — which document a palette-started job edits
 ---
 The prompt: what to produce, as ops on the target blocks, and which files to put into `assets/`.
 ```
