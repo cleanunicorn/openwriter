@@ -368,8 +368,8 @@ export class JobManager {
     const id = entry.file.job.id
     const still = (state: JobState) => entry.file.job.state === state
     this.update(entry, { state: 'running' })
-    const dir = `.zen/jobs/${id}`
-    const first = await this.attempt(entry, `Read ${dir}/instruction.md and follow it exactly.`)
+    const jobRel = `.zen/jobs/${id}`
+    const first = await this.attempt(entry, `Read ${jobRel}/instruction.md and follow it exactly.`)
     if (!still('running')) return
     if (!first.ok) return this.fail(entry, first.reason, first.message, first.output ?? null)
 
@@ -385,7 +385,7 @@ export class JobManager {
         entry,
         `result.json rejected (${checked.errors[0]}); asking the agent to repair it once`,
       )
-      const repair = await this.attempt(entry, `Read ${dir}/repair.md and follow it exactly.`)
+      const repair = await this.attempt(entry, `Read ${jobRel}/repair.md and follow it exactly.`)
       if (!still('repairing')) return
       if (!repair.ok)
         return this.fail(entry, repair.reason, repair.message, repair.output ?? checked.raw)

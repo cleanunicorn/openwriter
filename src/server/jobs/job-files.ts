@@ -33,7 +33,7 @@ export function renderInstruction(
   skill: Skill | undefined,
   articlePath: string | null,
 ): string {
-  const dir = `.zen/jobs/${jobId}`
+  const jobRel = `.zen/jobs/${jobId}`
   const docLine =
     request.doc.kind === 'article'
       ? 'The document is an article.'
@@ -42,9 +42,9 @@ export function renderInstruction(
         : 'The document is `strategy.md`, the global writing strategy.'
   return `# Job ${jobId}
 
-You are helping a writer with a markdown document. Everything goes through files in \`${dir}/\`.
+You are helping a writer with a markdown document. Everything goes through files in \`${jobRel}/\`.
 Paths below are relative to the workspace root. You may read the workspace (\`sources/\` and other
-files) for context; you may write only inside \`${dir}/\`.
+files) for context; you may write only inside \`${jobRel}/\`.
 
 ## The writer's instruction
 
@@ -54,17 +54,17 @@ ${skill ? `## Skill: ${skill.name}\n\n${skill.body}\n` : ''}
 ## Context
 
 - ${docLine}
-- \`${dir}/article.md\` — a snapshot of the document. Every block is wrapped in
+- \`${jobRel}/article.md\` — a snapshot of the document. Every block is wrapped in
   \`<!-- zen:block id=bN -->\` … \`<!-- /zen:block -->\`. The markers carry the block IDs; they are not
   part of the document and must never appear in your markdown.
-- \`${dir}/targets.json\` — the scope, the target block IDs, and the selected text if any.
-- \`${dir}/strategy.md\` and \`${dir}/brief.md\` — the writer's strategy and this article's brief.
+- \`${jobRel}/targets.json\` — the scope, the target block IDs, and the selected text if any.
+- \`${jobRel}/strategy.md\` and \`${jobRel}/brief.md\` — the writer's strategy and this article's brief.
   Follow them for voice, structure, and audience.
 
 ## Rules
 
 - ${SCOPE_RULES[request.scope]}
-- Write exactly one file: \`${dir}/result.json\`. Put generated files into \`${dir}/assets/\` and
+- Write exactly one file: \`${jobRel}/result.json\`. Put generated files into \`${jobRel}/assets/\` and
   reference them in your markdown as \`assets/<file>\`.
 - Do not modify the article or anything else in the workspace. The writer reviews and applies
   your proposal; nothing you write enters the article until it is accepted.
