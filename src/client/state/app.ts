@@ -5,7 +5,7 @@ import {
   docKey,
   type SkillInfo,
 } from '../../shared/api-types.ts'
-import { ServerEventSchema } from '../../shared/events.ts'
+import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
 import { ApiError, api } from '../api.ts'
 import {
@@ -227,7 +227,7 @@ export const setPanel = (panel: Panel) => store.set((state) => ({ ...state, pane
 // ── server events ─────────────────────────────────────────────────────────────────────────
 
 type EventHandlers = {
-  onJobEvent?: (event: ReturnType<typeof ServerEventSchema.parse>) => void
+  onJobEvent?: (event: ServerEvent) => void
   onConnect?: () => void
 }
 const handlers: EventHandlers = {}
