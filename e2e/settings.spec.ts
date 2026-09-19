@@ -124,3 +124,23 @@ test('a click on the backdrop closes settings', async ({ page }) => {
   await page.getByRole('dialog', { name: 'Settings' }).click({ position: { x: 5, y: 5 } })
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })
+
+test('a settings event from outside does not wipe a half-edited form', async ({ page, app }) => {
+  await openArticle(page)
+  await openSettings(page)
+  const form = page.getByRole('form', { name: 'Settings' })
+  await form.getByLabel('codex model').fill('half-typed-model')
+
+  // Something else rewrites the config file: the server announces it, the client reloads it.
+  const current = JSON.parse(readFileSync(configPath(app.workspace), 'utf8'))
+  const saved = page.waitForResponse(
+    (response) => response.url().endsWith('/api/config') && response.request().method() === 'GET',
+  )
+  await fetch(`${app.url}/api/config`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...current, concurrency: 7 }),
+  })
+  await saved
+  await expect(form.getByLabel('codex model')).toHaveValue('half-typed-model')
+})

@@ -22,8 +22,10 @@ export function Settings() {
     if (ready) form.current?.querySelector<HTMLElement>('select, input')?.focus()
   }, [ready])
 
+  // Seed the form once per opening. `state.config` is replaced by every settings event and theme
+  // switch; re-seeding on each would wipe what the writer has typed so far.
   useEffect(() => {
-    if (loaded !== null) setDraft(loaded.config)
+    if (loaded !== null) setDraft((current) => current ?? loaded.config)
   }, [loaded])
 
   if (loaded === null || draft === null) return null
