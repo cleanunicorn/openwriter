@@ -45,11 +45,11 @@ describe('theme tokens meet WCAG AA for normal text', () => {
 
   // Which text token is drawn on which surface token.
   const pairs: [string, string[]][] = [
-    ['--fg', ['--bg', '--code-bg', '--add-bg', '--del-bg']],
-    ['--quiet', ['--bg', '--code-bg', '--add-bg', '--del-bg']],
-    ['--accent', ['--bg', '--code-bg']],
+    ['--fg', ['--bg', '--surface', '--code-bg', '--add-bg', '--del-bg']],
+    ['--quiet', ['--bg', '--surface', '--code-bg', '--add-bg', '--del-bg']],
+    ['--accent', ['--bg', '--surface', '--code-bg']],
     // Warnings (ghost flag, tray errors) and numbers in code share one token.
-    ['--warn', ['--bg', '--code-bg']],
+    ['--warn', ['--bg', '--surface', '--code-bg']],
     ['--syn-keyword', ['--code-bg']],
     ['--syn-string', ['--code-bg']],
   ]
