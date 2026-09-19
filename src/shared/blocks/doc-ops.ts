@@ -101,15 +101,10 @@ export function deleteBlocks(doc: Doc, indices: number[], mintId: MintId): Doc {
 
 /** Replace a block's text. Several blocks' worth of markdown re-splits; empty text deletes. */
 export function replaceBlock(doc: Doc, index: number, markdown: string, mintId: MintId): Doc {
-  const current = doc.blocks[index]
-  if (current === undefined) return doc
+  if (doc.blocks[index] === undefined) return doc
   if (markdown.trim() === '') return deleteBlocks(doc, [index], mintId)
   const blocks = doc.blocks.map((block, i) => (i === index ? { ...block, raw: markdown } : block))
-  return reconcile(
-    { blocks: doc.blocks, gaps: doc.gaps },
-    serialise({ blocks, gaps: doc.gaps }),
-    mintId,
-  )
+  return reconcile(doc, serialise({ blocks, gaps: doc.gaps }), mintId)
 }
 
 export type MergeResult = { doc: Doc; focusId: string; cursor: number } | null
