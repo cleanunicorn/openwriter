@@ -14,8 +14,9 @@ export type Op = z.infer<typeof OpSchema>
 export const AssetSchema = z.strictObject({ file: z.string().min(1), alt: z.string().optional() })
 
 /**
- * `result.json`, exactly the shape in the build spec. `summary` is required; `ops`, `assets` and
- * `notes` default to empty so a research answer can be just a summary plus notes.
+ * `result.json`, the shape of the job file contract (README, "The job file contract"). `summary`
+ * is required; `ops`, `assets` and `notes` default to empty so a research answer can be just a
+ * summary plus notes.
  */
 export const ResultSchema = z.strictObject({
   summary: z.string(),

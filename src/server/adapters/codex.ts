@@ -42,8 +42,9 @@ export function buildCodexArgs(jobDir: string, options: AdapterOptions): string[
 }
 
 /**
- * codex runs with the job directory as its working root (a recorded deviation from the spec's
- * "workspace as working directory": it is what makes the job directory the only writable place).
+ * codex runs with the job directory as its working root (a recorded deviation from "workspace as
+ * working directory" — DECISIONS.md, "Real agents" → codex: it is what makes the job directory
+ * the only writable place).
  * The prompt therefore says where the workspace is and how the paths in instruction.md map.
  */
 export function codexPrompt(jobDir: string, options: AdapterOptions): string {

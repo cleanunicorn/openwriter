@@ -28,7 +28,7 @@ const result = (partial: Record<string, unknown>) =>
   ResultSchema.parse({ summary: 's', ...partial })
 
 describe('result.json schema', () => {
-  it('accepts the shape from the spec', () => {
+  it('accepts the shape of the job file contract', () => {
     const parsed = ResultSchema.safeParse({
       summary: 'one line',
       ops: [
