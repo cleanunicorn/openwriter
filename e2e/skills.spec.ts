@@ -5,7 +5,7 @@ import {
   ask,
   blockWith,
   expectFile,
-  expectWaiting,
+  expectOneWaiting,
   ghosts,
   jobFile,
   openArticle,
@@ -26,7 +26,7 @@ test('a skill from the palette runs as an ordinary job; the diagram renders in t
     .fill('fake:diagram from idea to post')
   await page.keyboard.press('Enter')
 
-  const [jobId] = await expectWaiting(app, 1)
+  const jobId = await expectOneWaiting(app)
   const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
   expect(instruction).toContain('## Skill: diagram')
   await release(app)

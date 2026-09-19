@@ -7,7 +7,7 @@ import {
   briefPath,
   editor,
   expectFile,
-  expectWaiting,
+  expectOneWaiting,
   ghosts,
   jobFile,
   openArticle,
@@ -44,7 +44,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
   await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · hello-openwrite')).toBeVisible()
 
-  const [jobId] = await expectWaiting(app, 1)
+  const jobId = await expectOneWaiting(app)
   const dir = jobFile(app, jobId)
   const instruction = readFileSync(path.join(dir, 'instruction.md'), 'utf8')
   expect(instruction).toContain('## Skill: draft-brief')
@@ -71,7 +71,7 @@ test('an empty brief is drafted through the start anchor', async ({ page, app })
 
   await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · fresh-post')).toBeVisible()
-  const [jobId] = await expectWaiting(app, 1)
+  const jobId = await expectOneWaiting(app)
   expect(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8')).toContain('"b0"')
   await release(app)
   await acceptButton(ghosts(page).first()).click()
@@ -85,7 +85,7 @@ test('"draft article from brief" targets the article', async ({ page, app }) => 
   await runCommand(page, 'edit strategy')
   await runCommand(page, 'draft article')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
-  const [jobId] = await expectWaiting(app, 1)
+  const jobId = await expectOneWaiting(app)
   const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
   expect(instruction).toContain('## Skill: draft-article')
   expect(instruction).toContain('Scope `article`')

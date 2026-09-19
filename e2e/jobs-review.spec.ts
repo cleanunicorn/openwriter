@@ -8,6 +8,7 @@ import {
   blockWith,
   editor,
   expectFile,
+  expectOneWaiting,
   expectWaiting,
   ghosts,
   jobFile,
@@ -181,7 +182,7 @@ test('a selection made in edit mode carries exact offsets, and the draft survive
 
   // Focus moved to the pill: the edit was committed, not dropped.
   await expect(page.getByRole('heading', { name: 'Why blocks now' })).toBeVisible()
-  const [jobId] = await expectWaiting(app, 1)
+  const jobId = await expectOneWaiting(app)
   const targets = JSON.parse(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8'))
   expect(targets.selection).toMatchObject({ text: 'now', from: 14, to: 17 })
   // The snapshot holds the text as typed, focused editor included.

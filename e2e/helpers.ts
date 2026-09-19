@@ -144,6 +144,13 @@ export async function expectWaiting(app: App, count: number): Promise<string[]> 
   return ids
 }
 
+/** The id of the one fake job that is waiting at its checkpoint. */
+export async function expectOneWaiting(app: App): Promise<string> {
+  const [id] = await expectWaiting(app, 1)
+  if (id === undefined) throw new Error('no waiting job')
+  return id
+}
+
 export const release = (app: App, jobId?: string): Promise<string[]> =>
   fakeControl(app, 'POST', 'release', jobId === undefined ? {} : { jobId })
 
@@ -159,8 +166,8 @@ export async function dropEventStreams(app: App): Promise<void> {
 }
 
 /** A file of a job's contract directory (`.zen/jobs/<id>/<name>`), or the directory itself. */
-export const jobFile = (app: App, jobId: string | undefined, name = ''): string =>
-  path.join(app.workspace, '.zen', 'jobs', jobId ?? '', name)
+export const jobFile = (app: App, jobId: string, name = ''): string =>
+  path.join(app.workspace, '.zen', 'jobs', jobId, name)
 
 export const briefPath = (app: App, slug = 'hello-openwrite'): string =>
   path.join(app.workspace, '.zen', 'articles', slug, 'brief.md')

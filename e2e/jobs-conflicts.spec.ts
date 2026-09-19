@@ -6,6 +6,7 @@ import {
   blockStart,
   blockWith,
   expectFile,
+  expectOneWaiting,
   expectWaiting,
   ghosts,
   jobFile,
@@ -28,7 +29,7 @@ test('a second job on a busy block queues behind it and runs against the settled
   const heading = blockWith(page, 'Why blocks')
   await selectWord(page, heading, 'Why blocks')
   await ask(page, 'fake:upper first')
-  const [firstId] = await expectWaiting(app, 1)
+  const firstId = await expectOneWaiting(app)
 
   await selectWord(page, heading, 'Why blocks')
   await ask(page, 'fake:insert second')
@@ -44,7 +45,7 @@ test('a second job on a busy block queues behind it and runs against the settled
 
   // Accepting settles it; only now does the second job start — against the accepted text.
   await acceptButton(ghosts(page)).click()
-  const [secondId] = await expectWaiting(app, 1)
+  const secondId = await expectOneWaiting(app)
   expect(secondId).not.toBe(firstId)
   const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
   expect(snapshot).toContain('## WHY BLOCKS')
@@ -59,10 +60,10 @@ test('a rejected outcome releases the queue as well', async ({ page, app }) => {
   await ask(page, 'fake:upper first')
   await selectWord(page, heading, 'Why blocks')
   await ask(page, 'fake:upper second')
-  const [firstId] = await expectWaiting(app, 1)
+  const firstId = await expectOneWaiting(app)
   await release(app, firstId)
   await rejectButton(ghosts(page)).click()
-  const [secondId] = await expectWaiting(app, 1)
+  const secondId = await expectOneWaiting(app)
   const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
   expect(snapshot).toContain('## Why blocks')
 })
@@ -98,7 +99,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await openArticle(page)
   await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
   await ask(page, 'fake:upper block job')
-  const [blockJob] = await expectWaiting(app, 1)
+  const blockJob = await expectOneWaiting(app)
 
   await runCommand(page, 'whole article')
   await page
@@ -115,7 +116,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
 
   await release(app, blockJob)
   await acceptButton(ghosts(page)).click()
-  const [articleJob] = await expectWaiting(app, 1)
+  const articleJob = await expectOneWaiting(app)
   const instruction = readFileSync(jobFile(app, articleJob, 'instruction.md'), 'utf8')
   expect(instruction).toContain('article job')
   expect(instruction).toContain('Scope `article`')
@@ -123,7 +124,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
 
   await release(app, articleJob)
   await acceptButton(ghosts(page)).click()
-  const [lateJob] = await expectWaiting(app, 1)
+  const lateJob = await expectOneWaiting(app)
   expect(readFileSync(jobFile(app, lateJob, 'instruction.md'), 'utf8')).toContain('late block job')
 })
 
@@ -198,7 +199,7 @@ test('a queued instruction whose block is deleted is dropped, with a notice, and
   const paragraph = blockWith(page, 'Results arrive as ghost diffs')
   await selectWord(page, paragraph, 'Results')
   await ask(page, 'fake:upper first')
-  const [firstId] = await expectWaiting(app, 1)
+  const firstId = await expectOneWaiting(app)
   await selectWord(page, paragraph, 'Results')
   await ask(page, 'fake:upper second, held behind the first')
   await tray(page).getByRole('button', { name: '2 running' }).click()

@@ -5,6 +5,7 @@ import {
   ask,
   blockWith,
   editor,
+  expectOneWaiting,
   expectWaiting,
   ghosts,
   jobState,
@@ -19,9 +20,9 @@ async function runToEnd(page: Page, app: App, instruction: string, repair = fals
   await openArticle(page)
   await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
   await ask(page, instruction)
-  const [id] = await expectWaiting(app, 1)
+  const id = await expectOneWaiting(app)
   await release(app, id)
-  if (repair && id !== undefined) {
+  if (repair) {
     // The repair attempt is the same job reaching its checkpoint a second time.
     await expect(async () => expect(await jobState(app, id)).toBe('repairing')).toPass()
     await expectWaiting(app, 1)
