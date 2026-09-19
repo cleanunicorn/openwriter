@@ -21,8 +21,6 @@ import { EventHub } from './sse.ts'
 import { DocWatcher } from './watcher.ts'
 import { ConflictError, UndecodableError, Workspace } from './workspace.ts'
 
-export type { AppOptions } from './context.ts'
-
 export type CreatedApp = {
   app: Hono
   context: ServerContext
