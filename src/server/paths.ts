@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs'
 import path from 'node:path'
+import { isSlug } from '../shared/names.ts'
 
 /** Thrown for every path that would leave its root. Routes map it to HTTP 400. */
 export class PathEscapeError extends Error {
@@ -9,10 +10,8 @@ export class PathEscapeError extends Error {
   }
 }
 
-export const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/
-
 export function assertSlug(slug: string): string {
-  if (!SLUG_PATTERN.test(slug) || slug.length > 120) {
+  if (!isSlug(slug)) {
     throw new PathEscapeError(`invalid slug: ${JSON.stringify(slug)}`)
   }
   return slug

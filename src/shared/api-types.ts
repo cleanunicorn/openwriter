@@ -1,10 +1,8 @@
 import { z } from 'zod'
 import { ConfigSchema } from './config-schema.ts'
+import { SlugSchema } from './names.ts'
 
-const Slug = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/)
-  .max(120)
+const Slug = SlugSchema
 
 /** The editor is document-generic: an article, the global strategy, or an article's brief. */
 export const DocRefSchema = z.discriminatedUnion('kind', [

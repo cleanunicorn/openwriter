@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DocRefSchema } from '../api-types.ts'
+import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
 
 export const ScopeSchema = z.enum(['blocks', 'article', 'research'])
@@ -56,10 +57,7 @@ export const JobRequestSchema = z.object({
   doc: DocRefSchema,
   scope: ScopeSchema,
   instruction: z.string().trim().min(1).max(20000),
-  skill: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]*$/)
-    .optional(),
+  skill: SkillNameSchema.optional(),
   targets: z.array(BlockId),
   selection: SelectionSchema.optional(),
   snapshot: SnapshotSchema,

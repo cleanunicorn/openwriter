@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { splitHeader } from '../shared/key-values.ts'
+import { SkillNameSchema } from '../shared/names.ts'
 
 const list = z.union([z.array(z.string()), z.string().transform((value) => [value])]).default([])
 const flag = z
@@ -10,7 +11,7 @@ const flag = z
 
 /** The header of `skills/<name>.md`. A new media type is a file here, never new editor code. */
 export const SkillHeaderSchema = z.object({
-  name: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+  name: SkillNameSchema,
   description: z.string().min(1),
   scope: z.enum(['blocks', 'article', 'research']).default('blocks'),
   /** Task kind; selects a per-task agent override from settings (for example `image`). */

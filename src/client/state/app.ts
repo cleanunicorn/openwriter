@@ -6,6 +6,7 @@ import {
   type SkillInfo,
 } from '../../shared/api-types.ts'
 import { ServerEventSchema } from '../../shared/events.ts'
+import { isSlug } from '../../shared/names.ts'
 import { ApiError, api } from '../api.ts'
 import {
   type DocAction,
@@ -149,11 +150,7 @@ export const refToHash = (ref: DocRef): string =>
 export function hashToRef(hash: string): DocRef | null {
   const [, kind, slug] = hash.split('/')
   if (kind === 'strategy') return { kind }
-  if (
-    (kind === 'article' || kind === 'brief') &&
-    slug !== undefined &&
-    /^[a-z0-9][a-z0-9-]*$/.test(slug)
-  ) {
+  if ((kind === 'article' || kind === 'brief') && slug !== undefined && isSlug(slug)) {
     return { kind, slug }
   }
   return null

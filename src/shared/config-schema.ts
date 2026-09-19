@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HerdrSessionSchema } from './names.ts'
 
 /** Per-adapter overrides. `command` replaces the executable, `baseArgs` the verified defaults. */
 export const AdapterConfigSchema = z.object({
@@ -7,10 +8,7 @@ export const AdapterConfigSchema = z.object({
   baseArgs: z.array(z.string()).optional(),
   extraArgs: z.array(z.string()).default([]),
   /** herdr only: the named herdr session jobs run in (default `openwrite-jobs`). */
-  session: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]*$/)
-    .optional(),
+  session: HerdrSessionSchema.optional(),
 })
 export type AdapterConfig = z.infer<typeof AdapterConfigSchema>
 

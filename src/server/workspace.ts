@@ -12,6 +12,7 @@ import path from 'node:path'
 import type { Article, DocRef } from '../shared/api-types.ts'
 import { summariseFrontMatter } from '../shared/blocks/front-matter.ts'
 import { splitText } from '../shared/blocks/split.ts'
+import { isSlug } from '../shared/names.ts'
 import { loadConfig } from './config.ts'
 import { assertSlug, resolveWithin } from './paths.ts'
 
@@ -136,7 +137,7 @@ export class Workspace {
     if (!existsSync(posts)) return []
     const articles: Article[] = []
     for (const entry of readdirSync(posts, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !/^[a-z0-9][a-z0-9-]*$/.test(entry.name)) continue
+      if (!entry.isDirectory() || !isSlug(entry.name)) continue
       const index = path.join(posts, entry.name, 'index.md')
       if (!existsSync(index) || !statSync(index).isFile()) continue
       let title = entry.name
