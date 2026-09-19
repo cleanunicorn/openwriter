@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { MAX_LINE, spawnAgent } from './spawn.ts'
+import { alive } from './test-helpers.ts'
 
 const fixture = path.join(import.meta.dirname, 'fixtures', 'echo-agent.ts')
 const temp = mkdtempSync(path.join(os.tmpdir(), 'openwrite-spawn-'))
@@ -18,15 +19,6 @@ const run = (mode: string, extra: string[] = []) => {
     onLine: (line) => lines.push(line),
   })
   return { agent, lines }
-}
-
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
 }
 
 describe('spawnAgent', () => {

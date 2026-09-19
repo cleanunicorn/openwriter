@@ -14,6 +14,7 @@ import type { ServerEvent } from '../../shared/events.ts'
 import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
 import { createProcessAdapter } from '../adapters/process-adapter.ts'
 import { AdapterRegistry } from '../adapters/registry.ts'
+import { alive } from '../adapters/test-helpers.ts'
 import type { AdapterHandle, AgentAdapter, Completion } from '../adapters/types.ts'
 import { createApp } from '../app.ts'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
@@ -374,20 +375,12 @@ describe('shutdown', () => {
     manager.create(request('x', byText('## Why blocks')))
     await expect.poll(() => existsSync(pidFile), { timeout: 5000 }).toBe(true)
     const pid = Number(readFileSync(pidFile, 'utf8'))
-    const alive = () => {
-      try {
-        process.kill(pid, 0)
-        return true
-      } catch {
-        return false
-      }
-    }
-    expect(alive()).toBe(true)
+    expect(alive(pid)).toBe(true)
     const started = Date.now()
     await manager.shutdown()
     // No three-second grace period on shutdown: nobody would be left to send the SIGKILL.
     expect(Date.now() - started).toBeLessThan(1500)
-    await expect.poll(alive, { timeout: 2000 }).toBe(false)
+    await expect.poll(() => alive(pid), { timeout: 2000 }).toBe(false)
   })
 })
 

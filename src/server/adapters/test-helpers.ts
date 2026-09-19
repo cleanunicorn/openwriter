@@ -12,3 +12,13 @@ export const options = (overrides: Partial<AdapterOptions> = {}): AdapterOptions
   network: false,
   ...overrides,
 })
+
+/** Whether a process still exists: signal 0 only checks, it delivers nothing. */
+export const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
