@@ -81,7 +81,7 @@ Settings are reachable from the palette (`Settings…`) and stored in `<workspac
 
 | Key | Meaning |
 | --- | --- |
-| `mainAgent` | `claude`, `codex`, or `fake`. Switching is a settings change, nothing else. |
+| `mainAgent` | `claude`, `codex`, `fake`, or `herdr` (optional, needs `herdr` on `PATH`; see "herdr" below). Switching is a settings change, nothing else. |
 | `taskAgents` | per-task overrides, for example `{ "image": "codex" }`; resolved before `mainAgent` |
 | `contentDir` | `content` by default; relative to the workspace, or an absolute path into a Hugo site |
 | `theme` | `system`, `light`, `dark` |
