@@ -7,7 +7,9 @@ import {
   type DocRef,
   DocResponseSchema,
   docUrl,
+  OkResponseSchema,
   SaveResponseSchema,
+  SkillsResponseSchema,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
 import {
@@ -16,19 +18,6 @@ import {
   JobSchema,
   JobsResponseSchema,
 } from '../shared/jobs/job-types.ts'
-import { z as zod } from 'zod'
-
-export const SkillInfoSchema = zod.object({
-  name: zod.string(),
-  description: zod.string(),
-  scope: zod.enum(['blocks', 'article', 'research']),
-  task: zod.string().optional(),
-  stub: zod.boolean(),
-  requires: zod.array(zod.string()),
-  document: zod.enum(['current', 'brief', 'article']),
-})
-export type SkillInfo = zod.infer<typeof SkillInfoSchema>
-const Ok = zod.object({ ok: zod.boolean() })
 
 export class ApiError extends Error {
   readonly status: number
@@ -92,8 +81,9 @@ export const api = {
     }),
   staleJob: (id: string, reason: string) =>
     request(JobSchema, `/api/jobs/${id}/stale`, { method: 'POST', body: { reason } }),
-  dismissJob: (id: string) => request(Ok, `/api/jobs/${id}/dismiss`, { method: 'POST' }),
-  skills: () => request(zod.object({ skills: zod.array(SkillInfoSchema) }), '/api/skills'),
+  dismissJob: (id: string) =>
+    request(OkResponseSchema, `/api/jobs/${id}/dismiss`, { method: 'POST' }),
+  skills: () => request(SkillsResponseSchema, '/api/skills'),
   saveConfig: (config: Config) =>
     request(ConfigResponseSchema, '/api/config', { method: 'PUT', body: config }),
 }

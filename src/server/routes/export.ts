@@ -1,20 +1,9 @@
 import { existsSync } from 'node:fs'
 import type { Hono } from 'hono'
-import { z } from 'zod'
+import { HtmlExportRequestSchema, MarkdownExportRequestSchema } from '../../shared/api-types.ts'
 import type { ServerContext } from '../context.ts'
 import { htmlZip, markdownZip } from '../export.ts'
 import { HttpError, parseBody } from '../http.ts'
-
-const Slug = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9-]*$/)
-  .max(120)
-const MarkdownExport = z.object({ slug: Slug })
-const HtmlExport = z.object({
-  slug: Slug,
-  title: z.string().max(500),
-  html: z.string().max(20_000_000),
-})
 
 export function mountExportRoutes(app: Hono, { workspace }: ServerContext): void {
   const zipResponse = (data: Uint8Array, name: string) =>
@@ -31,12 +20,12 @@ export function mountExportRoutes(app: Hono, { workspace }: ServerContext): void
   }
 
   app.post('/api/export/markdown', async (c) => {
-    const { slug } = await parseBody(c, MarkdownExport)
+    const { slug } = await parseBody(c, MarkdownExportRequestSchema)
     return zipResponse(markdownZip(bundleOf(slug), slug), `${slug}-markdown.zip`)
   })
 
   app.post('/api/export/html', async (c) => {
-    const { slug, title, html } = await parseBody(c, HtmlExport)
+    const { slug, title, html } = await parseBody(c, HtmlExportRequestSchema)
     return zipResponse(htmlZip(bundleOf(slug), slug, title, html), `${slug}-html.zip`)
   })
 }

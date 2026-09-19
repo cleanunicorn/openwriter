@@ -1,8 +1,13 @@
+import type { HtmlExportRequest, MarkdownExportRequest } from '../shared/api-types.ts'
 import { registerCommands } from './palette/commands.ts'
 import { renderForExport } from './render/export-html.ts'
 import { currentDoc, dispatch, flush, store } from './state/app.ts'
 
-async function download(url: string, body: unknown, fallbackName: string): Promise<void> {
+async function download(
+  url: string,
+  body: MarkdownExportRequest | HtmlExportRequest,
+  fallbackName: string,
+): Promise<void> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

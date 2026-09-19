@@ -121,6 +121,17 @@ describe('skills in jobs', () => {
     const { skills } = await json(t.get('/api/skills'))
     expect(skills.map((skill: { name: string }) => skill.name)).toContain('terminal-recording')
     expect(skills[0]).not.toHaveProperty('body')
+    // Permission headers are the server's business; they do not travel to the client.
+    const recording = skills.find((skill: { name: string }) => skill.name === 'terminal-recording')
+    expect(Object.keys(recording).sort()).toEqual([
+      'description',
+      'document',
+      'name',
+      'requires',
+      'scope',
+      'stub',
+      'task',
+    ])
   })
 
   it('puts the skill body into instruction.md: any adapter can run it', async () => {

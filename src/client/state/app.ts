@@ -1,6 +1,12 @@
-import { type Article, type ConfigResponse, type DocRef, docKey } from '../../shared/api-types.ts'
+import {
+  type Article,
+  type ConfigResponse,
+  type DocRef,
+  docKey,
+  type SkillInfo,
+} from '../../shared/api-types.ts'
 import { ServerEventSchema } from '../../shared/events.ts'
-import { ApiError, api, type SkillInfo } from '../api.ts'
+import { ApiError, api } from '../api.ts'
 import {
   type DocAction,
   type DocState,

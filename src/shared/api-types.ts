@@ -51,3 +51,28 @@ export const ConfigResponseSchema = z.object({
   adapterOverride: z.string().nullable(),
 })
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>
+
+/** What the palette needs to know about a skill. The prompt body and the permission headers stay on the server. */
+export const SkillInfoSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  scope: z.enum(['blocks', 'article', 'research']),
+  task: z.string().optional(),
+  stub: z.boolean(),
+  requires: z.array(z.string()),
+  document: z.enum(['current', 'brief', 'article']),
+})
+export type SkillInfo = z.infer<typeof SkillInfoSchema>
+export const SkillsResponseSchema = z.object({ skills: z.array(SkillInfoSchema) })
+
+export const OkResponseSchema = z.object({ ok: z.boolean() })
+
+/** Export requests; the response is a zip, not JSON. */
+export const MarkdownExportRequestSchema = z.object({ slug: Slug })
+export const HtmlExportRequestSchema = z.object({
+  slug: Slug,
+  title: z.string().max(500),
+  html: z.string().max(20_000_000),
+})
+export type MarkdownExportRequest = z.infer<typeof MarkdownExportRequestSchema>
+export type HtmlExportRequest = z.infer<typeof HtmlExportRequestSchema>

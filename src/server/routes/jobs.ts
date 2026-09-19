@@ -1,5 +1,6 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
+import { SkillInfoSchema } from '../../shared/api-types.ts'
 import { DecisionsRequestSchema, JobRequestSchema } from '../../shared/jobs/job-types.ts'
 import type { FakeGate } from '../adapters/fake.ts'
 import type { ServerContext } from '../context.ts'
@@ -46,8 +47,9 @@ export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobMana
     })
   })
 
+  // Only what the palette needs: the prompt body and the permission headers stay on the server.
   app.get('/api/skills', (c) =>
-    c.json({ skills: listSkills().map(({ body: _body, ...header }) => header) }),
+    c.json({ skills: listSkills().map((skill) => SkillInfoSchema.parse(skill)) }),
   )
 }
 
