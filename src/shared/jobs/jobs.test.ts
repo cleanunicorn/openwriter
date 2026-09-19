@@ -189,9 +189,34 @@ describe('op validation', () => {
     expect(validateOps(result({ assets: [{ file }] }), blocks)[0]).toContain('inside assets/')
   })
 
+  it('rejects a declared asset that no op references', () => {
+    const errors = validateOps(
+      result({
+        ops: [{ op: 'insert_after', block_id: 'b3', markdown: 'See the diagram.' }],
+        assets: [{ file: 'assets/d.png' }],
+      }),
+      blocks,
+    )
+    expect(errors[0]).toContain('declared but no op references it')
+  })
+
   it('accepts nested asset paths and rejects duplicates', () => {
-    expect(validateOps(result({ assets: [{ file: 'assets/img/a.png' }] }), blocks)).toEqual([])
-    const twice = result({ assets: [{ file: 'assets/a.png' }, { file: 'assets/a.png' }] })
+    const referenced = {
+      ops: [
+        {
+          op: 'insert_after',
+          block_id: 'b3',
+          markdown: '![a](assets/img/a.png) ![b](assets/a.png)',
+        },
+      ],
+    }
+    expect(
+      validateOps(result({ ...referenced, assets: [{ file: 'assets/img/a.png' }] }), blocks),
+    ).toEqual([])
+    const twice = result({
+      ...referenced,
+      assets: [{ file: 'assets/a.png' }, { file: 'assets/a.png' }],
+    })
     expect(validateOps(twice, blocks)[0]).toContain('twice')
   })
 })
@@ -407,6 +432,26 @@ describe('asset references', () => {
         '<img src="diagram-2.png">',
         '{{< figure src="diagram-2.png" >}}',
         '{{< img "diagram-2.png" >}}',
+      ].join('\n'),
+    )
+  })
+
+  it('treats a leading ./ and reference-style definitions as the same path', () => {
+    const markdown = [
+      '![a](./assets/diagram.png)',
+      '![b][img]',
+      '',
+      '[img]: assets/diagram.png "Title"',
+      '[cast]: <./assets/diagram.png>',
+    ].join('\n')
+    expect(referencedAssets(markdown, ['assets/diagram.png'])).toEqual(['assets/diagram.png'])
+    expect(rewriteAssetRefs(markdown, map)).toBe(
+      [
+        '![a](diagram-2.png)',
+        '![b][img]',
+        '',
+        '[img]: diagram-2.png "Title"',
+        '[cast]: <diagram-2.png>',
       ].join('\n'),
     )
   })

@@ -1,10 +1,14 @@
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** Patterns that hold a path as a whole value: link/image destinations and quoted values. */
+/**
+ * Patterns that hold a path as a whole value: link/image destinations, reference definitions, and
+ * quoted values. A leading `./` is the same path, so it is matched (and dropped on rewrite).
+ */
 function patternsFor(path: string): RegExp[] {
-  const p = escapeRegExp(path)
+  const p = `(?:\\./)?${escapeRegExp(path)}`
   return [
     new RegExp(`(\\]\\(\\s*<?)${p}(>?(?:\\s+(?:"[^"]*"|'[^']*'|\\([^)]*\\)))?\\s*\\))`, 'g'),
+    new RegExp(`(^ {0,3}\\[[^\\]\\n]+\\]:[ \\t]*<?)${p}(>?(?:[ \\t]+\\S.*)?$)`, 'gm'),
     new RegExp(`(=\\s*["'])${p}(["'])`, 'g'),
     new RegExp(`(\\{\\{[<%][^}]*?\\s["'])${p}(["'])`, 'g'),
   ]
