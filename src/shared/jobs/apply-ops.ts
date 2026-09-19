@@ -38,8 +38,9 @@ export function applyOps(
   const placed = (opIndex: number) => inserted[opIndex] ?? priorInserted[opIndex] ?? []
 
   for (const { index: opIndex, op } of [...ops].sort((a, b) => a.index - b.index)) {
-    const anchorIndex = op.block_id === START_ANCHOR ? -1 : indexOf(current, op.block_id)
-    if (anchorIndex === -1 && op.block_id !== START_ANCHOR) {
+    const atStart = op.block_id === START_ANCHOR
+    const anchorIndex = atStart ? -1 : indexOf(current, op.block_id)
+    if (!atStart && anchorIndex === -1) {
       missing.push(opIndex)
       continue
     }
