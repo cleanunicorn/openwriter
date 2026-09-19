@@ -1,12 +1,12 @@
 import { splitText } from './split.ts'
-import type { Block, Doc, MintId } from './types.ts'
+import type { Block, Doc, MintId, Slice } from './types.ts'
 
 /** Longest common subsequence over (kind, raw); returns matched index pairs in order. */
-function lcsPairs(oldBlocks: Block[], next: { raw: string; kind: string }[]): [number, number][] {
+function lcsPairs(oldBlocks: Block[], newSlices: Slice[]): [number, number][] {
   const n = oldBlocks.length
-  const m = next.length
+  const m = newSlices.length
   const same = (i: number, j: number) =>
-    oldBlocks[i]?.raw === next[j]?.raw && oldBlocks[i]?.kind === next[j]?.kind
+    oldBlocks[i]?.raw === newSlices[j]?.raw && oldBlocks[i]?.kind === newSlices[j]?.kind
   const table: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
   for (let i = n - 1; i >= 0; i--) {
     const row = table[i] as number[]
