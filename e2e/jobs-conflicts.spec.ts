@@ -9,6 +9,7 @@ import {
   expectWaiting,
   ghosts,
   mod,
+  notice,
   openArticle,
   release,
   selectWord,
@@ -201,4 +202,34 @@ test('a page reload counts as a restart: the review becomes stale, its output st
   await tray(page).getByText('Show the agent’s output').click()
   await expect(tray(page)).toContainText('WHY BLOCKS')
   await expect(ghosts(page)).toHaveCount(0)
+})
+
+test('a queued instruction whose block is deleted is dropped, with a notice, and never starts', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  const paragraph = blockWith(page, 'Results arrive as ghost diffs')
+  await selectWord(page, paragraph, 'Results')
+  await ask(page, 'fake:upper first')
+  const [firstId] = await expectWaiting(app, 1)
+  await selectWord(page, paragraph, 'Results')
+  await ask(page, 'fake:upper second, held behind the first')
+  await tray(page).getByRole('button', { name: '2 running' }).click()
+  await expect(tray(page)).toContainText('queued behind another job')
+
+  // The writer deletes the block both instructions were about.
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(`${mod}+a`)
+  await page.keyboard.press('Delete')
+  await page.keyboard.press('Escape')
+
+  await expect(notice(page)).toContainText('A queued instruction was dropped')
+  await expect(tray(page)).not.toContainText('queued behind another job')
+  // The running job goes stale; the dropped one never reaches the server.
+  await expect(tray(page)).toContainText('stale')
+  await release(app, firstId)
+  expect(await waitingJobs(app)).toEqual([])
+  const jobs = (await (await fetch(`${app.url}/api/jobs`)).json()) as { jobs: unknown[] }
+  expect(jobs.jobs).toHaveLength(1)
 })
