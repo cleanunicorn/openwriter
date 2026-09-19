@@ -150,8 +150,8 @@ md.renderer.rules.image = (tokens, index, options, env, self) => {
  * Markdown → sanitised HTML. Article text and agent output are both untrusted input, so the one
  * render path always ends in DOMPurify; ghost previews and the HTML export reuse it.
  */
-export function renderMarkdown(markdown: string, env: RenderEnv = {}): string {
-  return DOMPurify.sanitize(md.render(markdown, env), {
+export function renderMarkdown(source: string, env: RenderEnv = {}): string {
+  return DOMPurify.sanitize(md.render(source, env), {
     ADD_ATTR: ['target'],
     FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select'],
   })
