@@ -7,6 +7,8 @@ import { createDoc, createIdMinter, serialise, splitText } from './index.ts'
 const corpusDir = path.join(import.meta.dirname, 'corpus')
 const corpus = (name: string) => readFileSync(path.join(corpusDir, name), 'utf8')
 
+// A deliberate copy of split.ts's `isBlank`: the oracle for "a gap is whitespace only" must not be
+// the splitter's own definition, or a change to that definition would pass unnoticed.
 const isWhitespace = (gap: string) => /^[ \t\r\n]*$/.test(gap)
 
 function expectLossless(text: string): ReturnType<typeof splitText> {
