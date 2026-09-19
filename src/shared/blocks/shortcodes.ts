@@ -67,13 +67,7 @@ export function pairedShortcodeRanges(
         stack.push({ name: tag.name, block: blockIndex })
         continue
       }
-      let match = -1
-      for (let i = stack.length - 1; i >= 0; i--) {
-        if (stack[i]?.name === tag.name) {
-          match = i
-          break
-        }
-      }
+      const match = stack.findLastIndex((entry) => entry.name === tag.name)
       if (match === -1) continue
       const open = stack[match]
       stack.length = match
