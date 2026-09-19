@@ -2,11 +2,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import type { Page } from '@playwright/test'
 import { strFromU8, unzipSync } from 'fflate'
 import { expect, test } from './fixtures.ts'
 import { notice, openArticle, openPalette, runCommand } from './helpers.ts'
 
-async function exportVia(page: import('@playwright/test').Page, query: string) {
+async function exportVia(page: Page, query: string) {
   await openPalette(page, query)
   const download = page.waitForEvent('download')
   await page.keyboard.press('Enter')

@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { configPath, mod, openArticle, runCommand } from './helpers.ts'
 
-async function openSettings(page: import('@playwright/test').Page) {
+async function openSettings(page: Page) {
   await runCommand(page, 'settings')
   await expect(page.getByRole('form', { name: 'Settings' })).toBeVisible()
 }
