@@ -5,19 +5,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { buildClaudeArgs, readClaudeLine } from './claude.ts'
 import { buildCodexArgs, codexPrompt, readCodexLine } from './codex.ts'
 import { BYPASS_FLAGS, type CliSpec, createProcessAdapter } from './process-adapter.ts'
+import { jobDir, options, workspace } from './test-helpers.ts'
 import type { AdapterOptions } from './types.ts'
-
-const workspace = '/work/space'
-const jobDir = '/work/space/.zen/jobs/20260919-101500-ab12'
-const options = (overrides: Partial<AdapterOptions> = {}): AdapterOptions => ({
-  workspace,
-  jobId: '20260919-101500-ab12',
-  prompt: 'Read .zen/jobs/20260919-101500-ab12/instruction.md and follow it exactly.',
-  config: { extraArgs: [] },
-  allow: [],
-  network: false,
-  ...overrides,
-})
 
 describe('claude command line', () => {
   it('is headless, streamed, and confined to the job directory', () => {

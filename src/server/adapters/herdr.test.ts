@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createHerdrAdapter, type HerdrCli } from './herdr.ts'
-import type { AdapterOptions } from './types.ts'
-
-const options = (overrides: Partial<AdapterOptions> = {}): AdapterOptions => ({
-  workspace: '/work/space',
-  jobId: '20260919-101500-ab12',
-  prompt: 'Read .zen/jobs/20260919-101500-ab12/instruction.md and follow it exactly.',
-  config: { extraArgs: [] },
-  allow: [],
-  network: false,
-  ...overrides,
-})
-const jobDir = '/work/space/.zen/jobs/20260919-101500-ab12'
+import { jobDir, options } from './test-helpers.ts'
 
 /** A scripted herdr: records every command and answers like the real CLI's JSON. */
 function stub(
