@@ -57,6 +57,13 @@ const until = (id: string, wanted: Job['state']) =>
   expect.poll(() => state(id), { timeout: 5000 }).toBe(wanted)
 const atCheckpoint = (id: string) =>
   expect.poll(() => t.gate.waitingIds(), { timeout: 5000 }).toContain(id)
+/** Let a fake job past its checkpoint and wait for its proposal. */
+const runToReady = async (id: string): Promise<Job> => {
+  await atCheckpoint(id)
+  t.gate.release(id)
+  await until(id, 'ready')
+  return t.jobs.get(id)
+}
 
 describe('the job file contract', () => {
   it('writes the contract files and leaves the article untouched', async () => {
@@ -108,9 +115,7 @@ describe('the job file contract', () => {
     expect(readFileSync(path.join(jobDir(job.id), 'article.md'), 'utf8')).toContain(
       '<!-- zen:block id=b0 target -->',
     )
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
+    await runToReady(job.id)
     expect(t.jobs.get(job.id).result?.ops[0]).toMatchObject({ op: 'insert_after', block_id: 'b0' })
   })
 
@@ -229,9 +234,7 @@ describe('lifecycle', () => {
     expect(state(running.id)).toBe('cancelled')
 
     const finished = await start(request('fake:upper', byText('## A table')))
-    await atCheckpoint(finished.id)
-    t.gate.release(finished.id)
-    await until(finished.id, 'ready')
+    await runToReady(finished.id)
     expect((await json(t.send('POST', `/api/jobs/${finished.id}/cancel`))).state).toBe('ready')
   })
 
@@ -413,10 +416,7 @@ describe('agent selection', () => {
 describe('review decisions', () => {
   async function readyJob(instruction: string, text = 'Results arrive'): Promise<Job> {
     const job = await start(request(instruction, byText(text)))
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
-    return t.jobs.get(job.id)
+    return runToReady(job.id)
   }
   const bundle = () => path.dirname(articlePath())
 
@@ -501,9 +501,7 @@ describe('review decisions', () => {
 
   it('a research job has no ops and settles with an empty decision', async () => {
     const job = await start(request('fake:research', () => [], { scope: 'research', targets: [] }))
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
+    await runToReady(job.id)
     expect(t.jobs.get(job.id).result?.notes).toContain('Findings')
     const body = await json(
       t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [], rejected: [] }),
@@ -515,9 +513,7 @@ describe('review decisions', () => {
 describe('staleness and restart', () => {
   it('the client can mark a job stale; its output stays readable', async () => {
     const job = await start(request('fake:upper', byText('## Why blocks')))
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
+    await runToReady(job.id)
     const stale = await json(
       t.send('POST', `/api/jobs/${job.id}/stale`, { reason: 'A target block was deleted.' }),
     )
@@ -527,9 +523,7 @@ describe('staleness and restart', () => {
 
   it('a restart marks unsettled jobs stale and keeps their output; dismissed jobs stay away', async () => {
     const reviewed = await start(request('fake:upper', byText('## Why blocks')))
-    await atCheckpoint(reviewed.id)
-    t.gate.release(reviewed.id)
-    await until(reviewed.id, 'ready')
+    await runToReady(reviewed.id)
     const running = await start(request('fake:upper', byText('## A table')))
     await atCheckpoint(running.id)
 
@@ -584,9 +578,7 @@ describe('agent-made links in the job directory are never followed', () => {
 
   it('neither serves nor copies through a symlinked assets directory', async () => {
     const job = await start(request('fake:asset', byText('Results arrive')))
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
+    await runToReady(job.id)
     rmSync(path.join(jobDir(job.id), 'assets'), { recursive: true })
     symlinkSync(outside, path.join(jobDir(job.id), 'assets'))
     // The job's own asset name now points outside too.
@@ -638,9 +630,7 @@ describe('routes', () => {
 
   it('serves job assets for ghost previews and refuses to leave assets/', async () => {
     const job = await start(request('fake:asset', byText('Results arrive')))
-    await atCheckpoint(job.id)
-    t.gate.release(job.id)
-    await until(job.id, 'ready')
+    await runToReady(job.id)
     expect((await t.get(`/api/jobs/${job.id}/assets/fake-diagram.png`)).status).toBe(200)
     expect((await t.get(`/api/jobs/${job.id}/assets/..%2fjob.json`)).status).toBe(400)
   })
