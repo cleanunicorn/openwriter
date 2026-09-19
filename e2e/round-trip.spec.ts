@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs'
+import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import { editor, expectFile, openArticle } from './helpers.ts'
 
@@ -43,8 +44,11 @@ test('a paired shortcode survives editing of its neighbours, byte for byte', asy
       `## A shortcode that spans blocks (edited)\n\n${shortcode}\n\n## Code and diagrams (edited)`,
     )
   })
-  // Only the two edited lines differ from the original.
-  const original = readFileSync('sample-workspace/content/posts/hello-openwrite/index.md', 'utf8')
+  // Only the two edited lines differ from the original: the tracked sample, not this test's copy.
+  const original = readFileSync(
+    path.join(import.meta.dirname, '..', 'sample-workspace/content/posts/hello-openwrite/index.md'),
+    'utf8',
+  )
   expect(app.readArticle().replaceAll(' (edited)', '')).toBe(original)
 })
 
