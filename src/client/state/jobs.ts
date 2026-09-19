@@ -51,6 +51,8 @@ export const useJobs = <T>(selector: (state: JobsState) => T): T =>
 
 const createdHere = new Set<string>()
 let deciding = 0
+/** jobId → op indices whose decision is on its way to the server. */
+const inFlight = new Map<string, Set<number>>()
 /** Requests that left the held list but whose job the server has not confirmed yet. */
 const posting = new Map<string, Claim>()
 let heldCounter = 0
@@ -198,9 +200,6 @@ export const undecided = (job: Job): number[] =>
  * returns the final names; references are rewritten and the ops applied to the *current* text
  * as one undoable step. Undoing it later is an ordinary edit: it never re-runs the job.
  */
-/** jobId → op indices whose decision is on its way to the server. */
-const inFlight = new Map<string, Set<number>>()
-
 export async function decide(
   id: string,
   wantAccepted: number[],
