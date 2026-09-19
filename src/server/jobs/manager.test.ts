@@ -113,6 +113,24 @@ describe('the job file contract', () => {
     expect(t.jobs.get(job.id).result?.ops[0]).toMatchObject({ op: 'insert_after', block_id: 'b0' })
   })
 
+  it('a job whose files cannot be written is not created at all', async () => {
+    // strategy.md that is not UTF-8: reading the context for the job throws.
+    writeFileSync(path.join(t.workspace, 'strategy.md'), Buffer.from([0x23, 0xff, 0xfe, 0x0a]))
+    const res = await t.send('POST', '/api/jobs', request('x', byText('## Why blocks')))
+    expect(res.status).toBe(422)
+    expect(t.jobs.list()).toEqual([])
+    expect(
+      existsSync(path.join(t.workspace, '.zen', 'jobs'))
+        ? readdirSync(path.join(t.workspace, '.zen', 'jobs'))
+        : [],
+    ).toEqual([])
+    // The next job is unaffected.
+    writeFileSync(path.join(t.workspace, 'strategy.md'), '# Strategy\n')
+    expect(
+      (await t.send('POST', '/api/jobs', request('fake:upper', byText('## Why blocks')))).status,
+    ).toBe(201)
+  })
+
   it('rejects a request whose targets are not in the snapshot', async () => {
     const body = request('x', byText('## Why blocks'))
     const res = await t.send('POST', '/api/jobs', { ...body, targets: ['b999'] })

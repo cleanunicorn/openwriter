@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
@@ -189,9 +190,16 @@ export class JobManager {
       dismissed: false,
     }
     const entry: Entry = { file, request, skill, logBytes: 0 }
+    // Publish the job only once its files exist. Reading the context can fail (strategy.md that is
+    // not UTF-8, a full disk); a half-created job must not stay listed as "queued" forever.
+    try {
+      writeJobFiles(this.jobDir(id), id, request, workspace, skill)
+      saveJobFile(this.jobDir(id), file)
+    } catch (error) {
+      rmSync(this.jobDir(id), { recursive: true, force: true })
+      throw error
+    }
     this.entries.set(id, entry)
-    writeJobFiles(this.jobDir(id), id, request, workspace, skill)
-    saveJobFile(this.jobDir(id), file)
     this.options.events.emit({ type: 'job.state', job })
 
     if (skill?.stub) {
