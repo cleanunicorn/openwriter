@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "mainAgent": "fake",
+  "contentDir": "content",
+  "theme": "system",
+  "concurrency": 3
+}

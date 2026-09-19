@@ -10,9 +10,9 @@ agent jobs run in the background while the writer keeps writing. The project
 follows GitHub flow: `main` is always runnable, work happens on short-lived
 branches, and every change lands through a pull request.
 
-**Status (2026-09-19): no code exists yet.** Everything below marked *planned*
-is the contract the first scaffold must create. When the scaffold lands, replace
-*planned* with what was built, in the same PR.
+**Status:** the initial build is in progress on `feat/openwrite-build`. This file
+describes what exists; sections are updated in the same PR as the code they
+describe.
 
 Use [README.md](README.md) for setup, the workspace layout, the job file
 contract, and how to add an adapter or a skill. Record every non-obvious
@@ -36,16 +36,17 @@ Versions are what is installed on the dev machine as of 2026-09-19.
 
 ## Commands
 
-npm scripts are the single source of the dev flow. `npm run dev` and
-`npm start` are fixed by the spec; the other names are *planned* and the
-scaffold must create them exactly.
+npm scripts are the single source of the dev flow (`package.json`).
 
 - **Install / bootstrap:** `npm install`
-- **Run locally (dev):** `npm run dev`
-- **Run locally (production):** `npm start` — opens the editor on the sample
-  workspace
-- **Lint:** `npm run lint`
-- **Format:** `npm run format`
+- **Run locally (dev):** `npm run dev` — Node server with `--watch` on
+  `127.0.0.1:4317` plus Vite on `127.0.0.1:5173`
+- **Run locally (production):** `npm start` — builds the client when it is
+  missing or stale (`scripts/ensure-build.ts`), then opens the editor on a
+  gitignored copy of the sample workspace (`.openwrite/sample-workspace/`);
+  `npm start -- --workspace <dir>` opens another one
+- **Lint:** `npm run lint` — Biome, warnings fail
+- **Format:** `npm run format` writes; `npm run format:check` verifies (CI)
 - **Type-check:** `npm run typecheck`
 - **Test (unit, all):** `npm test`
 - **Test (single file):** `npm test -- <path>`
@@ -342,7 +343,8 @@ so it can point into a Hugo site):
 
 ## Testing
 
-- **Framework / runner:** Vitest for unit tests (*planned*), Playwright for e2e.
+- **Framework / runner:** Vitest for unit tests (`vitest.config.ts`, node
+  environment, fails on an empty suite), Playwright for e2e.
 - **Location & naming:** `*.test.ts` next to the code; `e2e/*.spec.ts`.
 - **What to cover:** a property-style round-trip test (parse then serialise
   equals the input) over a corpus with front matter, shortcodes, nested lists,
@@ -355,9 +357,12 @@ so it can point into a Hugo site):
 ## End-to-end tests (Playwright)
 
 - **Specs live in:** `e2e/`, named `*.spec.ts`
-- **Config:** `playwright.config.ts` (*planned*) — the `webServer` block starts
-  the app against a temp copy of the sample workspace with the `fake` adapter,
-  so the run starts the app itself.
+- **Config:** `playwright.config.ts` — the `webServer` block runs
+  `scripts/e2e-server.ts`, which starts the app against a temp copy of the
+  sample workspace with the `fake` adapter, so the run starts the app itself.
+  Tests that write use the `app` fixture in `e2e/fixtures.ts`: one server
+  process on a free port and one workspace copy per test. Chromium only.
+  `npm run test:e2e` builds the client first when it is missing or stale.
 - **Browser binaries:** `npx playwright install --with-deps`. A "browser not
   found" / "executable doesn't exist" error means this hasn't been run.
 

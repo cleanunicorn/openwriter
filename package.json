@@ -1,0 +1,57 @@
+{
+  "name": "openwrite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first, block-based markdown editor with agent-powered editing",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,vite \"node --watch src/server/main.ts --dev\" \"vite\"",
+    "prestart": "node scripts/ensure-build.ts",
+    "start": "node src/server/main.ts --open",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.server.json && tsc -p tsconfig.client.json",
+    "lint": "biome lint --error-on-warnings .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "vitest run",
+    "test:e2e": "node scripts/ensure-build.ts && playwright test"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.5",
+    "@codemirror/view": "^6.43.12",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@hono/node-server": "^2.1.1",
+    "diff": "^9.0.0",
+    "dompurify": "^3.4.15",
+    "fflate": "^0.8.3",
+    "highlight.js": "^11.12.0",
+    "hono": "^4.13.8",
+    "markdown-it": "^15.0.2",
+    "mermaid": "^12.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@playwright/test": "^1.63.0",
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "fast-check": "^4.10.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}
