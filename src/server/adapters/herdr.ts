@@ -99,6 +99,12 @@ export function createHerdrAdapter(
         throw new Error(`the herdr session "${session}" did not start`)
       }
 
+      // Cancel can arrive while any setup call is in flight. After every await the run checks
+      // the flag, so a cancelled job never goes on to start and prompt a real (paid) agent.
+      const stopIfCancelled = () => {
+        if (cancelled) throw new Error('cancelled')
+      }
+
       const run = async (): Promise<Completion> => {
         try {
           await cli.run(['--version'], 5000)
@@ -110,7 +116,9 @@ export function createHerdrAdapter(
               '"herdr" was not found on PATH. Install it or choose another agent in settings.',
           }
         }
+        stopIfCancelled()
         await ensureServer()
+        stopIfCancelled()
         const created = parse(
           await cli.run(
             scoped(
@@ -126,6 +134,7 @@ export function createHerdrAdapter(
           ),
         )
         pane = (created.result?.root_pane as Pane | undefined) ?? {}
+        stopIfCancelled()
         if (pane.pane_id === undefined)
           return { ok: false, reason: 'exit', message: 'herdr did not return a pane for the job' }
         channel.push({
@@ -152,6 +161,7 @@ export function createHerdrAdapter(
           ),
           70_000,
         )
+        stopIfCancelled()
         channel.push({ text: 'claude is ready in the pane' })
 
         let status = statusOf(

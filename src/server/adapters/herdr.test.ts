@@ -138,6 +138,30 @@ describe('herdr adapter', () => {
     expect(calls).toContainEqual(['--session', 'openwrite-jobs', 'pane', 'close', 'w7:p1'])
   })
 
+  it('a cancel during setup never starts or prompts the agent, and closes what was created', async () => {
+    const { cli, calls } = stub()
+    let releaseCreate: (() => void) | undefined
+    const slow: HerdrCli = {
+      ...cli,
+      run: async (args, timeout) => {
+        if (args.includes('create'))
+          await new Promise<void>((resolve) => {
+            releaseCreate = resolve
+          })
+        return cli.run(args, timeout)
+      },
+    }
+    const handle = createHerdrAdapter(() => slow).start(jobDir, options())
+    await expect.poll(() => releaseCreate !== undefined).toBe(true)
+    const cancelling = handle.cancel()
+    releaseCreate?.()
+    await cancelling
+    expect(await handle.done).toMatchObject({ ok: false, message: 'cancelled' })
+    expect(calls.some((args) => args.includes('start'))).toBe(false)
+    expect(calls.some((args) => args.includes('prompt'))).toBe(false)
+    expect(calls).toContainEqual(['--session', 'openwrite-jobs', 'workspace', 'close', 'w7'])
+  })
+
   it('reports a missing herdr as missing-cli', async () => {
     const { cli } = stub({ missing: true })
     const { completion } = await finish(createHerdrAdapter(() => cli).start(jobDir, options()))
