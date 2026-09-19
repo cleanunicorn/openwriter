@@ -4,6 +4,7 @@ import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
   answer,
+  articleHeading,
   blockEnd,
   briefPath,
   editor,
@@ -33,7 +34,7 @@ test('strategy and brief open in the same block editor', async ({ page, app }) =
   )
 
   await runCommand(page, 'open article hello')
-  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(page)).toBeVisible()
 })
 
 test('"draft brief from my notes" is an ordinary job whose proposal lands in the brief', async ({
@@ -67,7 +68,7 @@ test('an empty brief is drafted through the start anchor', async ({ page, app })
   await openArticle(page)
   await runCommand(page, 'new article')
   await answer(page, 'Article title', 'Fresh Post')
-  await expect(page.getByRole('heading', { name: 'Fresh Post', level: 1 })).toBeVisible()
+  await expect(articleHeading(page, 'Fresh Post')).toBeVisible()
 
   await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · fresh-post')).toBeVisible()
@@ -84,7 +85,7 @@ test('"draft article from brief" targets the article', async ({ page, app }) => 
   await openArticle(page)
   await runCommand(page, 'edit strategy')
   await runCommand(page, 'draft article')
-  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(page)).toBeVisible()
   const jobId = await expectOneWaiting(app)
   const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
   expect(instruction).toContain('## Skill: draft-article')

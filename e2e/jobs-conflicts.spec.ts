@@ -3,6 +3,7 @@ import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
   answer,
+  articleHeading,
   ask,
   blockStart,
   blockWith,
@@ -178,7 +179,7 @@ test('a page reload counts as a restart: the review becomes stale, its output st
   await expect(ghosts(page)).toHaveCount(1)
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(page)).toBeVisible()
   await tray(page).getByRole('button').first().click()
   await expect(tray(page)).toContainText('stale')
   await tray(page).getByText('Show the agent’s output').click()

@@ -17,10 +17,14 @@ export const editor = (page: Page): Locator => page.getByRole('textbox', { name:
 /** dnd-kit also renders a `status` live region, so the notice is addressed by name. */
 export const notice = (page: Page): Locator => page.getByRole('status', { name: 'Document notice' })
 
+/** The article's title as rendered: the one level-1 heading. */
+export const articleHeading = (page: Page, title = 'Hello, openwrite'): Locator =>
+  page.getByRole('heading', { name: title, level: 1 })
+
 /** Open the app and wait until the sample article is on screen. */
 export async function openArticle(page: Page): Promise<void> {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(page)).toBeVisible()
   // The diagram renders asynchronously and shifts everything below it; wait for the layout to settle.
   await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
 }

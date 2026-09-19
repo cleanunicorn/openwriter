@@ -2,6 +2,7 @@ import { expect, test } from './fixtures.ts'
 import {
   answer,
   boundingBox,
+  editor,
   expectFile,
   expectWaiting,
   ghosts,
@@ -59,7 +60,7 @@ for (const viewport of [
     await release(app)
     const panel = page.getByRole('complementary', { name: 'Research notes' })
     await expect(panel).toBeVisible()
-    await expect(page.getByRole('textbox', { name: 'Block editor' })).toBeFocused()
+    await expect(editor(page)).toBeFocused()
 
     const column = await boundingBox(page.getByRole('main'))
     const notes = await boundingBox(panel)

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   answer,
+  articleHeading,
   blockWith,
   briefPath,
   configPath,
@@ -21,14 +22,12 @@ test('the palette creates a new article and switches between articles', async ({
   await page.keyboard.press('Enter')
   await answer(page, 'Article title', 'Shipping a Block Editor')
 
-  await expect(
-    page.getByRole('heading', { name: 'Shipping a Block Editor', level: 1 }),
-  ).toBeVisible()
+  await expect(articleHeading(page, 'Shipping a Block Editor')).toBeVisible()
   expect(existsSync(app.articlePath('shipping-a-block-editor'))).toBe(true)
   expect(existsSync(briefPath(app, 'shipping-a-block-editor'))).toBe(true)
 
   await runCommand(page, 'open hello')
-  await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(page)).toBeVisible()
 })
 
 test('the palette tells assistive technology which option is active', async ({ page }) => {

@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
-import { configPath, mod, openArticle, runCommand } from './helpers.ts'
+import { configPath, editor, mod, openArticle, runCommand } from './helpers.ts'
 
 async function openSettings(page: Page) {
   await runCommand(page, 'settings')
@@ -104,7 +104,7 @@ test('settings is a modal dialog: focus, Escape, Tab, and no keys reach the docu
   // Enter and undo on a select must not act on the article behind the dialog.
   await page.keyboard.press('Enter')
   await page.keyboard.press(`${mod}+z`)
-  await expect(page.getByRole('textbox', { name: 'Block editor' })).toHaveCount(0)
+  await expect(editor(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Why blocks edited' })).toBeVisible()
 
   // Tab stays inside: backwards from the first control lands on the last, and forwards again.

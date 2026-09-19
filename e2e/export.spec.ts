@@ -3,7 +3,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { strFromU8 } from 'fflate'
 import { expect, test } from './fixtures.ts'
-import { exportVia, notice, openArticle, runCommand } from './helpers.ts'
+import { articleHeading, exportVia, notice, openArticle, runCommand } from './helpers.ts'
 
 test('markdown export is the bundle as is, including an unsaved edit', async ({ page, app }) => {
   await openArticle(page)
@@ -49,7 +49,7 @@ test('HTML export is standalone: diagrams rendered, local stylesheet and assets,
   await context.route(/^https?:/, (route) => route.abort())
   const offline = await context.newPage()
   await offline.goto(pathToFileURL(path.join(dir, 'hello-openwrite', 'index.html')).href)
-  await expect(offline.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  await expect(articleHeading(offline)).toBeVisible()
   // A class on purpose: the exported file's contract is to carry no test ids (asserted below).
   await expect(offline.locator('.diagram svg')).toContainText('Writer')
   expect(
