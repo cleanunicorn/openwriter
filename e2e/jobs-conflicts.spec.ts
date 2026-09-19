@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
+  answer,
   ask,
   blockStart,
   blockWith,
@@ -102,10 +103,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   const blockJob = await expectOneWaiting(app)
 
   await runCommand(page, 'whole article')
-  await page
-    .getByRole('combobox', { name: 'Instruction for the whole article' })
-    .fill('fake:insert article job')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Instruction for the whole article', 'fake:insert article job')
 
   await selectWord(page, blockWith(page, 'Results arrive as ghost diffs'), 'Results')
   await ask(page, 'fake:upper late block job')
@@ -134,10 +132,7 @@ test('an ordinary merge while a whole-article job runs does not cancel it', asyn
 }) => {
   await openArticle(page)
   await runCommand(page, 'whole article')
-  await page
-    .getByRole('combobox', { name: 'Instruction for the whole article' })
-    .fill('fake:insert long draft')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Instruction for the whole article', 'fake:insert long draft')
   await expectWaiting(app, 1)
 
   // Backspace at the start of a paragraph merges it into the one above: one block id disappears.

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
+  answer,
   ask,
   blockWith,
   expectFile,
@@ -21,10 +22,7 @@ test('a skill from the palette runs as an ordinary job; the diagram renders in t
 }) => {
   await openArticle(page)
   await runCommand(page, 'run skill diagram')
-  await page
-    .getByRole('combobox', { name: 'Instruction for the diagram skill' })
-    .fill('fake:diagram from idea to post')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Instruction for the diagram skill', 'fake:diagram from idea to post')
 
   const jobId = await expectOneWaiting(app)
   const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')

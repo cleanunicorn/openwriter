@@ -3,6 +3,7 @@ import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
+  answer,
   blockEnd,
   briefPath,
   editor,
@@ -65,8 +66,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
 test('an empty brief is drafted through the start anchor', async ({ page, app }) => {
   await openArticle(page)
   await runCommand(page, 'new article')
-  await page.getByRole('combobox', { name: 'Article title' }).fill('Fresh Post')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Article title', 'Fresh Post')
   await expect(page.getByRole('heading', { name: 'Fresh Post', level: 1 })).toBeVisible()
 
   await runCommand(page, 'draft brief')

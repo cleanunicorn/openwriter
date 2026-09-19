@@ -97,6 +97,12 @@ export async function exportVia(page: Page, query: string) {
   }
 }
 
+/** Answer the palette's follow-up prompt (a title, a question, an instruction). */
+export async function answer(page: Page, label: string, text: string): Promise<void> {
+  await page.getByRole('combobox', { name: label }).fill(text)
+  await page.keyboard.press('Enter')
+}
+
 // ── jobs ──────────────────────────────────────────────────────────────────────────────────
 
 export const pill = (page: Page): Locator =>

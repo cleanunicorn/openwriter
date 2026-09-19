@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures.ts'
 import {
+  answer,
   boundingBox,
   expectFile,
   expectWaiting,
@@ -17,10 +18,7 @@ test('a research answer opens in a side panel and a note can be inserted as a bl
   await expect(page.getByRole('complementary')).toHaveCount(0)
 
   await runCommand(page, 'research')
-  await page
-    .getByRole('combobox', { name: 'Research question' })
-    .fill('fake:research what do my notes say about blocks?')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Research question', 'fake:research what do my notes say about blocks?')
   await expectWaiting(app, 1)
   await release(app)
 
@@ -52,8 +50,7 @@ for (const viewport of [
     await page.setViewportSize(viewport)
     await openArticle(page)
     await runCommand(page, 'research')
-    await page.getByRole('combobox', { name: 'Research question' }).fill('fake:research anything')
-    await page.keyboard.press('Enter')
+    await answer(page, 'Research question', 'fake:research anything')
     await expectWaiting(app, 1)
 
     // The writer is typing when the answer arrives.

@@ -1,6 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
-import { blockWith, briefPath, configPath, mod, openArticle, runCommand } from './helpers.ts'
+import {
+  answer,
+  blockWith,
+  briefPath,
+  configPath,
+  mod,
+  openArticle,
+  runCommand,
+} from './helpers.ts'
 
 test('the palette creates a new article and switches between articles', async ({ page, app }) => {
   await openArticle(page)
@@ -11,8 +19,7 @@ test('the palette creates a new article and switches between articles', async ({
   await palette.getByRole('combobox').fill('new art')
   await expect(palette.getByRole('option')).toHaveCount(1)
   await page.keyboard.press('Enter')
-  await page.getByRole('combobox', { name: 'Article title' }).fill('Shipping a Block Editor')
-  await page.keyboard.press('Enter')
+  await answer(page, 'Article title', 'Shipping a Block Editor')
 
   await expect(
     page.getByRole('heading', { name: 'Shipping a Block Editor', level: 1 }),
