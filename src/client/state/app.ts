@@ -265,7 +265,6 @@ async function resync(): Promise<void> {
 
 export function connectEvents(): () => void {
   const source = new EventSource('/api/events')
-  // No replay on the server: every (re)connect refetches what may have been missed.
   source.addEventListener('hello', () => {
     handlers.onConnect?.()
     void resync().catch((error: unknown) =>
