@@ -47,6 +47,71 @@ function trimEnd(text: string, start: number, end: number): number {
   return cursor
 }
 
+/** Top-level markdown-it token ranges from `contentStart` on; tokens that overlap become one. */
+function tokenRanges(text: string, contentStart: number): Range[] {
+  const rest = text.slice(contentStart)
+  const starts = lineStarts(rest)
+  const offsetOfLine = (line: number) => contentStart + (starts[line] ?? rest.length)
+  const ranges: Range[] = []
+  for (const token of md.parse(rest, {})) {
+    if (token.level !== 0 || token.map === null || token.nesting === -1) continue
+    const start = offsetOfLine(token.map[0])
+    const end = trimEnd(text, start, offsetOfLine(token.map[1]))
+    if (end <= start) continue
+    const previous = ranges[ranges.length - 1]
+    const scan = token.type !== 'fence' && token.type !== 'code_block'
+    if (previous !== undefined && start < previous.end) {
+      previous.end = Math.max(previous.end, end)
+      previous.scan = previous.scan || scan
+    } else {
+      ranges.push({ start, end, kind: 'content', scan })
+    }
+  }
+  return ranges
+}
+
+/**
+ * markdown-it emits no token for some source (link reference definitions). Whatever is left
+ * between two ranges and is not whitespace becomes its own block, so a gap is whitespace only.
+ */
+function fillLeftovers(text: string, ranges: Range[], contentStart: number): Range[] {
+  const filled: Range[] = []
+  const addLeftover = (from: number, to: number) => {
+    const between = text.slice(from, to)
+    if (isBlank(between)) return
+    const firstInk = from + between.search(/[^ \t\r\n]/)
+    let start = firstInk
+    while (start > from && text[start - 1] !== '\n' && text[start - 1] !== '\r') start--
+    filled.push({ start, end: trimEnd(text, start, to), kind: 'content', scan: true })
+  }
+  let cursor = contentStart
+  for (const range of ranges) {
+    addLeftover(cursor, range.start)
+    filled.push(range)
+    cursor = range.end
+  }
+  addLeftover(cursor, text.length)
+  return filled
+}
+
+/** A paired shortcode that spans several blocks stays one block. */
+function mergePairedShortcodes(text: string, ranges: Range[]): Range[] {
+  const pairs = pairedShortcodeRanges(
+    ranges.map((range) => ({ raw: text.slice(range.start, range.end), scan: range.scan })),
+  )
+  const merged: Range[] = []
+  let next = 0
+  for (const [first, last] of pairs) {
+    while (next < first) merged.push(ranges[next++] as Range)
+    const head = ranges[first] as Range
+    const tail = ranges[last] as Range
+    merged.push({ start: head.start, end: tail.end, kind: 'content', scan: true })
+    next = last + 1
+  }
+  while (next < ranges.length) merged.push(ranges[next++] as Range)
+  return merged
+}
+
 /**
  * Cut `text` into blocks without normalising anything: blocks are slices of the original text at
  * markdown-it's top-level token line maps, gaps are the exact whitespace between them, and
@@ -63,59 +128,8 @@ export function splitText(text: string): SplitResult {
     contentStart = fmEnd
   }
 
-  const rest = text.slice(contentStart)
-  const starts = lineStarts(rest)
-  const offsetOfLine = (line: number) => contentStart + (starts[line] ?? rest.length)
-  const tokenRanges: Range[] = []
-  for (const token of md.parse(rest, {})) {
-    if (token.level !== 0 || token.map === null || token.nesting === -1) continue
-    const start = offsetOfLine(token.map[0])
-    const end = trimEnd(text, start, offsetOfLine(token.map[1]))
-    if (end <= start) continue
-    const previous = tokenRanges[tokenRanges.length - 1]
-    const scan = token.type !== 'fence' && token.type !== 'code_block'
-    if (previous !== undefined && start < previous.end) {
-      previous.end = Math.max(previous.end, end)
-      previous.scan = previous.scan || scan
-    } else {
-      tokenRanges.push({ start, end, kind: 'content', scan })
-    }
-  }
-
-  // markdown-it emits no token for some source (link reference definitions). Whatever is left
-  // between two ranges and is not whitespace becomes its own block, so a gap is whitespace only.
-  let cursor = contentStart
-  const contentRanges: Range[] = []
-  const addLeftover = (from: number, to: number) => {
-    const between = text.slice(from, to)
-    if (isBlank(between)) return
-    const firstInk = from + between.search(/[^ \t\r\n]/)
-    let start = firstInk
-    while (start > from && text[start - 1] !== '\n' && text[start - 1] !== '\r') start--
-    contentRanges.push({ start, end: trimEnd(text, start, to), kind: 'content', scan: true })
-  }
-  for (const range of tokenRanges) {
-    addLeftover(cursor, range.start)
-    contentRanges.push(range)
-    cursor = range.end
-  }
-  addLeftover(cursor, text.length)
-
-  // A paired shortcode that spans several blocks stays one block.
-  const pairs = pairedShortcodeRanges(
-    contentRanges.map((range) => ({ raw: text.slice(range.start, range.end), scan: range.scan })),
-  )
-  const mergedContent: Range[] = []
-  let next = 0
-  for (const [first, last] of pairs) {
-    while (next < first) mergedContent.push(contentRanges[next++] as Range)
-    const head = contentRanges[first] as Range
-    const tail = contentRanges[last] as Range
-    mergedContent.push({ start: head.start, end: tail.end, kind: 'content', scan: true })
-    next = last + 1
-  }
-  while (next < contentRanges.length) mergedContent.push(contentRanges[next++] as Range)
-  ranges.push(...mergedContent)
+  const content = fillLeftovers(text, tokenRanges(text, contentStart), contentStart)
+  ranges.push(...mergePairedShortcodes(text, content))
 
   const slices: Slice[] = []
   const gaps: string[] = []
