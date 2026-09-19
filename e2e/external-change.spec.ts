@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { type App, expect, test } from './fixtures.ts'
-import { blockEnd, dropEventStreams, editor, notice, openArticle } from './helpers.ts'
+import { blockEnd, dropEventStreams, editor, expectFile, notice, openArticle } from './helpers.ts'
 
 /** The article as another program would rewrite it: one heading changed, nothing else. */
 const withHeading = (app: App, heading: string): string =>
@@ -25,11 +25,10 @@ test('an outside change reloads the document without losing the focused block’
   await expect(editor(page)).toContainText('reject the rest. UNSAVED')
   // …and both changes end up in the file.
   await page.keyboard.press('Escape')
-  await expect(() => {
-    const file = readFileSync(app.articlePath(), 'utf8')
+  await expectFile(app.articlePath(), (file) => {
     expect(file).toContain('## Why blocks, from outside')
     expect(file).toContain('reject the rest. UNSAVED')
-  }).toPass({ timeout: 5000 })
+  })
 })
 
 test('a file deleted from outside is not recreated from memory', async ({ page, app }) => {
