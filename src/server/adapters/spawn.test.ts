@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -50,6 +50,19 @@ describe('spawnAgent', () => {
   it('reports a missing executable instead of throwing', async () => {
     const agent = spawnAgent({
       command: 'openwrite-no-such-agent-cli',
+      args: [],
+      cwd: temp,
+      stdin: '',
+      onLine: () => {},
+    })
+    expect((await agent.done).status).toBe('missing')
+  })
+
+  it('reports a file that exists but is not executable the same way', async () => {
+    const notExecutable = path.join(temp, 'not-executable')
+    writeFileSync(notExecutable, '#!/bin/sh\necho hi\n', { mode: 0o644 })
+    const agent = spawnAgent({
+      command: notExecutable,
       args: [],
       cwd: temp,
       stdin: '',

@@ -110,7 +110,7 @@ export function createProcessAdapter(spec: CliSpec): AgentAdapter {
           if (outcome.status === 'missing') {
             return fail(
               'missing-cli',
-              `"${command}" was not found on PATH. Install it or set the command in settings.`,
+              `"${command}" could not be started: it is not on PATH or not executable. Install it or set the command in settings.`,
               output,
             )
           }

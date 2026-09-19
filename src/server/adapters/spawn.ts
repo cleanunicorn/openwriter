@@ -65,7 +65,9 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
     }
     child.once('error', (error: NodeJS.ErrnoException) => {
       stderrTail = tail(`${stderrTail}${error.message}\n`, STDERR_TAIL)
-      finish(error.code === 'ENOENT' ? 'missing' : 'exited', null)
+      // Not there, or there but not runnable (a `command` from settings that is not executable):
+      // both mean "this CLI cannot be started", which the tray reports as a missing CLI.
+      finish(['ENOENT', 'EACCES', 'EPERM'].includes(error.code ?? '') ? 'missing' : 'exited', null)
     })
     child.once('close', (code) => finish('exited', code))
   })
