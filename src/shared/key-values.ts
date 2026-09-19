@@ -3,7 +3,7 @@ export type KeyValues = Record<string, string | string[]>
 function unquote(value: string): string {
   const trimmed = value.trim()
   const quoted = trimmed.match(/^(["'])(.*)\1$/)
-  return quoted ? (quoted[2] ?? '') : trimmed
+  return quoted === null ? trimmed : (quoted[2] ?? '')
 }
 
 function parseInlineArray(value: string): string[] {
@@ -23,11 +23,14 @@ export function parseKeyValues(text: string): KeyValues {
   const result: KeyValues = {}
   let listKey: string | undefined
   for (const line of text.split(/\r\n|\r|\n/)) {
-    const item = line.match(/^\s+-\s+(.*)$/) ?? (listKey ? line.match(/^-\s+(.*)$/) : null)
-    if (item && listKey !== undefined) {
-      const list = result[listKey]
-      if (Array.isArray(list)) list.push(unquote(item[1] ?? ''))
-      continue
+    // While a dash list is open, a dash line — indented or not — is one of its items.
+    if (listKey !== undefined) {
+      const item = line.match(/^\s*-\s+(.*)$/)
+      if (item !== null) {
+        const list = result[listKey]
+        if (Array.isArray(list)) list.push(unquote(item[1] ?? ''))
+        continue
+      }
     }
     const pair = line.match(/^([A-Za-z_][\w-]*)\s*[:=]\s*(.*)$/)
     if (pair === null) continue
