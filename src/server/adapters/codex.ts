@@ -1,5 +1,6 @@
 import path from 'node:path'
-import { type CliSpec, createProcessAdapter, substitute } from './process-adapter.ts'
+import { z } from 'zod'
+import { type CliSpec, createProcessAdapter, parseLine, substitute } from './process-adapter.ts'
 import type { AdapterOptions } from './types.ts'
 
 const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
@@ -50,20 +51,24 @@ export function codexPrompt(jobDir: string, options: AdapterOptions): string {
   ].join('\n')
 }
 
-type CodexLine = {
-  type?: string
-  message?: string
-  error?: { message?: string }
-  item?: { type?: string; text?: string; command?: string; path?: string }
-}
+/** The fields of `codex exec --json` events that are read here. */
+const CodexLineSchema = z.looseObject({
+  type: z.string().optional(),
+  message: z.string().optional(),
+  error: z.looseObject({ message: z.string().optional() }).optional(),
+  item: z
+    .looseObject({
+      type: z.string().optional(),
+      text: z.string().optional(),
+      command: z.string().optional(),
+      path: z.string().optional(),
+    })
+    .optional(),
+})
 
 export function readCodexLine(line: string): { progress?: string; error?: string } {
-  let event: CodexLine
-  try {
-    event = JSON.parse(line) as CodexLine
-  } catch {
-    return {}
-  }
+  const event = parseLine(CodexLineSchema, line)
+  if (event === undefined) return {}
   if (event.type === 'thread.started') return { progress: 'codex started' }
   if (event.type === 'error' || event.type === 'turn.failed') {
     return { error: clip(event.error?.message ?? event.message ?? 'codex reported an error') }

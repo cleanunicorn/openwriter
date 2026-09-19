@@ -1,5 +1,6 @@
 import path from 'node:path'
-import { type CliSpec, createProcessAdapter, substitute } from './process-adapter.ts'
+import { z } from 'zod'
+import { type CliSpec, createProcessAdapter, parseLine, substitute } from './process-adapter.ts'
 import type { AdapterOptions } from './types.ts'
 
 const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
@@ -58,24 +59,32 @@ export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string
   return [...base, ...model, ...options.config.extraArgs]
 }
 
-type StreamLine = {
-  type?: string
-  subtype?: string
-  model?: string
-  is_error?: boolean
-  result?: string
-  message?: {
-    content?: { type?: string; text?: string; name?: string; input?: Record<string, unknown> }[]
-  }
-}
+/** The fields of claude's stream-json events that are read here. */
+const StreamLineSchema = z.looseObject({
+  type: z.string().optional(),
+  subtype: z.string().optional(),
+  model: z.string().optional(),
+  is_error: z.boolean().optional(),
+  result: z.string().optional(),
+  message: z
+    .looseObject({
+      content: z
+        .array(
+          z.looseObject({
+            type: z.string().optional(),
+            text: z.string().optional(),
+            name: z.string().optional(),
+            input: z.record(z.string(), z.unknown()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+})
 
 export function readClaudeLine(line: string): { progress?: string; error?: string } {
-  let event: StreamLine
-  try {
-    event = JSON.parse(line) as StreamLine
-  } catch {
-    return {}
-  }
+  const event = parseLine(StreamLineSchema, line)
+  if (event === undefined) return {}
   if (event.type === 'system' && event.subtype === 'init')
     return { progress: `claude started (${event.model ?? 'default model'})` }
   if (event.type === 'assistant') {

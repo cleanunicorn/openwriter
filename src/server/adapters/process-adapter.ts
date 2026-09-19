@@ -1,8 +1,25 @@
 import path from 'node:path'
+import type { z } from 'zod'
 import type { FailureReason } from '../../shared/jobs/job-types.ts'
 import { createChannel } from './channel.ts'
 import { spawnAgent } from './spawn.ts'
 import type { AdapterHandle, AdapterOptions, AgentAdapter, Completion } from './types.ts'
+
+/**
+ * Parse one stdout line of an agent CLI with a zod schema. Agent output is untrusted: a line that
+ * is not JSON, is JSON `null`, or has the wrong shape yields undefined, never a throw. Schemas are
+ * loose objects that name only the fields a reader uses, so a CLI may add fields freely.
+ */
+export function parseLine<T extends z.ZodType>(schema: T, line: string): z.infer<T> | undefined {
+  let json: unknown
+  try {
+    json = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  const parsed = schema.safeParse(json)
+  return parsed.success ? parsed.data : undefined
+}
 
 export type CliSpec = {
   name: string
@@ -56,7 +73,14 @@ export function createProcessAdapter(spec: CliSpec): AgentAdapter {
         cwd: options.workspace,
         stdin: spec.buildPrompt?.(jobDir, options) ?? options.prompt,
         onLine: (line) => {
-          const read = spec.readLine(line)
+          // Runs inside the child's stdout handler: a bug in a reader must not become an uncaught
+          // exception that takes the server down.
+          let read: ReturnType<CliSpec['readLine']>
+          try {
+            read = spec.readLine(line)
+          } catch {
+            return
+          }
           if (read.progress !== undefined) channel.push({ text: read.progress })
           if (read.error !== undefined) streamError = read.error
         },

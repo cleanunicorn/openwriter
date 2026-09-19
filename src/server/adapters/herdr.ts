@@ -1,8 +1,10 @@
 import { execFile, spawn } from 'node:child_process'
 import path from 'node:path'
+import { z } from 'zod'
 import { herdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createChannel } from './channel.ts'
 import { claudeConfinement } from './claude.ts'
+import { parseLine } from './process-adapter.ts'
 import type { AdapterHandle, AdapterOptions, AgentAdapter, Completion } from './types.ts'
 
 export const HERDR_SESSION = 'openwrite-jobs'
@@ -48,18 +50,22 @@ export function realHerdrCli(command: string): HerdrCli {
   }
 }
 
-type Pane = { pane_id?: string; workspace_id?: string }
-const parse = (
-  stdout: string,
-): { result?: Record<string, unknown>; error?: { message?: string } } => {
-  try {
-    return JSON.parse(stdout) as ReturnType<typeof parse>
-  } catch {
-    return {}
-  }
-}
-const statusOf = (stdout: string) =>
-  (parse(stdout).result?.agent as { agent_status?: string } | undefined)?.agent_status
+/** The fields of herdr's CLI JSON replies that are read here. */
+const PaneSchema = z.looseObject({
+  pane_id: z.string().optional(),
+  workspace_id: z.string().optional(),
+})
+type Pane = z.infer<typeof PaneSchema>
+const ReplySchema = z.looseObject({
+  result: z
+    .looseObject({
+      root_pane: PaneSchema.optional(),
+      agent: z.looseObject({ agent_status: z.string().optional() }).optional(),
+    })
+    .optional(),
+})
+const parse = (stdout: string) => parseLine(ReplySchema, stdout) ?? {}
+const statusOf = (stdout: string) => parse(stdout).result?.agent?.agent_status
 
 /**
  * An optional backend: the job runs as an interactive `claude` inside a herdr pane, so the writer
@@ -134,7 +140,7 @@ export function createHerdrAdapter(
             15_000,
           ),
         )
-        pane = (created.result?.root_pane as Pane | undefined) ?? {}
+        pane = created.result?.root_pane ?? {}
         stopIfCancelled()
         if (pane.pane_id === undefined)
           return { ok: false, reason: 'exit', message: 'herdr did not return a pane for the job' }

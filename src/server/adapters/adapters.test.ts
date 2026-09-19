@@ -158,6 +158,37 @@ describe('stream → progress', () => {
     })
   })
 
+  it.each([
+    'null',
+    '42',
+    '"text"',
+    '[]',
+    '{"type":"assistant","message":{"content":123}}',
+    '{"type":"assistant","message":{"content":[null]}}',
+    '{"type":"assistant","message":null}',
+    '{"type":"item.completed","item":"not an object"}',
+    '{"type":"result","is_error":"yes"}',
+  ])('treats valid JSON of the wrong shape as an uninteresting line: %s', (line) => {
+    expect(readClaudeLine(line)).toEqual({})
+    expect(readCodexLine(line)).toEqual({})
+  })
+
+  it('a reader that throws anyway cannot crash the run', async () => {
+    const temp = mkdtempSync(path.join(os.tmpdir(), 'openwrite-reader-'))
+    const handle = createProcessAdapter({
+      name: 'echo',
+      command: process.execPath,
+      buildArgs: () => [path.join(import.meta.dirname, 'fixtures', 'echo-agent.ts'), 'ok'],
+      readLine: () => {
+        throw new Error('reader bug')
+      },
+      authPattern: /never/,
+      loginHint: '',
+    }).start(temp, options({ workspace: temp }))
+    expect(await handle.done).toEqual({ ok: true })
+    rmSync(temp, { recursive: true, force: true })
+  })
+
   it('ignores lines that are not JSON or not interesting', () => {
     expect(readClaudeLine('not json')).toEqual({})
     expect(readCodexLine('{"type":"item.started","item":{"type":"reasoning"}}')).toEqual({})
