@@ -3,7 +3,10 @@
 A local-first, block-based markdown editor for technical blog posts, with agent-powered
 editing. The file on disk is plain markdown; agents propose, the writer approves.
 
-> Status: under construction in the initial build PR. Sections below grow with each milestone.
+| Light | Dark |
+| --- | --- |
+| ![The editor, light theme](docs/screenshots/editor-light.png) | ![The editor, dark theme](docs/screenshots/editor-dark.png) |
+| ![Reviewing a proposal, light theme](docs/screenshots/review-light.png) | ![Reviewing a proposal, dark theme](docs/screenshots/review-dark.png) |
 
 ## Setup
 
@@ -234,6 +237,7 @@ npm run typecheck
 npm test             # Vitest; one file: npm test -- src/server/paths.test.ts
 npm run test:e2e     # Playwright; first run: npx playwright install --with-deps chromium
 npm run build
+node scripts/screenshots.ts   # regenerates docs/screenshots/ (light and dark)
 ```
 
 Every check uses the sample workspace, temp directories, and the `fake` adapter. No test needs

@@ -741,3 +741,8 @@ body {
   font: inherit;
   cursor: pointer;
 }
+
+/* Markdown with several blocks in one container (ghost inserts, research notes, shortcodes). */
+.rendered > * + * {
+  margin-top: 1.1em;
+}
