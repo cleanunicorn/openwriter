@@ -10,10 +10,6 @@ import {
 } from './process-adapter.ts'
 import type { AdapterOptions } from './types.ts'
 
-/**
- * `claude` in headless print mode with streamed JSON. Flags verified against
- * `claude --help` 2.1.278 — see DECISIONS.md, "Real agents".
- */
 /** Built-in tools plus whatever a skill's `allow:` rules name (`Bash(asciinema *)` → `Bash`). */
 function toolsFor(allow: string[]): string[] {
   const tools = ['Read', 'Glob', 'Grep', 'Edit', 'Write']
@@ -45,6 +41,10 @@ export function claudeConfinement(jobRel: string, allow: string[]): string[] {
   ]
 }
 
+/**
+ * `claude` in headless print mode with streamed JSON. Flags verified against
+ * `claude --help` 2.1.278 — see DECISIONS.md, "Real agents".
+ */
 export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string[] {
   const jobRel = path.relative(options.workspace, jobDir)
   const base = options.config.baseArgs
