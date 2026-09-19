@@ -41,8 +41,12 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webm': 'video/webm',
 }
 
-export const contentTypeFor = (file: string): string =>
-  CONTENT_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()] ?? 'application/octet-stream'
+export function contentTypeFor(file: string): string {
+  const dot = file.lastIndexOf('.')
+  // Not path.extname: a dotfile such as `.png` is served by its name.
+  const extension = dot === -1 ? '' : file.slice(dot).toLowerCase()
+  return CONTENT_TYPES[extension] ?? 'application/octet-stream'
+}
 
 /** The part of the request path after `prefix`, decoded. A malformed escape is the client's error (400), not ours (500). */
 export function pathTail(c: Context, prefix: string): string {
