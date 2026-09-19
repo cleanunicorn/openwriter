@@ -27,6 +27,14 @@ function themeBlocks(): Record<string, Record<string, string>> {
   return blocks
 }
 
+describe('component rules use tokens, not bare colours', () => {
+  it('has no hex colour outside the token blocks', () => {
+    // A bare hex in a rule has no dark variant and escapes the contrast check below.
+    const rules = css.replace(/(?::root[^{]*)\{[^}]*\}/g, '')
+    expect(rules.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).toEqual([])
+  })
+})
+
 describe('theme tokens meet WCAG AA for normal text', () => {
   const blocks = themeBlocks()
 
@@ -40,6 +48,10 @@ describe('theme tokens meet WCAG AA for normal text', () => {
     ['--fg', ['--bg', '--code-bg', '--add-bg', '--del-bg']],
     ['--quiet', ['--bg', '--code-bg', '--add-bg', '--del-bg']],
     ['--accent', ['--bg', '--code-bg']],
+    // Warnings (ghost flag, tray errors) and numbers in code share one token.
+    ['--warn', ['--bg', '--code-bg']],
+    ['--syn-keyword', ['--code-bg']],
+    ['--syn-string', ['--code-bg']],
   ]
 
   for (const [name, tokens] of Object.entries(blocks)) {
