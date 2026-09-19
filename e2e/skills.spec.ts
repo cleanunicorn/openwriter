@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   ask,
@@ -7,6 +6,7 @@ import {
   expectFile,
   expectWaiting,
   ghosts,
+  jobFile,
   mod,
   openArticle,
   release,
@@ -28,10 +28,7 @@ test('a skill from the palette runs as an ordinary job; the diagram renders in t
   await page.keyboard.press('Enter')
 
   const [jobId] = await expectWaiting(app, 1)
-  const instruction = readFileSync(
-    path.join(app.workspace, '.zen', 'jobs', jobId ?? '', 'instruction.md'),
-    'utf8',
-  )
+  const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
   expect(instruction).toContain('## Skill: diagram')
   await release(app)
 

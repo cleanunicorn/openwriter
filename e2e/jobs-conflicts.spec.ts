@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   ask,
@@ -8,6 +7,7 @@ import {
   expectFile,
   expectWaiting,
   ghosts,
+  jobFile,
   mod,
   notice,
   openArticle,
@@ -45,10 +45,7 @@ test('a second job on a busy block queues behind it and runs against the settled
   await ghosts(page).getByRole('button', accept).click()
   const [secondId] = await expectWaiting(app, 1)
   expect(secondId).not.toBe(firstId)
-  const snapshot = readFileSync(
-    path.join(app.workspace, '.zen', 'jobs', secondId ?? '', 'article.md'),
-    'utf8',
-  )
+  const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
   expect(snapshot).toContain('## WHY BLOCKS')
   await release(app, secondId)
   await expect(ghosts(page)).toContainText('Inserted by the fake agent.')
@@ -65,10 +62,7 @@ test('a rejected outcome releases the queue as well', async ({ page, app }) => {
   await release(app, firstId)
   await ghosts(page).getByRole('button', { name: 'Reject', exact: true }).click()
   const [secondId] = await expectWaiting(app, 1)
-  const snapshot = readFileSync(
-    path.join(app.workspace, '.zen', 'jobs', secondId ?? '', 'article.md'),
-    'utf8',
-  )
+  const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
   expect(snapshot).toContain('## Why blocks')
 })
 
@@ -123,10 +117,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await release(app, blockJob)
   await ghosts(page).getByRole('button', accept).click()
   const [articleJob] = await expectWaiting(app, 1)
-  const instruction = readFileSync(
-    path.join(app.workspace, '.zen', 'jobs', articleJob ?? '', 'instruction.md'),
-    'utf8',
-  )
+  const instruction = readFileSync(jobFile(app, articleJob, 'instruction.md'), 'utf8')
   expect(instruction).toContain('article job')
   expect(instruction).toContain('Scope `article`')
   await expect(tray(page).getByText('queued behind another job')).toHaveCount(1)
@@ -134,9 +125,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await release(app, articleJob)
   await ghosts(page).getByRole('button', accept).click()
   const [lateJob] = await expectWaiting(app, 1)
-  expect(
-    readFileSync(path.join(app.workspace, '.zen', 'jobs', lateJob ?? '', 'instruction.md'), 'utf8'),
-  ).toContain('late block job')
+  expect(readFileSync(jobFile(app, lateJob, 'instruction.md'), 'utf8')).toContain('late block job')
 })
 
 test('an ordinary merge while a whole-article job runs does not cancel it', async ({

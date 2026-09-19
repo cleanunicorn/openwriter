@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import type { Locator, Page } from '@playwright/test'
 import { type App, expect } from './fixtures.ts'
 
@@ -121,3 +122,7 @@ export async function dropEventStreams(app: App): Promise<void> {
     body: '{}',
   })
 }
+
+/** A file of a job's contract directory (`.zen/jobs/<id>/<name>`), or the directory itself. */
+export const jobFile = (app: App, jobId: string | undefined, name = ''): string =>
+  path.join(app.workspace, '.zen', 'jobs', jobId ?? '', name)

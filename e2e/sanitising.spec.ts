@@ -1,8 +1,8 @@
 import { mkdtempSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { strFromU8, unzipSync } from 'fflate'
 import type { Page } from '@playwright/test'
+import { strFromU8, unzipSync } from 'fflate'
 import { expect, test } from './fixtures.ts'
 import {
   ask,
