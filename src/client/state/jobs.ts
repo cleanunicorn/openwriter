@@ -132,15 +132,14 @@ function pump(): void {
   const unsettled = unsettledClaims(state)
   const ready = new Set(startable(state.held.map(claimOfHeld), unsettled).map((claim) => claim.id))
   const starting = state.held.filter((held) => ready.has(held.id))
-  const waiting = state.held
-    .filter((held) => !ready.has(held.id))
-    .map((held, index, rest) => ({
-      ...held,
-      blockedBy: blockersOf(claimOfHeld(held), [
-        ...unsettled,
-        ...rest.slice(0, index).map(claimOfHeld),
-      ]),
-    }))
+  const stillHeld = state.held.filter((held) => !ready.has(held.id))
+  const waiting = stillHeld.map((held, index) => ({
+    ...held,
+    blockedBy: blockersOf(claimOfHeld(held), [
+      ...unsettled,
+      ...stillHeld.slice(0, index).map(claimOfHeld),
+    ]),
+  }))
   jobsStore.set((current) => ({ ...current, held: waiting }))
   for (const held of starting) void post(held)
 }
