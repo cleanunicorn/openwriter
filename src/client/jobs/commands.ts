@@ -28,6 +28,14 @@ export function askInPalette(options: {
   })
 }
 
+/** What a palette-started skill works on: the selection if there is one, else by scope. */
+function targetsFor(scope: Scope, selectedIds: string[], content: string[]): string[] {
+  if (scope === 'research') return []
+  if (selectedIds.length > 0) return selectedIds
+  if (scope === 'article') return content
+  return content.slice(-1)
+}
+
 registerCommands((state) => {
   const doc = currentDoc(state)
   if (doc === null || doc.status !== 'ready') return []
@@ -75,14 +83,7 @@ registerCommands((state) => {
             doc: doc.ref,
             scope: skill.scope,
             skill: skill.name,
-            targets:
-              skill.scope === 'research'
-                ? []
-                : doc.selectedIds.length > 0
-                  ? doc.selectedIds
-                  : skill.scope === 'article'
-                    ? content
-                    : content.slice(-1),
+            targets: targetsFor(skill.scope, doc.selectedIds, content),
           }),
       })),
   ]
