@@ -1,6 +1,10 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { expect, test } from './fixtures.ts'
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { type App, expect, test } from './fixtures.ts'
 import { blockEnd, dropEventStreams, editor, notice, openArticle } from './helpers.ts'
+
+/** The article as another program would rewrite it: one heading changed, nothing else. */
+const withHeading = (app: App, heading: string): string =>
+  readFileSync(app.articlePath(), 'utf8').replace('## Why blocks', heading)
 
 test('an outside change reloads the document without losing the focused block’s edits', async ({
   page,
@@ -12,12 +16,7 @@ test('an outside change reloads the document without losing the focused block’
   await page.keyboard.type(' UNSAVED')
 
   // Another editor rewrites a different block (save-by-rename, like many editors do).
-  const changed = readFileSync(app.articlePath(), 'utf8').replace(
-    '## Why blocks',
-    '## Why blocks, from outside',
-  )
-  writeFileSync(`${app.articlePath()}.tmp`, changed)
-  const { renameSync } = await import('node:fs')
+  writeFileSync(`${app.articlePath()}.tmp`, withHeading(app, '## Why blocks, from outside'))
   renameSync(`${app.articlePath()}.tmp`, app.articlePath())
 
   await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
@@ -58,11 +57,7 @@ test('a change made while the event stream was down is picked up on reconnect', 
   // The server ends the stream and keeps no replay, so the event for this change is lost for
   // good; only the client's re-check on reconnect can bring the change in.
   await dropEventStreams(app)
-  const changed = readFileSync(app.articlePath(), 'utf8').replace(
-    '## Why blocks',
-    '## Why blocks, while disconnected',
-  )
-  writeFileSync(app.articlePath(), changed)
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, while disconnected'))
 
   // EventSource reconnects by itself after a few seconds.
   await expect(page.getByRole('heading', { name: 'Why blocks, while disconnected' })).toBeVisible({
@@ -80,11 +75,7 @@ test('a save that loses the race with an outside change gets a 409 and keeps bot
 
   // No event will announce the outside change, so the autosave is the first to find out.
   await dropEventStreams(app)
-  const changed = readFileSync(app.articlePath(), 'utf8').replace(
-    '## Why blocks',
-    '## Why blocks, from outside',
-  )
-  writeFileSync(app.articlePath(), changed)
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
   const conflict = page.waitForResponse(
     (response) => response.request().method() === 'PUT' && response.status() === 409,
   )
