@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { createChannel } from './channel.ts'
-import type { AdapterHandle, AgentAdapter, Completion } from './types.ts'
+import type { AdapterHandle, AgentAdapter, Completion, ProgressEvent } from './types.ts'
 
 const PIXEL = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -156,7 +156,7 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
   return {
     name: 'fake',
     start(jobDir, options): AdapterHandle {
-      const channel = createChannel<{ text: string }>()
+      const channel = createChannel<ProgressEvent>()
       const abort = new AbortController()
       const isRepair = options.prompt.includes('repair.md')
 

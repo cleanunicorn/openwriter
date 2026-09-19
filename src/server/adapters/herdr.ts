@@ -5,7 +5,13 @@ import { herdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createChannel } from './channel.ts'
 import { claudeConfinement } from './claude.ts'
 import { parseLine } from './process-adapter.ts'
-import type { AdapterHandle, AdapterOptions, AgentAdapter, Completion } from './types.ts'
+import type {
+  AdapterHandle,
+  AdapterOptions,
+  AgentAdapter,
+  Completion,
+  ProgressEvent,
+} from './types.ts'
 
 export const HERDR_SESSION = 'openwrite-jobs'
 
@@ -78,7 +84,7 @@ export function createHerdrAdapter(
   return {
     name: 'herdr',
     start(jobDir, options: AdapterOptions): AdapterHandle {
-      const channel = createChannel<{ text: string }>()
+      const channel = createChannel<ProgressEvent>()
       const session = options.config.session ?? HERDR_SESSION
       const cli = cliFor(options.config.command ?? 'herdr')
       const scoped = (...args: string[]) => ['--session', session, ...args]

@@ -15,7 +15,7 @@ import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
 import { createProcessAdapter } from '../adapters/process-adapter.ts'
 import { AdapterRegistry } from '../adapters/registry.ts'
 import { alive } from '../adapters/test-helpers.ts'
-import type { AdapterHandle, AgentAdapter, Completion } from '../adapters/types.ts'
+import type { AdapterHandle, AgentAdapter, Completion, ProgressEvent } from '../adapters/types.ts'
 import { createApp } from '../app.ts'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
 import { JobManager } from './manager.ts'
@@ -273,7 +273,7 @@ describe('nothing inside a job run can take the server down', () => {
   })
   const handle = (
     done: Promise<Completion>,
-    progress: AsyncIterable<{ text: string }> = (async function* () {})(),
+    progress: AsyncIterable<ProgressEvent> = (async function* () {})(),
   ) => ({
     progress,
     done,

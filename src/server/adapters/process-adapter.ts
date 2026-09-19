@@ -3,7 +3,13 @@ import type { z } from 'zod'
 import type { FailureReason } from '../../shared/jobs/job-types.ts'
 import { createChannel } from './channel.ts'
 import { spawnAgent } from './spawn.ts'
-import type { AdapterHandle, AdapterOptions, AgentAdapter, Completion } from './types.ts'
+import type {
+  AdapterHandle,
+  AdapterOptions,
+  AgentAdapter,
+  Completion,
+  ProgressEvent,
+} from './types.ts'
 
 /**
  * Parse one stdout line of an agent CLI with a zod schema. Agent output is untrusted: a line that
@@ -87,7 +93,7 @@ export function createProcessAdapter(spec: CliSpec): AgentAdapter {
   return {
     name: spec.name,
     start(jobDir, options): AdapterHandle {
-      const channel = createChannel<{ text: string }>()
+      const channel = createChannel<ProgressEvent>()
       let streamError: string | undefined
       const command = options.config.command ?? spec.command
       const agent = spawnAgent({
