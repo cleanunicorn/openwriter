@@ -335,9 +335,11 @@ so it can point into a Hugo site):
   args are overridable there. No secrets are stored.
 - **The job file contract:** the server writes `instruction.md`, `article.md`
   (snapshot with ID marker comments), `targets.json`, and `strategy.md` /
-  `brief.md` copies or paths into `.zen/jobs/<id>/`. The agent runs with the
-  workspace as its working directory, writes `result.json` and `assets/` into
-  the job directory, and modifies nothing else. For `blocks` scope, ops may only
+  `brief.md` copies or paths into `.zen/jobs/<id>/`. The agent may read the
+  workspace and runs with it as its working directory (`codex` is the exception:
+  its working root is the job directory, which is what confines its writes, and
+  its prompt says where the workspace is). It writes `result.json` and `assets/`
+  into the job directory and modifies nothing else. For `blocks` scope, ops may only
   touch the target blocks or insert next to them.
 - **Job scopes:** `blocks`, `article` (exclusive: waits for running jobs, new
   block jobs queue behind it), `research` (no edits; answer goes to notes).

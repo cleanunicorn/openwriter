@@ -78,6 +78,9 @@ describe('the job file contract', () => {
     expect(instruction).toContain('Make it louder')
     expect(instruction).toContain('Scope `blocks`')
     expect(instruction).toContain('strategy.md')
+    // Adapter-neutral: codex runs from the job directory, so the contract must not claim a cwd.
+    expect(instruction).not.toMatch(/working directory is/i)
+    expect(instruction).toContain('relative to the workspace root')
     const article = readFileSync(path.join(dir, 'article.md'), 'utf8')
     expect(article).toContain(
       `<!-- zen:block id=${job.targets[0]} target -->\n## Why blocks\n<!-- /zen:block -->`,

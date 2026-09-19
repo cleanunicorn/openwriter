@@ -122,7 +122,8 @@ An adapter only launches a process and relays progress; the file contract does t
 
 1. Implement `AgentAdapter` from `src/server/adapters/types.ts`:
    `start(jobDir, options) → { progress: AsyncIterable<{ text }>, done: Promise<Completion>, cancel() }`.
-   For a CLI, describe it as a `CliSpec` (`buildArgs`, `readLine`, `authPattern`, `loginHint`) and
+   For a CLI, describe it as a `CliSpec` (`buildArgs`, `readLine`, `authPattern`, `loginHint`, and an
+   optional `buildPrompt` when the agent's working directory is not the workspace) and
    wrap it with `createProcessAdapter` from `process-adapter.ts` — see `claude.ts` and `codex.ts`.
    Launching, line splitting, bounded output, process-tree cancel, and failure mapping come with it.
 2. Register it in `createApp` (`src/server/app.ts`): `registry.register(createMyAdapter())`. It
@@ -201,8 +202,11 @@ the server creates `<workspace>/.zen/jobs/<id>/`:
 | `assets/` | agent | generated files, referenced from markdown as `assets/<file>` |
 | `result.invalid.json`, `repair.md` | server | only after a rejected result: the rejected output and the repair instructions |
 
-The agent runs with the workspace as its working directory (so it can read `sources/`), writes
-`result.json` and `assets/`, and modifies nothing else.
+The agent may read the workspace (so it can use `sources/`) and runs with the workspace as its
+working directory — except `codex`, which runs with the job directory as its working root (that
+is what confines its writes) and is told in its prompt where the workspace is and how the paths
+map (DECISIONS.md, "Real agents"). It writes `result.json` and `assets/`, and modifies nothing
+else.
 
 ```json
 {

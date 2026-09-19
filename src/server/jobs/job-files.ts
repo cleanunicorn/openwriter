@@ -43,7 +43,8 @@ export function renderInstruction(
   return `# Job ${jobId}
 
 You are helping a writer with a markdown document. Everything goes through files in \`${dir}/\`.
-Your working directory is the workspace, so you may read \`sources/\` and other files for context.
+Paths below are relative to the workspace root. You may read the workspace (\`sources/\` and other
+files) for context; you may write only inside \`${dir}/\`.
 
 ## The writer's instruction
 
