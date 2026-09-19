@@ -29,17 +29,14 @@ function frontMatterEnd(text: string, offset: number): number {
   if (fence === '') return -1
   const lines = /([^\r\n]*)(\r\n|\r|\n|$)/g
   lines.lastIndex = offset
-  let first = true
+  const opening = lines.exec(text)
+  if (opening === null || (opening[1] ?? '').trimEnd() !== fence) return -1
+  if (opening[2] === '' || opening[0] === '') return -1
   for (;;) {
     const match = lines.exec(text)
     if (match === null) return -1
     const line = match[1] ?? ''
-    if (first) {
-      if (line.trimEnd() !== fence) return -1
-      first = false
-    } else if (line.trimEnd() === fence) {
-      return match.index + line.length
-    }
+    if (line.trimEnd() === fence) return match.index + line.length
     if (match[2] === '' || match[0] === '') return -1
   }
 }
