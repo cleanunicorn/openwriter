@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   ask,
   blockEnd,
   blockWith,
@@ -43,14 +44,8 @@ test('two sections get different instructions while the writer types in a third;
   await expect(editor(page)).toContainText('And still typing.')
 
   // Review both, each job on its own.
-  await page
-    .getByRole('group', { name: 'Proposed replacement 1 of 1' })
-    .getByRole('button', { name: 'Accept', exact: true })
-    .click()
-  await page
-    .getByRole('group', { name: 'Proposed insertion 1 of 1' })
-    .getByRole('button', { name: 'Accept', exact: true })
-    .click()
+  await acceptButton(page.getByRole('group', { name: 'Proposed replacement 1 of 1' })).click()
+  await acceptButton(page.getByRole('group', { name: 'Proposed insertion 1 of 1' })).click()
   await expect(ghosts(page)).toHaveCount(0)
 
   await expectFile(app.articlePath(), (file) => {

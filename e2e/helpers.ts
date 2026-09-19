@@ -126,3 +126,9 @@ export async function dropEventStreams(app: App): Promise<void> {
 /** A file of a job's contract directory (`.zen/jobs/<id>/<name>`), or the directory itself. */
 export const jobFile = (app: App, jobId: string | undefined, name = ''): string =>
   path.join(app.workspace, '.zen', 'jobs', jobId ?? '', name)
+
+// `exact` is load-bearing: without it "Accept" also matches "Accept all".
+export const acceptButton = (scope: Locator | Page): Locator =>
+  scope.getByRole('button', { name: 'Accept', exact: true })
+export const rejectButton = (scope: Locator | Page): Locator =>
+  scope.getByRole('button', { name: 'Reject', exact: true })

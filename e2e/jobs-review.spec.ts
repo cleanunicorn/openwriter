@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   ask,
   blockEnd,
   blockWith,
@@ -13,6 +14,7 @@ import {
   mod,
   openArticle,
   pill,
+  rejectButton,
   release,
   selectWord,
   tray,
@@ -44,7 +46,7 @@ test('select → prompt → review → accept, then one undo step reverts it', a
   await expect(tray(page)).toContainText('ready for review')
   expect(readFileSync(app.articlePath(), 'utf8')).toContain('## Why blocks\n')
 
-  await ghost.getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghost).click()
   await expect(ghosts(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'WHY BLOCKS' })).toBeVisible()
   await expectFile(app.articlePath(), (file) => expect(file).toContain('## WHY BLOCKS\n'))
@@ -63,7 +65,7 @@ test('rejecting leaves the article untouched', async ({ page, app }) => {
   await ask(page, 'fake:upper')
   await expectWaiting(app, 1)
   await release(app)
-  await ghosts(page).getByRole('button', { name: 'Reject', exact: true }).click()
+  await rejectButton(ghosts(page)).click()
   await expect(ghosts(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Why blocks', exact: true })).toBeVisible()
   await expect(tray(page).getByRole('button', { name: '1 done' })).toBeVisible()
@@ -109,14 +111,8 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   await page.keyboard.press('Backspace')
   await expect(ghosts(page)).toHaveCount(2)
   // Mouse for the rest.
-  await page
-    .getByRole('group', { name: 'Proposed insertion 3 of 4' })
-    .getByRole('button', { name: 'Accept', exact: true })
-    .click()
-  await page
-    .getByRole('group', { name: 'Proposed deletion 4 of 4' })
-    .getByRole('button', { name: 'Accept', exact: true })
-    .click()
+  await acceptButton(page.getByRole('group', { name: 'Proposed insertion 3 of 4' })).click()
+  await acceptButton(page.getByRole('group', { name: 'Proposed deletion 4 of 4' })).click()
   await expect(ghosts(page)).toHaveCount(0)
 
   await expectFile(app.articlePath(), (file) => {
@@ -162,7 +158,7 @@ test('on accept, assets move into the bundle and references are rewritten', asyn
   ).toBeVisible()
   expect(existsSync(path.join(bundle, 'fake-diagram.png'))).toBe(false)
 
-  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghosts(page)).click()
   await expect(page.locator('img[src$="/hello-openwrite/assets/fake-diagram.png"]')).toBeVisible()
   expect(readdirSync(bundle)).toContain('fake-diagram.png')
   await expectFile(app.articlePath(), (file) => {
@@ -244,7 +240,7 @@ test('accepting the same insertion twice in a row inserts it once', async ({ pag
     await route.continue()
   })
   const insertion = page.getByRole('group', { name: 'Proposed insertion 2 of 3' })
-  await insertion.getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(insertion).click()
   await insertion
     .getByRole('button', { name: 'Accept all' })
     .or(ghosts(page).first().getByRole('button', { name: 'Accept all' }))

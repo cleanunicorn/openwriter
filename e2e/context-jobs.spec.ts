@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   blockEnd,
   editor,
   expectFile,
@@ -83,7 +84,7 @@ test('an empty brief is drafted through the start anchor', async ({ page, app })
   const [jobId] = await expectWaiting(app, 1)
   expect(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8')).toContain('"b0"')
   await release(app)
-  await ghosts(page).first().getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghosts(page).first()).click()
   await expectFile(briefPath(app.workspace, 'fresh-post'), (file) =>
     expect(file).toContain('# Draft\n\nDrafted by the fake agent'),
   )

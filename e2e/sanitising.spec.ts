@@ -5,6 +5,7 @@ import type { Page } from '@playwright/test'
 import { strFromU8, unzipSync } from 'fflate'
 import { expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   ask,
   blockWith,
   expectWaiting,
@@ -67,7 +68,7 @@ test('hostile markup in an agent result renders inert in the ghost and after acc
   await release(app)
   await expect(ghosts(page)).toContainText('Hostile')
   await expectInert(page)
-  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghosts(page)).click()
   await expect(blockWith(page, 'Hostile')).toHaveCount(2)
   await expectInert(page)
 })

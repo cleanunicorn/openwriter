@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   ask,
   blockStart,
   blockWith,
@@ -11,13 +12,12 @@ import {
   mod,
   notice,
   openArticle,
+  rejectButton,
   release,
   selectWord,
   tray,
   waitingJobs,
 } from './helpers.ts'
-
-const accept = { name: 'Accept', exact: true } as const
 
 test('a second job on a busy block queues behind it and runs against the settled outcome', async ({
   page,
@@ -42,7 +42,7 @@ test('a second job on a busy block queues behind it and runs against the settled
   expect(await waitingJobs(app)).toEqual([])
 
   // Accepting settles it; only now does the second job start — against the accepted text.
-  await ghosts(page).getByRole('button', accept).click()
+  await acceptButton(ghosts(page)).click()
   const [secondId] = await expectWaiting(app, 1)
   expect(secondId).not.toBe(firstId)
   const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
@@ -60,7 +60,7 @@ test('a rejected outcome releases the queue as well', async ({ page, app }) => {
   await ask(page, 'fake:upper second')
   const [firstId] = await expectWaiting(app, 1)
   await release(app, firstId)
-  await ghosts(page).getByRole('button', { name: 'Reject', exact: true }).click()
+  await rejectButton(ghosts(page)).click()
   const [secondId] = await expectWaiting(app, 1)
   const snapshot = readFileSync(jobFile(app, secondId, 'article.md'), 'utf8')
   expect(snapshot).toContain('## Why blocks')
@@ -86,7 +86,7 @@ test('editing a block while its job runs flags the result and diffs against the 
   await expect(ghost).toContainText('changed since request')
   // Diffed against "## Why blocks today", not the snapshot: "today" is what gets removed.
   await expect(ghost.locator('del').last()).toContainText('today')
-  await ghost.getByRole('button', accept).click()
+  await acceptButton(ghost).click()
   await expectFile(app.articlePath(), (file) => expect(file).toContain('## WHY BLOCKS\n'))
 })
 
@@ -115,7 +115,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await expect(tray(page).getByText('queued behind another job')).toHaveCount(2)
 
   await release(app, blockJob)
-  await ghosts(page).getByRole('button', accept).click()
+  await acceptButton(ghosts(page)).click()
   const [articleJob] = await expectWaiting(app, 1)
   const instruction = readFileSync(jobFile(app, articleJob, 'instruction.md'), 'utf8')
   expect(instruction).toContain('article job')
@@ -123,7 +123,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await expect(tray(page).getByText('queued behind another job')).toHaveCount(1)
 
   await release(app, articleJob)
-  await ghosts(page).getByRole('button', accept).click()
+  await acceptButton(ghosts(page)).click()
   const [lateJob] = await expectWaiting(app, 1)
   expect(readFileSync(jobFile(app, lateJob, 'instruction.md'), 'utf8')).toContain('late block job')
 })

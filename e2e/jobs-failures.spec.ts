@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { type App, expect, test } from './fixtures.ts'
 import {
+  acceptButton,
   ask,
   blockWith,
   editor,
@@ -86,13 +87,13 @@ test('a decision the server cannot record says so and keeps the proposal on scre
   await expect(ghosts(page)).toHaveCount(1)
 
   await page.route('**/api/jobs/*/decisions', (route) => route.abort('failed'))
-  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghosts(page)).click()
   await expect(notice(page)).toContainText('Could not record the decision')
   await expect(ghosts(page)).toHaveCount(1)
   await expect(page.getByRole('heading', { name: 'Why blocks', exact: true })).toHaveCount(0)
 
   // Once the server answers again the same proposal can still be accepted.
   await page.unroute('**/api/jobs/*/decisions')
-  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await acceptButton(ghosts(page)).click()
   await expect(page.getByRole('heading', { name: 'WHY BLOCKS' })).toBeVisible()
 })
