@@ -69,3 +69,35 @@ test('a change made while the event stream was down is picked up on reconnect', 
     timeout: 15_000,
   })
 })
+
+test('a save that loses the race with an outside change gets a 409 and keeps both edits', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+
+  // No event will announce the outside change, so the autosave is the first to find out.
+  await dropEventStreams(app)
+  const changed = readFileSync(app.articlePath(), 'utf8').replace(
+    '## Why blocks',
+    '## Why blocks, from outside',
+  )
+  writeFileSync(app.articlePath(), changed)
+  const conflict = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 409,
+  )
+  await page.keyboard.type(' MINE')
+  await conflict
+
+  // The 409 body carried the disk version: it is reconciled, the focused block keeps its text…
+  await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
+  await expect(editor(page)).toContainText('reject the rest. MINE')
+  // …and the follow-up save writes both.
+  await expect(() => {
+    const file = readFileSync(app.articlePath(), 'utf8')
+    expect(file).toContain('## Why blocks, from outside')
+    expect(file).toContain('reject the rest. MINE')
+  }).toPass({ timeout: 8000 })
+})
