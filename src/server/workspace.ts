@@ -104,7 +104,9 @@ export class Workspace {
   docPath(ref: DocRef): string {
     if (ref.kind === 'strategy') return this.strategyPath()
     if (ref.kind === 'brief') return this.briefPath(ref.slug)
-    return path.join(this.bundleDir(ref.slug), 'index.md')
+    // Guard the leaf too: an `index.md` that is a symlink out of the content root is an escape,
+    // even though its bundle directory is inside.
+    return resolveWithin(this.contentRoot(), 'posts', assertSlug(ref.slug), 'index.md')
   }
 
   readDoc(ref: DocRef): DocOnDisk {
@@ -138,7 +140,12 @@ export class Workspace {
     const articles: Article[] = []
     for (const entry of readdirSync(posts, { withFileTypes: true })) {
       if (!entry.isDirectory() || !isSlug(entry.name)) continue
-      const index = path.join(posts, entry.name, 'index.md')
+      let index: string
+      try {
+        index = this.docPath({ kind: 'article', slug: entry.name })
+      } catch {
+        continue // an index.md that leaves the content root is not an article of this workspace
+      }
       if (!existsSync(index) || !statSync(index).isFile()) continue
       let title = entry.name
       try {

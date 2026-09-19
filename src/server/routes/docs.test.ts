@@ -82,6 +82,36 @@ describe('documents', () => {
     expect(readFileSync(article()).equals(bytes)).toBe(true)
   })
 
+  it('never follows an index.md, strategy.md or brief.md that is a symlink out of the workspace', async () => {
+    const outside = path.join(t.workspace, '..', `outside-${path.basename(t.workspace)}`)
+    mkdirSync(outside)
+    writeFileSync(path.join(outside, 'secret.md'), 'TOP SECRET\n')
+    try {
+      mkdirSync(path.join(t.workspace, 'content', 'posts', 'leak'))
+      symlinkSync(path.join(outside, 'secret.md'), article('leak'))
+      rmSync(path.join(t.workspace, 'strategy.md'))
+      symlinkSync(path.join(outside, 'secret.md'), path.join(t.workspace, 'strategy.md'))
+
+      for (const url of ['/api/docs/article/leak', '/api/docs/strategy']) {
+        const res = await t.get(url)
+        expect(res.status).toBe(400)
+        expect(await res.text()).not.toContain('TOP SECRET')
+      }
+      // Not listed, not written through.
+      expect(
+        (await json(t.get('/api/articles'))).articles.map((a: { slug: string }) => a.slug),
+      ).toEqual(['hello-openwrite'])
+      const put = await t.send('PUT', '/api/docs/article/leak', {
+        text: 'overwrite',
+        baseHash: null,
+      })
+      expect(put.status).toBe(400)
+      expect(readFileSync(path.join(outside, 'secret.md'), 'utf8')).toBe('TOP SECRET\n')
+    } finally {
+      rmSync(outside, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     '/api/docs/article/..%2f..%2fstrategy',
     '/api/docs/article/UPPER',
