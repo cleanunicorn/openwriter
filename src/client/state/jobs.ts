@@ -1,7 +1,7 @@
 import { type DocRef, docKey } from '../../shared/api-types.ts'
 import { applyOps } from '../../shared/jobs/apply-ops.ts'
 import { rewriteAssetRefs } from '../../shared/jobs/asset-refs.ts'
-import { isUnsettled, type Job, type JobRequest } from '../../shared/jobs/job-types.ts'
+import { isActive, isUnsettled, type Job, type JobRequest } from '../../shared/jobs/job-types.ts'
 import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { hasContent, START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
@@ -269,12 +269,7 @@ export function claimsOn(
   for (const id of state.order) {
     const job = state.jobs[id]
     if (job === undefined || docKey(job.doc) !== key) continue
-    if (
-      job.state === 'queued' ||
-      job.state === 'running' ||
-      job.state === 'validating' ||
-      job.state === 'repairing'
-    ) {
+    if (isActive(job.state)) {
       for (const target of job.targets) pending.add(target)
     }
   }
