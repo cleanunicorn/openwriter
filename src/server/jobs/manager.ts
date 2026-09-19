@@ -303,11 +303,9 @@ export class JobManager {
     let outcome: Completion | 'timeout'
     try {
       outcome = await Promise.race([handle.done, timeout, relayFailure])
-    } catch (error) {
+    } finally {
       clearTimeout(timer)
-      throw error
     }
-    clearTimeout(timer)
     if (outcome === 'timeout') {
       await handle.cancel()
       await relay
