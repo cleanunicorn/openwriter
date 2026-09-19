@@ -16,8 +16,8 @@ export function buildCodexArgs(jobDir: string, options: AdapterOptions): string[
         '--json',
         '--skip-git-repo-check',
         '--ephemeral',
-        '-o',
-        path.join(jobDir, 'last-message.txt'),
+        // No `-o <jobDir>/last-message.txt`: the codex CLI writes that file outside its own sandbox,
+        // at a name the agent controls — a symlink there would be an outside write.
         // The job directory is the only writable root. `-s read-only --add-dir <jobDir>` does not
         // work: --add-dir only extends workspace-write. /tmp and $TMPDIR are excluded as well.
         '-C',

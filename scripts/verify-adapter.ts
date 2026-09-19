@@ -110,7 +110,7 @@ while (!terminal.has(jobs.get(job.id).state))
   await new Promise((resolve) => setTimeout(resolve, 500))
 const final = jobs.get(job.id)
 const jobDir = jobs.jobDir(job.id)
-const jobFiles = ['result.json', 'last-message.txt', 'result.invalid.json']
+const jobFiles = ['result.json', 'result.invalid.json']
   .map((name) => path.join(jobDir, name))
   .filter((file) => existsSync(file))
   .map((file) => readFileSync(file, 'utf8'))

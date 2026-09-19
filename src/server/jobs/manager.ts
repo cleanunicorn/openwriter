@@ -1,4 +1,3 @@
-import { appendFileSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
@@ -14,6 +13,14 @@ import { findSkill, missingTools, type Skill, type ToolLookup } from '../skills.
 import type { EventHub } from '../sse.ts'
 import type { Workspace } from '../workspace.ts'
 import { renderRepair, writeJobFiles } from './job-files.ts'
+import {
+  appendJobText,
+  readJobAsset,
+  readJobText,
+  readJobTextOrNull,
+  UnsafeJobFileError,
+  writeJobText,
+} from './job-io.ts'
 import { type JobFile, recoverJobs, saveJobFile } from './store.ts'
 
 const PROGRESS_TAIL = 40
@@ -115,7 +122,7 @@ export class JobManager {
     if (entry.logBytes < PROGRESS_LOG_LIMIT) {
       const line = `${new Date().toISOString()} ${text}\n`
       entry.logBytes += line.length
-      appendFileSync(path.join(this.jobDir(job.id), 'progress.log'), line)
+      appendJobText(this.jobDir(job.id), 'progress.log', line)
     }
     this.options.events.emit({ type: 'job.progress', id: job.id, text })
   }
@@ -273,9 +280,14 @@ export class JobManager {
   private readResult(entry: Entry): { result: Result } | { errors: string[]; raw: string } {
     const job = entry.file.job
     const jobDir = this.jobDir(job.id)
-    const file = path.join(jobDir, 'result.json')
-    if (!existsSync(file)) return { errors: ['result.json was not written'], raw: '' }
-    const raw = readFileSync(file, 'utf8')
+    let raw: string | null
+    try {
+      raw = readJobText(jobDir, 'result.json')
+    } catch (error) {
+      if (!(error instanceof UnsafeJobFileError)) throw error
+      return { errors: [error.message], raw: '' }
+    }
+    if (raw === null) return { errors: ['result.json was not written'], raw: '' }
     let json: unknown
     try {
       json = JSON.parse(raw)
@@ -298,12 +310,9 @@ export class JobManager {
     })
     for (const asset of parsed.data.assets) {
       try {
-        const source = resolveWithin(
-          path.join(jobDir, 'assets'),
-          asset.file.replace(/^assets\//, ''),
-        )
-        if (!existsSync(source) || !lstatSync(source).isFile())
-          errors.push(`asset "${asset.file}" does not exist in the job directory`)
+        if (readJobAsset(jobDir, asset.file) === null) {
+          errors.push(`asset "${asset.file}" does not exist in the job directory as a plain file`)
+        }
       } catch {
         errors.push(`asset "${asset.file}" is not inside assets/`)
       }
@@ -325,8 +334,8 @@ export class JobManager {
     if ('errors' in checked) {
       // One automatic repair attempt; the rejected output is kept next to the new one.
       const jobDir = this.jobDir(id)
-      writeFileSync(path.join(jobDir, 'result.invalid.json'), checked.raw)
-      writeFileSync(path.join(jobDir, 'repair.md'), renderRepair(id, checked.errors, checked.raw))
+      writeJobText(jobDir, 'result.invalid.json', checked.raw)
+      writeJobText(jobDir, 'repair.md', renderRepair(id, checked.errors, checked.raw))
       this.update(entry, { state: 'repairing' })
       this.progress(
         entry,
@@ -355,19 +364,17 @@ export class JobManager {
     // A proposal that is already complete stays reviewable if cancel races with completion.
     if (state === 'ready' || state === 'settled') return entry.file.job
     if (state === 'failed' || state === 'cancelled' || state === 'stale') return entry.file.job
-    const resultPath = path.join(this.jobDir(id), 'result.json')
     this.update(entry, { state: 'cancelled', error: 'Cancelled by the writer.' })
     await entry.handle?.cancel()
-    if (existsSync(resultPath)) this.update(entry, { rawOutput: readFileSync(resultPath, 'utf8') })
+    const written = readJobTextOrNull(this.jobDir(id), 'result.json')
+    if (written !== null) this.update(entry, { rawOutput: written })
     return entry.file.job
   }
 
   markStale(id: string, reason: string): Job {
     const entry = this.entry(id)
     if (entry.file.job.state === 'settled') return entry.file.job
-    const resultPath = path.join(this.jobDir(id), 'result.json')
-    const rawOutput =
-      entry.file.job.rawOutput ?? (existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : null)
+    const rawOutput = entry.file.job.rawOutput ?? readJobTextOrNull(this.jobDir(id), 'result.json')
     void entry.handle?.cancel()
     this.update(entry, { state: 'stale', error: reason, rawOutput })
     return entry.file.job
@@ -401,7 +408,6 @@ export class JobManager {
     if (job.doc.kind === 'article') {
       const files = job.result.assets.map((asset) => asset.file)
       const bundle = this.options.workspace.bundleDir(job.doc.slug)
-      const assetsDir = path.join(this.jobDir(id), 'assets')
       for (const index of accepted) {
         const op = ops[index]
         if (op === undefined || op.op === 'delete') continue
@@ -411,14 +417,10 @@ export class JobManager {
             assetMap[file] = known
             continue
           }
-          const source = resolveWithin(assetsDir, file.replace(/^assets\//, ''))
-          if (!existsSync(source) || !lstatSync(source).isFile())
-            throw new HttpError(409, `asset ${file} is missing`)
-          const name = storeWithoutOverwrite(
-            bundle,
-            sanitiseFileName(path.basename(file)),
-            readFileSync(source),
-          )
+          // An escaping path throws (PathEscapeError → 400); anything else that is not a plain file is a 409.
+          const data = readJobAsset(this.jobDir(id), file)
+          if (data === null) throw new HttpError(409, `asset ${file} is missing`)
+          const name = storeWithoutOverwrite(bundle, sanitiseFileName(path.basename(file)), data)
           entry.file.promoted[file] = name
           assetMap[file] = name
         }

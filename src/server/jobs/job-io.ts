@@ -1,0 +1,150 @@
+import { randomBytes } from 'node:crypto'
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs'
+import path from 'node:path'
+import { PathEscapeError, resolveWithin } from '../paths.ts'
+
+/**
+ * Everything the server reads or writes inside `.zen/jobs/<id>/` after the agent has started goes
+ * through this module. The job directory is the one place an agent may write, so every name in
+ * it is untrusted: an agent with a shell (codex, or a skill that allows Bash) can replace
+ * `progress.log`, `result.json`, or `assets/` with a symlink, a hard link to an outside file, a
+ * directory, or a FIFO. Following those would let the agent read and write outside its sandbox
+ * *through the server*.
+ *
+ * Rules: never follow a symlink at the final component (O_NOFOLLOW), never block on a FIFO
+ * (O_NONBLOCK), accept only regular files with a single link, write through an exclusive
+ * random-named temp file plus rename (a rename replaces the directory entry, it never writes
+ * through it), and resolve assets from the trusted job directory, not from its `assets` child.
+ */
+export class UnsafeJobFileError extends Error {
+  constructor(name: string, why: string) {
+    super(`${name} is not a plain file the agent wrote (${why})`)
+    this.name = 'UnsafeJobFileError'
+  }
+}
+
+const NO_FOLLOW = constants.O_NOFOLLOW | constants.O_NONBLOCK
+
+function artifactPath(jobDir: string, name: string): string {
+  if (name !== path.basename(name) || name === '' || name.startsWith('.')) {
+    throw new PathEscapeError(`not a job artifact name: ${name}`)
+  }
+  return path.join(jobDir, name)
+}
+
+/** Open without following links; the returned descriptor is a regular, singly linked file. */
+function openChecked(file: string, flags: number, label: string): number {
+  let fd: number
+  try {
+    fd = openSync(file, flags | NO_FOLLOW, 0o644)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') throw error
+    throw new UnsafeJobFileError(label, code === 'ELOOP' ? 'it is a symlink' : String(code))
+  }
+  const stats = fstatSync(fd)
+  if (!stats.isFile() || stats.nlink !== 1) {
+    closeSync(fd)
+    throw new UnsafeJobFileError(label, stats.isFile() ? 'it is a hard link' : 'not a regular file')
+  }
+  return fd
+}
+
+const isMissing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
+
+/** Text of a fixed artifact, or null when it does not exist. Throws UnsafeJobFileError otherwise. */
+export function readJobText(jobDir: string, name: string): string | null {
+  let fd: number
+  try {
+    fd = openChecked(artifactPath(jobDir, name), constants.O_RDONLY, name)
+  } catch (error) {
+    if (isMissing(error)) return null
+    throw error
+  }
+  try {
+    return readFileSync(fd, 'utf8')
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/** Like readJobText, but an unsafe or unreadable artifact counts as "no output". */
+export function readJobTextOrNull(jobDir: string, name: string): string | null {
+  try {
+    return readJobText(jobDir, name)
+  } catch {
+    return null
+  }
+}
+
+/** Replace an artifact atomically. Whatever sits at the name now is replaced, never written through. */
+export function writeJobText(jobDir: string, name: string, text: string): void {
+  const target = artifactPath(jobDir, name)
+  const temp = path.join(jobDir, `.${name}.${randomBytes(8).toString('hex')}.tmp`)
+  const fd = openSync(
+    temp,
+    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW,
+    0o644,
+  )
+  try {
+    writeSync(fd, text)
+  } finally {
+    closeSync(fd)
+  }
+  try {
+    renameSync(temp, target)
+  } catch (error) {
+    unlinkSync(temp)
+    throw new UnsafeJobFileError(name, String((error as NodeJS.ErrnoException).code))
+  }
+}
+
+/** Append to a server-owned log. An artifact that is no longer a plain file is left alone. */
+export function appendJobText(jobDir: string, name: string, text: string): boolean {
+  let fd: number
+  try {
+    fd = openChecked(
+      artifactPath(jobDir, name),
+      constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT,
+      name,
+    )
+  } catch {
+    return false
+  }
+  try {
+    writeSync(fd, text)
+    return true
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/**
+ * Bytes of a job asset (`assets/<relative>`), or null when it is not a plain file. The path is
+ * resolved from the trusted job directory, so `assets` — or any directory below it — being a
+ * symlink that leaves the job directory is a PathEscapeError, not a new trusted root.
+ */
+export function readJobAsset(jobDir: string, file: string): Buffer | null {
+  const relative = file.replace(/^assets\//, '')
+  const resolved = resolveWithin(jobDir, 'assets', relative)
+  let fd: number
+  try {
+    fd = openChecked(resolved, constants.O_RDONLY, file)
+  } catch {
+    return null
+  }
+  try {
+    return readFileSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}

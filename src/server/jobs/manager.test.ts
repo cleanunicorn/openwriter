@@ -1,4 +1,12 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
@@ -386,6 +394,74 @@ describe('staleness and restart', () => {
     } finally {
       again.dispose()
     }
+  })
+})
+
+describe('agent-made links in the job directory are never followed', () => {
+  // What an agent with a shell (codex, or a skill that allows Bash) can do inside its own
+  // directory. The server must not turn those links into reads or writes outside it.
+  let outside: string
+  beforeEach(() => {
+    outside = path.join(t.workspace, '..', `outside-${path.basename(t.workspace)}`)
+    mkdirSync(outside)
+    writeFileSync(path.join(outside, 'secret.png'), 'TOP SECRET')
+    writeFileSync(path.join(outside, 'victim.txt'), 'victim\n')
+  })
+  afterEach(() => rmSync(outside, { recursive: true, force: true }))
+
+  it('does not append progress through a symlinked progress.log', async () => {
+    const job = await start(request('fake:upper', byText('## Why blocks')))
+    await atCheckpoint(job.id)
+    rmSync(path.join(jobDir(job.id), 'progress.log'), { force: true })
+    symlinkSync(path.join(outside, 'victim.txt'), path.join(jobDir(job.id), 'progress.log'))
+    t.gate.release(job.id)
+    await until(job.id, 'ready')
+    expect(readFileSync(path.join(outside, 'victim.txt'), 'utf8')).toBe('victim\n')
+  })
+
+  it('neither serves nor copies through a symlinked assets directory', async () => {
+    const job = await start(request('fake:asset', byText('Results arrive')))
+    await atCheckpoint(job.id)
+    t.gate.release(job.id)
+    await until(job.id, 'ready')
+    rmSync(path.join(jobDir(job.id), 'assets'), { recursive: true })
+    symlinkSync(outside, path.join(jobDir(job.id), 'assets'))
+    // The job's own asset name now points outside too.
+    writeFileSync(path.join(outside, 'fake-diagram.png'), 'OUTSIDE BYTES')
+
+    expect((await t.get(`/api/jobs/${job.id}/assets/secret.png`)).status).toBe(400)
+    const decide = await t.send('POST', `/api/jobs/${job.id}/decisions`, {
+      accepted: [0],
+      rejected: [],
+    })
+    expect(decide.status).toBe(400)
+    const bundle = path.dirname(articlePath())
+    expect(existsSync(path.join(bundle, 'fake-diagram.png'))).toBe(false)
+  })
+
+  it('does not disclose an outside file through a symlinked result.json', async () => {
+    const job = await start(request('fake:upper', byText('## Why blocks')))
+    await atCheckpoint(job.id)
+    symlinkSync(path.join(outside, 'secret.png'), path.join(jobDir(job.id), 'result.json'))
+    const cancelled = await json(t.send('POST', `/api/jobs/${job.id}/cancel`))
+    expect(cancelled.state).toBe('cancelled')
+    expect(JSON.stringify(cancelled)).not.toContain('TOP SECRET')
+    const stale = await json(t.send('POST', `/api/jobs/${job.id}/stale`, { reason: 'x' }))
+    expect(JSON.stringify(stale)).not.toContain('TOP SECRET')
+  })
+
+  it('rejects a result.json that is a link, as an invalid result', async () => {
+    const job = await start(request('fake:hang', byText('## Why blocks')))
+    await atCheckpoint(job.id)
+    // The "agent" leaves a link instead of a file and exits: plant it, then let the run end.
+    symlinkSync(path.join(outside, 'secret.png'), path.join(jobDir(job.id), 'result.json'))
+    const entry = t.jobs as unknown as {
+      readResult: (e: unknown) => { errors?: string[] }
+      entries: Map<string, unknown>
+    }
+    const checked = entry.readResult(entry.entries.get(job.id))
+    expect(checked.errors?.[0]).toContain('not a plain file')
+    await t.send('POST', `/api/jobs/${job.id}/cancel`)
   })
 })
 

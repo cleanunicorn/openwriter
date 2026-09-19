@@ -1,15 +1,9 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { AdapterConfigSchema } from '../../shared/config-schema.ts'
 import { isUnsettled, type Job, JobSchema } from '../../shared/jobs/job-types.ts'
+import { readJobText, readJobTextOrNull, writeJobText } from './job-io.ts'
 
 /** `job.json`: server-owned lifecycle metadata next to the contract files. */
 export const JobFileSchema = z.object({
@@ -25,17 +19,15 @@ export type JobFile = z.infer<typeof JobFileSchema>
 
 export function saveJobFile(jobDir: string, file: JobFile): void {
   mkdirSync(jobDir, { recursive: true })
-  const target = path.join(jobDir, 'job.json')
-  const temp = `${target}.${process.pid}.tmp`
-  writeFileSync(temp, `${JSON.stringify(file, null, 2)}\n`)
-  renameSync(temp, target)
+  writeJobText(jobDir, 'job.json', `${JSON.stringify(file, null, 2)}\n`)
 }
 
+/** job.json sits in a directory the agent may write, so it is read without following links and re-validated. */
 export function readJobFile(jobDir: string): JobFile | undefined {
   try {
-    const parsed = JobFileSchema.safeParse(
-      JSON.parse(readFileSync(path.join(jobDir, 'job.json'), 'utf8')),
-    )
+    const text = readJobText(jobDir, 'job.json')
+    if (text === null) return undefined
+    const parsed = JobFileSchema.safeParse(JSON.parse(text))
     return parsed.success ? parsed.data : undefined
   } catch {
     return undefined
@@ -57,9 +49,7 @@ export function recoverJobs(jobsDir: string): JobFile[] {
     if (file === undefined || file.dismissed) continue
     const job: Job = file.job
     if (isUnsettled(job.state)) {
-      let rawOutput = job.rawOutput
-      const resultPath = path.join(jobDir, 'result.json')
-      if (rawOutput === null && existsSync(resultPath)) rawOutput = readFileSync(resultPath, 'utf8')
+      const rawOutput = job.rawOutput ?? readJobTextOrNull(jobDir, 'result.json')
       file.job = {
         ...job,
         state: 'stale',

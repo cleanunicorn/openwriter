@@ -1,13 +1,11 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import path from 'node:path'
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { DecisionsRequestSchema, JobRequestSchema } from '../../shared/jobs/job-types.ts'
 import type { FakeGate } from '../adapters/fake.ts'
 import type { ServerContext } from '../context.ts'
 import { contentTypeFor, HttpError, parseBody } from '../http.ts'
+import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
-import { resolveWithin } from '../paths.ts'
 import { listSkills } from '../skills.ts'
 
 export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobManager): void {
@@ -37,10 +35,12 @@ export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobMana
     const id = c.req.param('id')
     const prefix = `/api/jobs/${id}/assets/`
     const relative = decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
-    const file = resolveWithin(path.join(jobs.jobDir(id), 'assets'), relative)
-    if (!existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'asset not found')
-    return c.body(readFileSync(file), 200, {
-      'content-type': contentTypeFor(file),
+    // Resolved from the trusted job directory and read without following links: `assets` itself
+    // is agent-writable and may be a symlink.
+    const data = readJobAsset(jobs.jobDir(id), `assets/${relative}`)
+    if (data === null) throw new HttpError(404, 'asset not found')
+    return c.body(new Uint8Array(data), 200, {
+      'content-type': contentTypeFor(relative),
       'x-content-type-options': 'nosniff',
       'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
     })

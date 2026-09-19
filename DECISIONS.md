@@ -196,7 +196,7 @@ claude -p --output-format stream-json --verbose
 Shipped command line (prompt on stdin, `-` last):
 
 ```
-codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
+codex exec --json --skip-git-repo-check --ephemeral
   -C <jobDir> -s workspace-write
   -c sandbox_workspace_write.exclude_slash_tmp=true
   -c sandbox_workspace_write.exclude_tmpdir_env_var=true [-m <model>] [...extraArgs] -
@@ -218,6 +218,9 @@ codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
   read the secret outside the workspace with `cat`. No flag in `codex exec --help` changes that.
   Writes — the part the file contract depends on — are confined to the job directory.
   Workspace-wide write (`-C <workspace> -s workspace-write`) was not needed and is not shipped.
+- `-o <jobDir>/last-message.txt` was part of the verified runs and was removed afterwards: the
+  codex CLI writes that file itself, outside its sandbox, at a name inside the agent-writable job
+  directory, so a symlink planted there would become an outside write. Nothing read the file.
 - codex has no per-command allow list; a skill that declares `network: true` adds
   `-c sandbox_workspace_write.network_access=true`.
 
@@ -271,6 +274,20 @@ codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
   web server cannot do that for the writer.
 - **claude's `Write(path)` allow rule was dropped.** claude says it is never matched; `Edit(path)`
   rules cover every file-editing tool. The sentinel runs had passed with both rules present.
+
+## The job directory is untrusted
+
+- **Every name inside `.zen/jobs/<id>/` is agent-controlled once the agent runs.** An agent with
+  a shell (codex, or a skill that allows Bash) can replace `progress.log`, `result.json` or
+  `assets/` with a symlink, a hard link to an outside file, a directory, or a FIFO. The server
+  therefore touches the job directory only through `src/server/jobs/job-io.ts`: opens use
+  `O_NOFOLLOW | O_NONBLOCK` and accept only regular files with one link; writes go through an
+  exclusive random-named temp file plus rename (a rename replaces the entry, it never writes
+  through it); assets resolve from the trusted job directory, never from its `assets` child.
+  Found in review: before this, the server served and appended to files outside the workspace
+  through planted symlinks.
+- **`job.json` lives in that directory too,** so it is re-validated with zod on every read and
+  never trusted for anything the in-memory job does not already know.
 
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
