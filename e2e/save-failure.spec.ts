@@ -26,3 +26,20 @@ test('a failed save is announced where the writer is, not at the top of a long a
   await notice(page).getByRole('button', { name: 'Dismiss' }).click()
   await expect(notice(page)).toHaveCount(0)
 })
+
+test('leaving the tab saves at once instead of waiting for the debounce', async ({ page, app }) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' Saved on the way out.')
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.ok(),
+  )
+  // The tab goes to the background (what happens first when it is closed or switched away from).
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await saved
+  await expectFile(app.articlePath(), (file) => expect(file).toContain('Saved on the way out.'))
+})

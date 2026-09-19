@@ -145,6 +145,14 @@ store.subscribe(() => {
   }
 })
 
+/** Is any open document ahead of the disk? Used by the unload guard. */
+export const hasUnsavedChanges = (): boolean => Object.values(store.get().docs).some(isDirty)
+
+/** Save everything that is dirty, now. The tab going to the background is the last safe moment. */
+export function flushAll(): void {
+  for (const doc of Object.values(store.get().docs)) if (isDirty(doc)) void flush(doc.ref)
+}
+
 // ── loading and navigation ────────────────────────────────────────────────────────────────
 
 export const refToHash = (ref: DocRef): string =>

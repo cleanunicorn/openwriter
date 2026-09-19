@@ -12,7 +12,15 @@ import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { effectiveTargets } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
-import { dispatchDoc, flush, notifyFailure, setEventHandlers, store } from './app.ts'
+import {
+  dispatchDoc,
+  flush,
+  flushAll,
+  hasUnsavedChanges,
+  notifyFailure,
+  setEventHandlers,
+  store,
+} from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
@@ -402,6 +410,11 @@ export function startJobs(): void {
     const open =
       held.length > 0 ||
       Object.values(jobs).some((job) => createdHere.has(job.id) && isUnsettled(job.state))
-    if (open) event.preventDefault()
+    // A dirty document counts too: autosave is debounced, so the last keystrokes may still be
+    // on their way when the tab closes.
+    if (open || hasUnsavedChanges()) event.preventDefault()
+  })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushAll()
   })
 }
