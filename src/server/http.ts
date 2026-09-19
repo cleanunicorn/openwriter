@@ -4,7 +4,7 @@ import { IMAGE_EXTENSIONS } from './assets.ts'
 
 /** An error a route wants the client to see, with its status. Everything else is a 500. */
 export class HttpError extends Error {
-  readonly status: 400 | 404 | 409 | 413 | 415 | 422
+  readonly status: 400 | 404 | 409 | 413 | 415
   readonly body: Record<string, unknown>
   constructor(status: HttpError['status'], message: string, body: Record<string, unknown> = {}) {
     super(message)
