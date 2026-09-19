@@ -30,6 +30,11 @@ test('settings are reachable from the palette and stored in .zen/config.json', a
   await form.getByLabel('claude extra arguments').fill('--max-budget-usd 2')
   await form.getByRole('button', { name: 'Save' }).click()
   await expect(form.getByRole('status', { name: 'Settings status' })).toHaveText('Saved.')
+  await form.getByLabel('Jobs running at once').fill('4')
+  await expect(form.getByRole('status', { name: 'Settings status' })).toHaveText('')
+  await form.getByLabel('Jobs running at once').fill('5')
+  await form.getByRole('button', { name: 'Save' }).click()
+  await expect(form.getByRole('status', { name: 'Settings status' })).toHaveText('Saved.')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
   expect(JSON.parse(readFileSync(configPath(app.workspace), 'utf8'))).toMatchObject({

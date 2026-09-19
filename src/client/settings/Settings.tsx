@@ -29,7 +29,11 @@ export function Settings() {
   }, [loaded])
 
   if (loaded === null || draft === null) return null
-  const set = (patch: Partial<Config>) => setDraft({ ...draft, ...patch })
+  const set = (patch: Partial<Config>) => {
+    setDraft({ ...draft, ...patch })
+    // "Saved." describes the last save, not a form that has been edited since.
+    setMessage(null)
+  }
   const adapterNames = loaded.adapters
   const setAdapter = (name: string, patch: Partial<Config['adapters'][string]>) =>
     set({
