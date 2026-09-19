@@ -467,6 +467,44 @@ describe('review decisions', () => {
     expect(rest.job.decisions).toEqual({ '0': 'accepted', '1': 'accepted', '2': 'rejected' })
   })
 
+  it('takes back an acceptance the client could not apply, and only that', async () => {
+    const job = await readyJob('fake:multi')
+    const settled = await json(
+      t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [0, 1], rejected: [2] }),
+    )
+    expect(settled.job.state).toBe('settled')
+
+    // Op 1's block was gone when the client came to apply it; op 2 was rejected, not accepted.
+    const res = await t.send('POST', `/api/jobs/${job.id}/decisions/withdraw`, { indices: [1, 2] })
+    expect(res.status).toBe(200)
+    const back = await json(res)
+    expect(back.state).toBe('ready')
+    expect(back.decisions).toEqual({ '0': 'accepted', '2': 'rejected' })
+    expect(back.revision).toBeGreaterThan(settled.job.revision)
+    // Reviewable again: the client can now report it stale, which a settled job ignores.
+    const stale = await json(t.send('POST', `/api/jobs/${job.id}/stale`, { reason: 'gone' }))
+    expect(stale.state).toBe('stale')
+  })
+
+  it('withdrawing nothing that was accepted changes nothing, and a job that is not under review refuses', async () => {
+    const job = await readyJob('fake:multi')
+    await t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [], rejected: [0] })
+    const before = t.jobs.get(job.id)
+    const same = await json(
+      t.send('POST', `/api/jobs/${job.id}/decisions/withdraw`, { indices: [0, 1, 99] }),
+    )
+    expect(same.decisions).toEqual({ '0': 'rejected' })
+    expect(same.revision).toBe(before.revision)
+    expect(
+      (await t.send('POST', `/api/jobs/${job.id}/decisions/withdraw`, { indices: [] })).status,
+    ).toBe(400)
+
+    await t.send('POST', `/api/jobs/${job.id}/stale`, { reason: 'gone' })
+    expect(
+      (await t.send('POST', `/api/jobs/${job.id}/decisions/withdraw`, { indices: [1] })).status,
+    ).toBe(409)
+  })
+
   it('decides an op once: a repeated accept changes nothing, and accept+reject of one op is refused', async () => {
     const job = await readyJob('fake:multi')
     const first = await json(

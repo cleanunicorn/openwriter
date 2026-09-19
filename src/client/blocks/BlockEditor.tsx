@@ -113,6 +113,14 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
       for (const file of files) {
         try {
           const { name } = await api.uploadImage(docRef.slug, file)
+          if (destroyed) {
+            // The file is in the bundle, but the editor it was meant for closed meanwhile.
+            send({
+              type: 'notice',
+              notice: `The image was saved as ${name}, but its editor had closed. Add ![](${name}) where you want it.`,
+            })
+            continue
+          }
           view.dispatch(view.state.replaceSelection(`![](${name})`))
         } catch (error) {
           send({ type: 'notice', notice: `Could not add the image: ${(error as Error).message}` })

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
@@ -12,6 +12,7 @@ import {
   expectWaiting,
   ghosts,
   jobFile,
+  jobState,
   mod,
   notice,
   openArticle,
@@ -215,4 +216,39 @@ test('a queued instruction whose block is deleted is dropped, with a notice, and
   expect(await waitingJobs(app)).toEqual([])
   const jobs = (await (await fetch(`${app.url}/api/jobs`)).json()) as { jobs: unknown[] }
   expect(jobs.jobs).toHaveLength(1)
+})
+
+test('a target deleted while Accept is in flight leaves no phantom acceptance', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Results arrive as ghost diffs'), 'Results')
+  await ask(page, 'fake:upper')
+  const jobId = await expectOneWaiting(app)
+  await release(app)
+  await expect(ghosts(page)).toHaveCount(1)
+
+  // The server records the decision; before its answer reaches the page, the block disappears
+  // from outside (another editor saves the file without it).
+  await page.route('**/api/jobs/*/decisions', async (route) => {
+    const response = await route.fetch()
+    writeFileSync(
+      app.articlePath(),
+      app.readArticle().replace(/^Results arrive as ghost diffs[^\n]*\n\n/m, ''),
+    )
+    await expect(notice(page)).toContainText('changed on disk')
+    await route.fulfill({ response })
+  })
+  await acceptButton(page).click()
+
+  // Nothing was applied, so nothing may count as accepted: the job is stale and keeps its output.
+  await expect.poll(() => jobState(app, jobId)).toBe('stale')
+  const job = (await (await fetch(`${app.url}/api/jobs/${jobId}`)).json()) as {
+    decisions: Record<string, string>
+  }
+  expect(Object.values(job.decisions)).not.toContain('accepted')
+  await tray(page).getByRole('button').first().click()
+  await expect(tray(page)).toContainText('stale')
+  expect(app.readArticle()).not.toContain('RESULTS ARRIVE')
 })

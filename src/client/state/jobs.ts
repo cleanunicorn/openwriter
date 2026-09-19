@@ -250,11 +250,14 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
   })
   if (touchesFocused) dispatchDoc(job.doc, { type: 'blur' })
 
-  const { job: updated, assetMap } = await api.decide(id, accepted, rejected)
+  const decided = await api.decide(id, accepted, rejected)
+  let updated = decided.job
   const docState = docStateOf(job.doc)
   if (docState !== undefined && accepted.length > 0) {
     const ops: Op[] = job.result.ops.map((op) =>
-      op.op === 'delete' ? op : { ...op, markdown: rewriteAssetRefs(op.markdown, assetMap) },
+      op.op === 'delete'
+        ? op
+        : { ...op, markdown: rewriteAssetRefs(op.markdown, decided.assetMap) },
     )
     let next = docState.nextId
     const result = applyOps(
@@ -274,9 +277,18 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
         type: 'notice',
         notice: 'Part of the proposal could not be applied: its block no longer exists.',
       })
+      // The server recorded these as accepted before this client could know that their block
+      // was gone (it vanished during the round trip). What was not applied is not accepted.
+      updated = await api.withdrawDecisions(id, result.missing).catch((error) => {
+        notifyFailure('Could not take back the decision', error, job.doc)
+        return updated
+      })
+      // An earlier stale report may have been a no-op on the then-settled job: report again.
+      reportedStale.delete(id)
     }
   }
   upsert(updated)
+  checkTargets()
 }
 
 export const acceptAll = (id: string) => {

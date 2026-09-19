@@ -95,6 +95,10 @@ export const DecisionsRequestSchema = z.object({
   accepted: z.array(z.number().int().min(0)),
   rejected: z.array(z.number().int().min(0)),
 })
+/** Op indices the client accepted but could not apply: their block was gone by then. */
+export const WithdrawRequestSchema = z.object({
+  indices: z.array(z.number().int().min(0)).min(1),
+})
 export const DecisionsResponseSchema = z.object({
   job: JobSchema,
   /** `assets/<file>` in the job → final name inside the bundle. */

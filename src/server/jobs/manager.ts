@@ -466,6 +466,28 @@ export class JobManager {
   }
 
   /**
+   * Take back acceptances the client could not apply. Only the client knows the live document:
+   * a block can vanish between the server recording "accepted" and the client applying the op.
+   * Such an op was never applied, so it must not stay accepted — it becomes undecided again and a
+   * settled job is reviewable again (the client then reports it stale if its targets are gone).
+   * Rejections and applied acceptances are never touched. Promoted assets stay in the bundle:
+   * they are copies, and a later acceptance reuses them.
+   */
+  withdraw(id: string, indices: number[]): Job {
+    const entry = this.entry(id)
+    const job = entry.file.job
+    if (job.state !== 'ready' && job.state !== 'settled')
+      throw new HttpError(409, `job is ${job.state}, its decisions are final`)
+    const decisions = { ...job.decisions }
+    for (const index of indices) {
+      if (decisions[String(index)] === 'accepted') delete decisions[String(index)]
+    }
+    if (Object.keys(decisions).length === Object.keys(job.decisions).length) return job
+    this.update(entry, { decisions, state: 'ready' })
+    return entry.file.job
+  }
+
+  /**
    * Copy the assets that the accepted ops reference into the article's bundle, and return
    * `assets/<file>` → name in the bundle. Only an article has a bundle.
    */

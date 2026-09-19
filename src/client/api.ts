@@ -79,6 +79,8 @@ export const api = {
       method: 'POST',
       body: { accepted, rejected },
     }),
+  withdrawDecisions: (id: string, indices: number[]) =>
+    request(JobSchema, `/api/jobs/${id}/decisions/withdraw`, { method: 'POST', body: { indices } }),
   staleJob: (id: string, reason: string) =>
     request(JobSchema, `/api/jobs/${id}/stale`, { method: 'POST', body: { reason } }),
   dismissJob: (id: string) =>

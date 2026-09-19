@@ -1,7 +1,11 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { SkillInfoSchema } from '../../shared/api-types.ts'
-import { DecisionsRequestSchema, JobRequestSchema } from '../../shared/jobs/job-types.ts'
+import {
+  DecisionsRequestSchema,
+  JobRequestSchema,
+  WithdrawRequestSchema,
+} from '../../shared/jobs/job-types.ts'
 import type { FakeGate } from '../adapters/fake.ts'
 import type { ServerContext } from '../context.ts'
 import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
@@ -19,6 +23,12 @@ export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManag
   app.post('/api/jobs/:id/decisions', async (c) => {
     const { accepted, rejected } = await parseBody(c, DecisionsRequestSchema)
     return c.json(jobs.decide(c.req.param('id'), accepted, rejected))
+  })
+
+  // An accepted op whose block vanished before the client could apply it is not accepted.
+  app.post('/api/jobs/:id/decisions/withdraw', async (c) => {
+    const { indices } = await parseBody(c, WithdrawRequestSchema)
+    return c.json(jobs.withdraw(c.req.param('id'), indices))
   })
 
   // The client reports what only it can know: a target block was deleted from the live document.

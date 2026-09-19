@@ -359,6 +359,15 @@ codex exec --json --skip-git-repo-check --ephemeral
   the editor and the exported page reference it only as an `<img>`, which runs no script. Script
   in it could run only if the writer opened the file itself in a browser. Sanitising or refusing
   SVG changes what the writer can paste, so it is a follow-up, not a fix.
+- **An acceptance the client could not apply is withdrawn, not kept.** The server records
+  "accepted" (and copies assets) before the client applies the op to the live document, which only
+  the client knows. If the block vanished during that round trip, the client calls
+  `POST /api/jobs/:id/decisions/withdraw`: the op is undecided again, a settled job is reviewable
+  again, and a `blocks` job then goes stale as usual. Applying first and recording second was
+  rejected: a failed recording would leave an applied edit that the job still offers as a ghost.
+  A failed withdraw leaves the old behaviour (a notice), so it is never worse than before.
+- **An image upload that finishes after its editor closed is announced,** with the file name and
+  the reference to type; the reference is not guessed into a block the writer has left.
 - **Test-only server routes** (`/api/__fake/release`, `/waiting`, `/drop-events`) exist only with
   `--fake-control`; a unit test asserts 404 without it.
 
