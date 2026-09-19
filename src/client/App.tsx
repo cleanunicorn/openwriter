@@ -91,7 +91,7 @@ export function App() {
   return (
     <>
       <main className="column" data-doc-status={doc?.status ?? 'none'}>
-        {doc?.notice != null && (
+        {doc !== null && doc.notice !== null && (
           <p className="notice" role="status" aria-label="Document notice">
             {doc.notice}{' '}
             <button

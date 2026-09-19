@@ -104,7 +104,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
     }
     if (target.closest('.gutter, .block-editor, .ghost, button, a, input, textarea') !== null)
       return
-    if (element == null || block === undefined) return
+    if (element === null || block === undefined) return
     if (event.shiftKey && block.kind === 'content') {
       // Shift-click extends a block selection from the focused or first selected block.
       event.preventDefault()

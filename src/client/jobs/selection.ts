@@ -51,7 +51,7 @@ function targetFromSelection(): PillTarget | null {
   const block = element.closest<HTMLElement>('[data-testid="block"]')
   const blockId = block?.dataset.blockId
   if (
-    block == null ||
+    block === null ||
     blockId === undefined ||
     !state.doc.blocks.some((candidate) => candidate.id === blockId)
   ) {
