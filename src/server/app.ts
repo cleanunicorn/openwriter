@@ -2,7 +2,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
 import { createClaudeAdapter } from './adapters/claude.ts'
 import { createCodexAdapter } from './adapters/codex.ts'
 import { createFakeAdapter, FakeGate } from './adapters/fake.ts'
@@ -13,6 +12,7 @@ import { HttpError } from './http.ts'
 import { PathEscapeError } from './paths.ts'
 import { mountConfigRoutes } from './routes/config.ts'
 import { mountDocRoutes } from './routes/docs.ts'
+import { mountEventRoutes } from './routes/events.ts'
 import { mountExportRoutes } from './routes/export.ts'
 import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
 import { JobManager } from './jobs/manager.ts'
@@ -72,34 +72,7 @@ export function createApp(options: AppOptions): CreatedApp {
 
   app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(options.workspace) }))
 
-  app.get('/api/events', (c) =>
-    streamSSE(c, async (stream) => {
-      const unsubscribe = events.subscribe((event) => {
-        // A client that went away mid-write must not become an unhandled rejection.
-        void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})
-      })
-      let dropped = false
-      const untrack = events.trackStream(() => {
-        // Immediately: nothing emitted after the drop may still reach this client.
-        dropped = true
-        unsubscribe()
-        void stream.close()
-      })
-      stream.onAbort(() => {
-        unsubscribe()
-        untrack()
-      })
-      await stream.writeSSE({ event: 'hello', data: '{}' })
-      // Keep the connection open; a comment line every 25 s defeats idle timeouts.
-      while (!stream.aborted && !dropped) {
-        await stream.sleep(25_000)
-        if (!stream.aborted && !dropped) await stream.write(': keep-alive\n\n')
-      }
-      unsubscribe()
-      untrack()
-    }),
-  )
-
+  mountEventRoutes(app, events)
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)

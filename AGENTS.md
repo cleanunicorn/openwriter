@@ -294,7 +294,7 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
   context.ts            AppOptions and the ServerContext every route module receives
   workspace.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
   test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
-  routes/               docs (documents, articles, assets), config, jobs (+ fake control), export
+  routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control), export
   jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
                         job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
   adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent
