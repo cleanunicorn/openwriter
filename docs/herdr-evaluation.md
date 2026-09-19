@@ -84,6 +84,10 @@ open a terminal for the writer.
   job timeout still applies.
 - **State is herdr's detection,** not the agent's own exit code. It was correct in every run
   here (idle → working → idle), but it is a heuristic over the terminal.
+- **Not sentinel-checked.** The evaluation saw the article untouched and `result.json` written,
+  but the two checks that matter most — a probe file elsewhere in the workspace, a secret outside
+  it — were not run through a pane. The flags are the ones that pass them in print mode; run
+  `node scripts/verify-adapter.ts herdr` to measure it for the herdr path.
 - **Tested against a stub.** `herdr.test.ts` drives the adapter with a scripted CLI (argv,
   session scoping, blocked → wait, cancel, missing herdr). The real end-to-end path was exercised
   by hand with the same commands, as recorded above; it is not part of any automated suite, and

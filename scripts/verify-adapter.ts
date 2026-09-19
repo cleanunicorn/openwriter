@@ -1,5 +1,5 @@
 // Manual check of a real agent adapter. It spends credits, so it is never part of `npm test`
-// or CI. Usage:  node scripts/verify-adapter.ts <claude|codex> [--skill=<name>] [--extra="<args>"] [--base="<args>"]
+// or CI. Usage:  node scripts/verify-adapter.ts <claude|codex|herdr> [--skill=<name>] [--extra="<args>"] [--base="<args>"]
 //
 // It runs ONE small job in a temp copy of the sample workspace and checks the confinement the
 // file contract relies on, with sentinel files rather than trust in the prompt:
@@ -36,9 +36,11 @@ const { values, positionals } = parseArgs({
   },
 })
 const adapter = positionals[0]
-if (adapter !== 'claude' && adapter !== 'codex') {
+// herdr runs an interactive claude in a pane of its own `openwrite-jobs` session; it needs herdr
+// installed and is subject to the same four checks.
+if (adapter !== 'claude' && adapter !== 'codex' && adapter !== 'herdr') {
   console.error(
-    'usage: node scripts/verify-adapter.ts <claude|codex> [--extra="<args>"] [--base="<args>"]',
+    'usage: node scripts/verify-adapter.ts <claude|codex|herdr> [--skill=<name>] [--extra="<args>"] [--base="<args>"]',
   )
   process.exit(2)
 }

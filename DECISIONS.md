@@ -299,6 +299,12 @@ codex exec --json --skip-git-repo-check --ephemeral
   `options` bag would keep the schema adapter-neutral but move the validation of that one key out
   of zod; with a single adapter-specific key and a single reader (`herdr.ts`) the typed key wins.
   Revisit when a second adapter needs an option of its own.
+- **The herdr path has not been sentinel-checked itself.** It passes `claudeConfinement()` — the
+  flags that passed all four checks in print mode — to an interactive claude, and the evaluation
+  saw the job write only its `result.json` and leave the article alone. But the probe-file and
+  outside-secret checks were never run through a pane: the real-run budget of the build was spent.
+  `node scripts/verify-adapter.ts herdr` now exists for exactly that; until someone runs it,
+  herdr's confinement is inherited, not measured.
 - **Interactive claude inside herdr reuses the direct adapter's confinement flags.** Print-only
   flags (`--permission-prompts`, `--max-budget-usd`, `--no-session-persistence`) are left out.
 - **"Open this job in herdr" shows the attach command** instead of opening a terminal: a local
