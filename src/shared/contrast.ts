@@ -1,10 +1,10 @@
 /** WCAG 2.x relative luminance of a `#rrggbb` colour. */
 function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const channel = Number.parseInt(hex.slice(i, i + 2), 16) / 255
-    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  }) as [number, number, number]
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const channel = (offset: number) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
 }
 
 /** WCAG 2.x contrast ratio of two `#rrggbb` colours. Used by the colour tests of the app and the export. */
