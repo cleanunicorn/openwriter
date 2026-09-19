@@ -231,7 +231,8 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **codex cannot confine reads.** Its sandbox restricts writes only: in runs 2 and 3 the agent
   read the secret outside the workspace with `cat`. No flag in `codex exec --help` changes that.
   Writes — the part the file contract depends on — are confined to the job directory.
-  Workspace-wide write (`-C <workspace> -s workspace-write`) was not needed and is not shipped.
+  Workspace-wide write (`-C <workspace> -s workspace-write`) was not needed and is not shipped
+  (OD2).
 - `-o <jobDir>/last-message.txt` was part of the verified runs and was removed afterwards: the
   codex CLI writes that file itself, outside its sandbox, at a name inside the agent-writable job
   directory, so a symlink planted there would become an outside write. Nothing read the file.
