@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import type { z } from 'zod'
+import { IMAGE_EXTENSIONS } from './assets.ts'
 
 /** An error a route wants the client to see, with its status. Everything else is a 500. */
 export class HttpError extends Error {
@@ -29,13 +30,9 @@ export async function parseBody<T extends z.ZodType>(c: Context, schema: T): Pro
 }
 
 const CONTENT_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
+  // Every image that can be uploaded is served back under the type it arrived with.
+  ...Object.fromEntries(Object.entries(IMAGE_EXTENSIONS).map(([type, ext]) => [ext, type])),
   '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.avif': 'image/avif',
-  '.svg': 'image/svg+xml',
   '.cast': 'application/json',
   '.json': 'application/json',
   '.txt': 'text/plain; charset=utf-8',

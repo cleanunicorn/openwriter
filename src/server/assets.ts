@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { resolveWithin } from './paths.ts'
 
-const IMAGE_EXTENSIONS: Record<string, string> = {
+/** Content type → extension for every image that can be pasted or dropped; http.ts serves them back by the inverse. */
+export const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
   'image/gif': '.gif',
