@@ -24,8 +24,8 @@ any place the build spec turned out to be a bad idea and what replaced it.
 Versions are what is installed on the dev machine as of 2026-09-19.
 
 - **Node.js ≥ 24 + npm** (v24.14.1 / 11.11.0). TypeScript everywhere.
-- **Playwright browser binaries** — `npx playwright install --with-deps`, once
-  per machine or container.
+- **Playwright browser binaries** — `npx playwright install --with-deps chromium`,
+  once per machine or container.
 - **`gh` CLI** for PRs (2.92.0).
 - **Agent CLIs, only for the real adapters:** `claude` (2.1.278), `codex`
   (codex-cli 0.155.1). They use the user's own logins; the app stores no keys.
@@ -393,8 +393,9 @@ so it can point into a Hugo site):
   Tests that write use the `app` fixture in `e2e/fixtures.ts`: one server
   process on a free port and one workspace copy per test. Chromium only.
   `npm run test:e2e` builds the client first when it is missing or stale.
-- **Browser binaries:** `npx playwright install --with-deps`. A "browser not
-  found" / "executable doesn't exist" error means this hasn't been run.
+- **Browser binaries:** `npx playwright install --with-deps chromium`. A
+  "browser not found" / "executable doesn't exist" error means this hasn't been
+  run.
 
 Prefer `npm run test:e2e`; the raw forms:
 
