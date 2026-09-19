@@ -35,16 +35,16 @@ test('the palette tells assistive technology which option is active', async ({ p
   await openArticle(page)
   await page.keyboard.press(`${mod}+k`)
   const input = page.getByRole('combobox', { name: 'Command palette' })
-  const activeOption = async () => {
+  /** The id the input points at; the option with that id must be the selected one. */
+  const expectActiveOption = async () => {
     const id = await input.getAttribute('aria-activedescendant')
-    return id === null ? null : page.locator(`[id="${id}"]`)
+    expect(id).not.toBeNull()
+    await expect(page.locator(`[id="${id}"]`)).toHaveAttribute('aria-selected', 'true')
+    return id
   }
-  const first = await activeOption()
-  await expect(first ?? page.locator('never')).toHaveAttribute('aria-selected', 'true')
+  const first = await expectActiveOption()
   await page.keyboard.press('ArrowDown')
-  const second = await activeOption()
-  await expect(second ?? page.locator('never')).toHaveAttribute('aria-selected', 'true')
-  expect(await second?.getAttribute('id')).not.toBe(await first?.getAttribute('id'))
+  expect(await expectActiveOption()).not.toBe(first)
   // No match, no active descendant.
   await input.fill('zzzz no such command')
   await expect(input).not.toHaveAttribute('aria-activedescendant', /.+/)
