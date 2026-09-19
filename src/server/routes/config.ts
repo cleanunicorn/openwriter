@@ -27,7 +27,7 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     const config = await parseBody(c, ConfigSchema)
     // Validate what the value resolves to BEFORE it is written: a saved bad value would make
     // every later load fail.
-    const problem = Workspace.contentDirProblem(workspace.root, config.contentDir)
+    const problem = Workspace.contentDirProblemFor(workspace.root, config.contentDir)
     if (problem !== null) throw new HttpError(400, problem)
     try {
       saveConfig(workspace.root, config)

@@ -66,7 +66,7 @@ export class Workspace {
    * Why a `contentDir` cannot be used, or null. A relative value must stay inside the workspace
    * (`../site/content` is refused; an absolute path is the supported way to point outside).
    */
-  static contentDirProblem(root: string, contentDir: string): string | null {
+  static contentDirProblemFor(root: string, contentDir: string): string | null {
     if (path.isAbsolute(contentDir)) return null
     try {
       resolveWithin(root, contentDir)
@@ -77,7 +77,7 @@ export class Workspace {
   }
 
   contentDirProblem(): string | null {
-    return Workspace.contentDirProblem(this.root, this.config().config.contentDir)
+    return Workspace.contentDirProblemFor(this.root, this.config().config.contentDir)
   }
 
   contentOutsideWorkspace(): boolean {
