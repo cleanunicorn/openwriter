@@ -76,7 +76,10 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   const first = blockWith(page, 'Select some text, type an instruction')
   const second = blockWith(page, 'Results arrive as ghost diffs')
   // A margin click selects a block; shift-click extends the selection.
-  await first.getByTestId('gutter').click({ position: { x: 5, y: 5 } })
+  // Bottom-left of the margin: clear of the drag handle, whatever the font metrics are.
+  const gutter = await first.getByTestId('gutter').boundingBox()
+  await first.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
+  await expect(first).toHaveClass(/is-selected/)
   await second.locator('.rendered').click({ modifiers: ['Shift'] })
   await expect(first).toHaveClass(/is-selected/)
   await expect(second).toHaveClass(/is-selected/)
