@@ -34,6 +34,11 @@ function settle(candidate: Doc, mintId: MintId): Doc {
 
 const firstMovable = (doc: Doc) => (doc.blocks[0]?.kind === 'frontmatter' ? 1 : 0)
 
+/**
+ * Move the block at `from` to index `to` (clamped to the document). The front matter never moves
+ * and nothing moves above it. Gaps stay at their positions; only a touched gap without a blank
+ * line gets a separator.
+ */
 export function moveBlock(doc: Doc, from: number, to: number, mintId: MintId): Doc {
   const floor = firstMovable(doc)
   const target = Math.max(floor, Math.min(to, doc.blocks.length - 1))
@@ -76,6 +81,11 @@ export function insertMarkdown(doc: Doc, index: number, markdown: string, mintId
   return settle({ blocks, gaps }, mintId)
 }
 
+/**
+ * Delete the blocks at `indices`. For each, the gap *before* it survives and the gap after it
+ * goes — except for the last block, whose removal keeps the file's trailing gap instead, so the
+ * file still ends the way it did.
+ */
 export function deleteBlocks(doc: Doc, indices: number[], mintId: MintId): Doc {
   const blocks = [...doc.blocks]
   const gaps = [...doc.gaps]
