@@ -18,7 +18,7 @@ try {
       colorScheme: theme,
     })
     await page.goto(url)
-    await page.locator('.mermaid-block svg').waitFor()
+    await page.getByTestId('diagram').locator('svg').waitFor()
     await page.screenshot({ path: path.join(out, `editor-${theme}.png`) })
 
     // A job on the heading, reviewed as a ghost diff, with the tray open.
