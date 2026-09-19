@@ -3,7 +3,7 @@ import type { DocState } from '../state/doc-reducer.ts'
 import { liveDoc } from '../state/doc-reducer.ts'
 import { renderMarkdown, renderMermaidIn } from './markdown.ts'
 
-export class ExportError extends Error {}
+class ExportError extends Error {}
 
 /**
  * Render the article with the editor's own pipeline (sanitised, highlighted) in export mode and
