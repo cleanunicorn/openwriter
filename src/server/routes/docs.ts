@@ -38,13 +38,7 @@ async function readLimited(request: Request, limit: number): Promise<Uint8Array>
     }
     chunks.push(value)
   }
-  const data = new Uint8Array(size)
-  let offset = 0
-  for (const chunk of chunks) {
-    data.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return data
+  return Buffer.concat(chunks)
 }
 
 export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext): void {
