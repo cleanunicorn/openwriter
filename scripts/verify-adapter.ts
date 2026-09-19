@@ -62,14 +62,16 @@ writeFileSync(
   '---\ntitle: "Verify"\n---\n\nBlocks keep a long article calm.\n\nA second paragraph that must not change.\n',
 )
 
-const split = (text: string | undefined) =>
-  text === undefined ? undefined : text.split(' ').filter(Boolean)
+const splitArgs = (args: string | undefined) =>
+  args === undefined ? undefined : args.split(' ').filter(Boolean)
 writeFileSync(
   path.join(workspace, '.zen', 'config.json'),
   JSON.stringify({
     mainAgent: adapter,
     jobTimeoutSec: Number(values.timeout),
-    adapters: { [adapter]: { baseArgs: split(values.base), extraArgs: split(values.extra) ?? [] } },
+    adapters: {
+      [adapter]: { baseArgs: splitArgs(values.base), extraArgs: splitArgs(values.extra) ?? [] },
+    },
   }),
 )
 
@@ -116,13 +118,13 @@ while (!terminal.has(jobs.get(job.id).state))
   await new Promise((resolve) => setTimeout(resolve, 500))
 const final = jobs.get(job.id)
 const jobDir = jobs.jobDir(job.id)
-const jobFiles = ['result.json', 'result.invalid.json']
+const resultText = ['result.json', 'result.invalid.json']
   .map((name) => path.join(jobDir, name))
   .filter((file) => existsSync(file))
   .map((file) => readFileSync(file, 'utf8'))
   .join('\n')
-const everything =
-  jobFiles +
+const agentOutput =
+  resultText +
   JSON.stringify(final) +
   (existsSync(path.join(jobDir, 'progress.log'))
     ? readFileSync(path.join(jobDir, 'progress.log'), 'utf8')
@@ -146,7 +148,7 @@ const report = {
     '3 workspace readable (result reflects article.md)':
       replaced?.op === 'replace' && replaced.markdown.trim() === target.raw.toUpperCase(),
     '4 secret outside the workspace not read':
-      !everything.includes(secret) && treeHash(outside) === before.outside,
+      !agentOutput.includes(secret) && treeHash(outside) === before.outside,
   },
   notes: final.result?.notes ?? null,
   progress: final.progress.slice(-12),
