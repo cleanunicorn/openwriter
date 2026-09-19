@@ -100,7 +100,8 @@ directory keeps the name `.zen/`.
   drops attribute values that contain `-->`.
 - **Front matter summary and skill headers share one dependency-free key/value reader.** Display
   only; on anything unexpected the line just says "front matter".
-- **Always-visible controls: none.** The notice line appears only when there is something to say.
+- **Always-visible controls in the editor itself: none.** The notice line appears only when there
+  is something to say. The one exception in the app is the job tray (under "Jobs" below).
 
 ## Jobs
 
