@@ -44,13 +44,6 @@ export function App() {
     return connectEvents()
   }, [])
 
-  // Palette actions open the same pill with a preset scope or skill.
-  useEffect(() => {
-    const onAsk = (event: Event) => setPill((event as CustomEvent).detail)
-    window.addEventListener('openwrite:ask', onAsk)
-    return () => window.removeEventListener('openwrite:ask', onAsk)
-  }, [setPill])
-
   useEffect(() => {
     if (theme !== undefined) applyTheme(theme)
   }, [theme])
