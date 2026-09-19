@@ -14,6 +14,7 @@ import { effectiveTargets } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
 import {
   dispatchDoc,
+  docStateOf,
   flush,
   flushAll,
   hasUnsavedChanges,
@@ -105,7 +106,7 @@ async function post(held: HeldRequest): Promise<void> {
 
 async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   await flush(request.doc)
-  const docState = store.get().docs[docKey(request.doc)]
+  const docState = docStateOf(request.doc)
   if (docState === undefined) return
   const doc = liveDoc(docState)
   const snapshot = { blocks: doc.blocks, gaps: doc.gaps }
@@ -239,7 +240,7 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
   // editor's draft — otherwise the draft is folded over the accepted text on the next save and
   // the writer's decision silently disappears. Commit the draft first (it stays in the undo
   // history), then apply. An editor on any other block is left alone.
-  const focusedId = store.get().docs[docKey(job.doc)]?.focusedId ?? null
+  const focusedId = docStateOf(job.doc)?.focusedId ?? null
   const touchesFocused = accepted.some((index) => {
     const op = job.result?.ops[index]
     return (
@@ -252,7 +253,7 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
   if (touchesFocused) dispatchDoc(job.doc, { type: 'blur' })
 
   const { job: updated, assetMap } = await api.decide(id, accepted, rejected)
-  const docState = store.get().docs[docKey(job.doc)]
+  const docState = docStateOf(job.doc)
   if (docState !== undefined && accepted.length > 0) {
     const ops: Op[] = job.result.ops.map((op) =>
       op.op === 'delete' ? op : { ...op, markdown: rewriteAssetRefs(op.markdown, assetMap) },
@@ -290,7 +291,7 @@ export const rejectAll = (id: string) => {
 }
 
 export function insertNote(job: Job, markdown: string): void {
-  const docState = store.get().docs[docKey(job.doc)]
+  const docState = docStateOf(job.doc)
   if (docState === undefined) return
   const anchor = [...job.targets]
     .reverse()
@@ -335,7 +336,7 @@ function checkTargets(): void {
   for (const id of order) {
     const job = jobs[id]
     if (job === undefined || !isUnsettled(job.state) || reportedStale.has(id)) continue
-    const docState = store.get().docs[docKey(job.doc)]
+    const docState = docStateOf(job.doc)
     if (docState === undefined || docState.status !== 'ready') continue
     const ids = docState.doc.blocks.map((block) => block.id)
     // While a target is being edited its text may be empty for a moment; only a committed delete counts.
@@ -349,7 +350,7 @@ function checkTargets(): void {
       .catch(() => reportedStale.delete(id))
   }
   for (const request of held) {
-    const docState = store.get().docs[docKey(request.request.doc)]
+    const docState = docStateOf(request.request.doc)
     if (docState === undefined) continue
     const ids = docState.doc.blocks.map((block) => block.id)
     if (lostItsTargets(request.request.scope, request.request.targets, ids)) {

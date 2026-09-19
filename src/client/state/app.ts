@@ -57,6 +57,9 @@ export const useApp = <T>(selector: (state: AppState) => T): T => useStoreSlice(
 export const currentDoc = (state: AppState): DocState | null =>
   state.current === null ? null : (state.docs[docKey(state.current)] ?? null)
 
+/** The state of one open document, by ref; `currentDoc` is the selector for the one on screen. */
+export const docStateOf = (ref: DocRef): DocState | undefined => store.get().docs[docKey(ref)]
+
 export function dispatchDoc(ref: DocRef, action: DocAction): void {
   const key = docKey(ref)
   store.set((state) => {
@@ -77,7 +80,7 @@ export function notifyFailure(
   ref: DocRef | null = store.get().current,
 ): void {
   const message = `${what}: ${error instanceof Error ? error.message : String(error)}`
-  if (ref !== null && store.get().docs[docKey(ref)] !== undefined)
+  if (ref !== null && docStateOf(ref) !== undefined)
     dispatchDoc(ref, { type: 'notice', notice: message })
   else console.error(message)
 }
@@ -234,7 +237,7 @@ const handlers: EventHandlers = {}
 export const setEventHandlers = (next: EventHandlers) => Object.assign(handlers, next)
 
 async function onDocChanged(ref: DocRef, hash: string | null): Promise<void> {
-  const state = store.get().docs[docKey(ref)]
+  const state = docStateOf(ref)
   if (state === undefined || state.baseHash === hash) return
   try {
     const disk = await api.doc(ref)
@@ -254,7 +257,7 @@ async function resync(): Promise<void> {
   await Promise.all([
     ...open.map(async (doc) => {
       const disk = await api.doc(doc.ref)
-      if (disk.hash !== store.get().docs[docKey(doc.ref)]?.baseHash) {
+      if (disk.hash !== docStateOf(doc.ref)?.baseHash) {
         dispatchDoc(doc.ref, { type: 'external', ...disk })
       }
     }),
