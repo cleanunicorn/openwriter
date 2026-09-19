@@ -22,7 +22,7 @@ export type PaletteMode =
   | { kind: 'commands' }
   | { kind: 'input'; label: string; placeholder: string; submit: (value: string) => void }
 
-export type Panel = 'settings' | 'research' | null
+export type Panel = 'settings' | null
 
 export type AppState = {
   /** The first load: loading, ready, or why it failed. Empty and failed must not look alike. */
