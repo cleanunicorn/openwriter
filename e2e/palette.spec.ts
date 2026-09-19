@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './fixtures.ts'
-import { mod, openArticle } from './helpers.ts'
+import { blockWith, mod, openArticle } from './helpers.ts'
 
 test('the palette creates a new article and switches between articles', async ({ page, app }) => {
   await openArticle(page)
@@ -80,4 +80,16 @@ test('diagrams follow a theme switch instead of keeping the old theme', async ({
   await page.keyboard.press('Enter')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(async () => expect(await nodeFill()).not.toBe(light)).toPass()
+})
+
+test('closing the palette gives the keyboard back to where it was', async ({ page }) => {
+  await openArticle(page)
+  const heading = blockWith(page, 'Why blocks')
+  await heading.hover()
+  const handle = heading.getByTestId('drag-handle')
+  await handle.focus()
+  await page.keyboard.press(`${mod}+k`)
+  await expect(page.getByRole('combobox', { name: 'Command palette' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(handle).toBeFocused()
 })

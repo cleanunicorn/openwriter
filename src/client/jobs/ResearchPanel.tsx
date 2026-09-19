@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { splitText } from '../../shared/blocks/index.ts'
+import type { Job } from '../../shared/jobs/job-types.ts'
+import type { Result } from '../../shared/jobs/result-schema.ts'
 import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
 import { dismissJob, insertNote, setResearchJob, useJobs } from '../state/jobs.ts'
+import { useRestoreFocus } from '../use-restore-focus.ts'
 
 /** Research answers never touch the article; the writer inserts what is useful as new blocks. */
 export function ResearchPanel() {
@@ -16,7 +19,13 @@ export function ResearchPanel() {
     return () => document.body.classList.remove('has-research')
   }, [open])
   if (job === undefined || job.result === null) return null
-  const notes = splitText(job.result.notes).slices
+  return <OpenPanel job={job} result={job.result} />
+}
+
+/** Mounted only while the panel is open, so the focus hook runs per opening. */
+function OpenPanel({ job, result }: { job: Job; result: Result }) {
+  useRestoreFocus()
+  const notes = splitText(result.notes).slices
 
   return (
     <aside className="research" aria-label="Research notes">
@@ -26,7 +35,7 @@ export function ResearchPanel() {
           Close
         </button>
       </header>
-      <p className="research-summary">{job.result.summary}</p>
+      <p className="research-summary">{result.summary}</p>
       {notes.map((note, index) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: notes are static for a finished job
         <div key={index} className="research-note">

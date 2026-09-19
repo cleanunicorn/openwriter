@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type PaletteMode, setPalette, store, useApp } from '../state/app.ts'
+import { useRestoreFocus } from '../use-restore-focus.ts'
 import { allCommands, filterCommands } from './commands.ts'
 
 /** `Cmd/Ctrl+K`: a filtered list of commands, or a one-line input a command asked for. */
@@ -7,6 +8,7 @@ export function Palette({ mode }: { mode: PaletteMode }) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const input = useRef<HTMLInputElement>(null)
+  useRestoreFocus()
   const articles = useApp((state) => state.articles)
   const config = useApp((state) => state.config)
   const skills = useApp((state) => state.skills)
