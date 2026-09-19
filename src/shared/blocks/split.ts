@@ -88,24 +88,23 @@ export function splitText(text: string): SplitResult {
   // markdown-it emits no token for some source (link reference definitions). Whatever is left
   // between two ranges and is not whitespace becomes its own block, so a gap is whitespace only.
   let cursor = contentStart
-  const withLeftovers: Range[] = []
+  const contentRanges: Range[] = []
   const addLeftover = (from: number, to: number) => {
     const between = text.slice(from, to)
     if (isBlank(between)) return
     const firstInk = from + between.search(/[^ \t\r\n]/)
     let start = firstInk
     while (start > from && text[start - 1] !== '\n' && text[start - 1] !== '\r') start--
-    withLeftovers.push({ start, end: trimEnd(text, start, to), kind: 'content', scan: true })
+    contentRanges.push({ start, end: trimEnd(text, start, to), kind: 'content', scan: true })
   }
   for (const range of tokenRanges) {
     addLeftover(cursor, range.start)
-    withLeftovers.push(range)
+    contentRanges.push(range)
     cursor = range.end
   }
   addLeftover(cursor, text.length)
 
   // A paired shortcode that spans several blocks stays one block.
-  const contentRanges = withLeftovers
   const pairs = pairedShortcodeRanges(
     contentRanges.map((range) => ({ raw: text.slice(range.start, range.end), scan: range.scan })),
   )
