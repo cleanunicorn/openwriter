@@ -353,6 +353,11 @@ codex exec --json --skip-git-repo-check --ephemeral
   value, so settings can always repair it.
 - **A failed save retries by itself after three seconds** and its notice is sticky; leaving the
   tab saves at once, and the unload guard also covers a dirty document.
+- **A pasted SVG image is stored and exported unchanged.** It is served with `nosniff` and
+  `content-security-policy: default-src 'none'` (`fileResponse` in `src/server/http.ts`), and both
+  the editor and the exported page reference it only as an `<img>`, which runs no script. Script
+  in it could run only if the writer opened the file itself in a browser. Sanitising or refusing
+  SVG changes what the writer can paste, so it is a follow-up, not a fix.
 - **Test-only server routes** (`/api/__fake/release`, `/waiting`, `/drop-events`) exist only with
   `--fake-control`; a unit test asserts 404 without it.
 
