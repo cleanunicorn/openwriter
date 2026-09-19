@@ -34,3 +34,38 @@ test('a research answer opens in a side panel and a note can be inserted as a bl
   await panel.getByRole('button', { name: 'Done with these notes' }).click()
   await expect(page.getByRole('complementary')).toHaveCount(0)
 })
+
+for (const viewport of [
+  { width: 1400, height: 900 },
+  { width: 900, height: 900 },
+]) {
+  test(`research notes never cover the text being typed (${viewport.width}px wide)`, async ({
+    page,
+    app,
+  }) => {
+    await page.setViewportSize(viewport)
+    await openArticle(page)
+    await page.keyboard.press(`${mod}+k`)
+    await page.getByRole('combobox', { name: 'Command palette' }).fill('research')
+    await page.keyboard.press('Enter')
+    await page.getByRole('combobox', { name: 'Research question' }).fill('fake:research anything')
+    await page.keyboard.press('Enter')
+    await expectWaiting(app, 1)
+
+    // The writer is typing when the answer arrives.
+    await page.getByText('This is a sample article.').click()
+    await page.keyboard.type('typing ')
+    await release(app)
+    const panel = page.getByRole('complementary', { name: 'Research notes' })
+    await expect(panel).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'Block editor' })).toBeFocused()
+
+    const column = await page.getByRole('main').boundingBox()
+    const notes = await panel.boundingBox()
+    if (column === null || notes === null) throw new Error('no box')
+    const besideTheText = column.x + column.width <= notes.x
+    const belowTheText = column.y + column.height <= notes.y
+    expect(besideTheText || belowTheText).toBe(true)
+    expect(column.width).toBeGreaterThanOrEqual(Math.min(680, viewport.width - 96))
+  })
+}

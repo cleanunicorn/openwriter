@@ -667,6 +667,30 @@ body {
   font-size: 15px;
 }
 
+/* Wide: the column is centred in the space left of the panel, so nothing is covered. */
+@media (min-width: 1160px) {
+  .has-research .column {
+    margin-left: calc((100vw - 380px - min(var(--column), 100% - 96px)) / 2);
+    margin-right: 0;
+  }
+}
+
+/* Narrow: no room beside the text, so the notes follow the article instead of lying over it. */
+@media (max-width: 1159px) {
+  .research {
+    position: static;
+    width: min(var(--column), 100% - 96px);
+    margin: 0 auto;
+    padding: 24px 0 96px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .has-research .column {
+    padding-bottom: 48px;
+  }
+}
+
 .research-header,
 .research-footer {
   display: flex;
