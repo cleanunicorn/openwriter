@@ -67,6 +67,17 @@ export class DocWatcher {
     }
   }
 
+  /**
+   * Forget everything. Called when the settings change: `contentDir` may point somewhere else
+   * now, so the old directories must stop producing events and documents are re-registered (with
+   * their new paths) the next time they are read.
+   */
+  reset(): void {
+    this.close()
+    this.tracked.clear()
+    this.timers.clear()
+  }
+
   close(): void {
     for (const timer of this.timers.values()) clearTimeout(timer)
     for (const watcher of this.watchers.values()) watcher.close()

@@ -34,6 +34,7 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     } catch (error) {
       throw new HttpError(409, (error as Error).message)
     }
+    context.watcher.reset()
     events.emit({ type: 'config.changed' })
     return c.json(response())
   })

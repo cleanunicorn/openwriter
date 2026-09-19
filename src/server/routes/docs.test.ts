@@ -276,6 +276,33 @@ describe('watching', () => {
   })
 })
 
+describe('watching across a content directory change', () => {
+  it('stops watching the old directory and follows the new one', async () => {
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    await t.get('/api/docs/article/hello-openwrite')
+
+    // Move the content root; the same slug now lives elsewhere.
+    const moved = path.join(t.workspace, 'site', 'content', 'posts', 'hello-openwrite')
+    mkdirSync(moved, { recursive: true })
+    writeFileSync(path.join(moved, 'index.md'), '# Moved\n')
+    const { config } = await json(t.get('/api/config'))
+    await t.send('PUT', '/api/config', { ...config, contentDir: 'site/content' })
+    await t.get('/api/docs/article/hello-openwrite')
+    seen.length = 0
+
+    // A change in the OLD location is no longer this document's business…
+    writeFileSync(article(), 'old location changed\n')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(seen.filter((event) => event.type === 'doc.changed')).toEqual([])
+    // …a change in the new one is, exactly once.
+    writeFileSync(path.join(moved, 'index.md'), '# Moved and changed\n')
+    await expect
+      .poll(() => seen.filter((event) => event.type === 'doc.changed').length, { timeout: 3000 })
+      .toBe(1)
+  })
+})
+
 describe('config', () => {
   it('returns the sample config with the forced adapter', async () => {
     const body = await json(t.get('/api/config'))
