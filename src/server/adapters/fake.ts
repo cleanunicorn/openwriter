@@ -22,6 +22,95 @@ function readBlocks(jobDir: string): ArticleBlock[] {
 }
 
 /**
+ * What each scenario writes into result.json. Pure: it only looks at the targets and the blocks
+ * the fake read from the job's own files.
+ */
+function scenarioResults(
+  targets: Targets,
+  blocks: ArticleBlock[],
+  byId: Map<string, string>,
+  first: string,
+): Record<string, unknown> {
+  const upper = targets.blockIds.map((id) => ({
+    op: 'replace',
+    block_id: id,
+    markdown: (byId.get(id) ?? '').toUpperCase(),
+  }))
+  return {
+    upper: { summary: 'Upper-cased the target blocks.', ops: upper, assets: [], notes: '' },
+    insert: {
+      summary: 'Inserted a paragraph.',
+      ops: [{ op: 'insert_after', block_id: first, markdown: 'Inserted by the fake agent.' }],
+    },
+    delete: { summary: 'Deleted the block.', ops: [{ op: 'delete', block_id: first }] },
+    // Agent output that repeats its input verbatim: lets a test send hostile markup through
+    // the path that renders agent output (a ghost insert).
+    echo: {
+      summary: 'Echoed the block.',
+      ops: [{ op: 'insert_after', block_id: first, markdown: byId.get(first) ?? '' }],
+    },
+    multi: {
+      summary: 'Rewrote, inserted two paragraphs, and deleted one.',
+      ops: [
+        { op: 'replace', block_id: first, markdown: `${byId.get(first) ?? ''} (tightened)` },
+        { op: 'insert_after', block_id: first, markdown: 'First insert.' },
+        {
+          op: 'insert_after',
+          block_id: first,
+          markdown: 'Second insert.\n\nWith a second block.',
+        },
+        ...(targets.blockIds[1] ? [{ op: 'delete', block_id: targets.blockIds[1] }] : []),
+      ],
+    },
+    asset: {
+      summary: 'Added a diagram image.',
+      ops: [
+        {
+          op: 'insert_after',
+          block_id: first,
+          markdown: '![Fake diagram](assets/fake-diagram.png)',
+        },
+      ],
+      assets: [{ file: 'assets/fake-diagram.png', alt: 'Fake diagram' }],
+    },
+    diagram: {
+      summary: 'Added a mermaid diagram.',
+      ops: [
+        {
+          op: 'insert_after',
+          block_id: first,
+          markdown: '```mermaid\ngraph TD\n  Idea --> Draft\n  Draft --> Post\n```',
+        },
+      ],
+    },
+    research: {
+      summary: 'Answered the question.',
+      ops: [],
+      notes: '## Findings\n\nThe notes say blocks feel calm.\n\n- Source: `sources/notes.md`',
+    },
+    draft: {
+      summary: 'Drafted the document.',
+      ops: [
+        {
+          op: 'insert_after',
+          block_id: first,
+          markdown: '# Draft\n\nDrafted by the fake agent from the context files.',
+        },
+      ],
+    },
+    'out-of-scope': {
+      summary: 'Touched a block it was not given.',
+      ops: [
+        {
+          op: 'delete',
+          block_id: blocks.find((block) => !targets.blockIds.includes(block.id))?.id ?? 'b999',
+        },
+      ],
+    },
+  }
+}
+
+/**
  * Test-controlled checkpoints. With `--fake-control` every fake job stops before it writes its
  * result until a test releases it, so e2e timing is driven by the test and never by sleeps.
  */
@@ -103,84 +192,7 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
             message: 'not logged in — run the agent CLI once to sign in',
           }
 
-        const upper = targets.blockIds.map((id) => ({
-          op: 'replace',
-          block_id: id,
-          markdown: (byId.get(id) ?? '').toUpperCase(),
-        }))
-        const results: Record<string, unknown> = {
-          upper: { summary: 'Upper-cased the target blocks.', ops: upper, assets: [], notes: '' },
-          insert: {
-            summary: 'Inserted a paragraph.',
-            ops: [{ op: 'insert_after', block_id: first, markdown: 'Inserted by the fake agent.' }],
-          },
-          delete: { summary: 'Deleted the block.', ops: [{ op: 'delete', block_id: first }] },
-          // Agent output that repeats its input verbatim: lets a test send hostile markup through
-          // the path that renders agent output (a ghost insert).
-          echo: {
-            summary: 'Echoed the block.',
-            ops: [{ op: 'insert_after', block_id: first, markdown: byId.get(first) ?? '' }],
-          },
-          multi: {
-            summary: 'Rewrote, inserted two paragraphs, and deleted one.',
-            ops: [
-              { op: 'replace', block_id: first, markdown: `${byId.get(first) ?? ''} (tightened)` },
-              { op: 'insert_after', block_id: first, markdown: 'First insert.' },
-              {
-                op: 'insert_after',
-                block_id: first,
-                markdown: 'Second insert.\n\nWith a second block.',
-              },
-              ...(targets.blockIds[1] ? [{ op: 'delete', block_id: targets.blockIds[1] }] : []),
-            ],
-          },
-          asset: {
-            summary: 'Added a diagram image.',
-            ops: [
-              {
-                op: 'insert_after',
-                block_id: first,
-                markdown: '![Fake diagram](assets/fake-diagram.png)',
-              },
-            ],
-            assets: [{ file: 'assets/fake-diagram.png', alt: 'Fake diagram' }],
-          },
-          diagram: {
-            summary: 'Added a mermaid diagram.',
-            ops: [
-              {
-                op: 'insert_after',
-                block_id: first,
-                markdown: '```mermaid\ngraph TD\n  Idea --> Draft\n  Draft --> Post\n```',
-              },
-            ],
-          },
-          research: {
-            summary: 'Answered the question.',
-            ops: [],
-            notes: '## Findings\n\nThe notes say blocks feel calm.\n\n- Source: `sources/notes.md`',
-          },
-          draft: {
-            summary: 'Drafted the document.',
-            ops: [
-              {
-                op: 'insert_after',
-                block_id: first,
-                markdown: '# Draft\n\nDrafted by the fake agent from the context files.',
-              },
-            ],
-          },
-          'out-of-scope': {
-            summary: 'Touched a block it was not given.',
-            ops: [
-              {
-                op: 'delete',
-                block_id:
-                  blocks.find((block) => !targets.blockIds.includes(block.id))?.id ?? 'b999',
-              },
-            ],
-          },
-        }
+        const results = scenarioResults(targets, blocks, byId, first)
 
         channel.push({ text: 'writing result.json' })
         const invalid = scenario === 'invalid-twice' || (scenario === 'invalid-once' && !isRepair)
