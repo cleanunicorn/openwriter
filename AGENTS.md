@@ -226,10 +226,13 @@ least once per milestone; never commit a red tree.
 
 ### 5. Run the checks locally
 
-These mirror what CI runs:
+The same checks CI runs. Two differences: CI runs `npm run format:check` (it
+must not rewrite files; run `npm run format` before you commit so it passes),
+and CI builds before the e2e suite (locally `test:e2e` builds the client itself
+when it is missing or stale):
 
 ```bash
-npm run format
+npm run format        # CI: npm run format:check
 npm run lint
 npm run typecheck
 npm test
