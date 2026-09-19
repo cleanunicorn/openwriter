@@ -54,7 +54,7 @@ test('HTML export is standalone: diagrams rendered, local stylesheet and assets,
   ])
   const html = strFromU8(files['hello-openwrite/index.html'] as Uint8Array)
   expect(html).toContain('<title>Hello, openwrite</title>')
-  expect(html).not.toMatch(/<script|data-line|class="shortcode"/)
+  expect(html).not.toMatch(/<script|data-line|data-testid|class="shortcode"/)
   expect(html).not.toContain('{{<')
   // The shortcode's tags are dropped, its content kept.
   expect(html).toContain('A paired Hugo shortcode stays one block.')
@@ -69,6 +69,7 @@ test('HTML export is standalone: diagrams rendered, local stylesheet and assets,
   const offline = await context.newPage()
   await offline.goto(pathToFileURL(path.join(dir, 'hello-openwrite', 'index.html')).href)
   await expect(offline.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
+  // A class on purpose: the exported file's contract is to carry no test ids (asserted below).
   await expect(offline.locator('.diagram svg')).toContainText('Writer')
   expect(
     await offline

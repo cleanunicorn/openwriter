@@ -133,7 +133,7 @@ md.renderer.rules.fence = (tokens, index, options, env, self) => {
   if (token !== undefined && token.info.trim().split(/\s+/)[0] === 'mermaid') {
     const lines = `data-line="${token.map?.[0] ?? 0}" data-line-end="${token.map?.[1] ?? 0}"`
     // The source travels as text: DOMPurify drops attribute values that contain `-->`.
-    return `<div class="mermaid-block" ${lines}><pre>${escapeHtml(token.content)}</pre></div>\n`
+    return `<div class="mermaid-block" data-testid="diagram" ${lines}><pre>${escapeHtml(token.content)}</pre></div>\n`
   }
   return defaultFence?.(tokens, index, options, env, self) ?? ''
 }

@@ -14,7 +14,7 @@ test('undo and redo work across the whole document, reorders included', async ({
   await openArticle(page)
   const original = readFileSync(app.articlePath(), 'utf8')
   // The diagram block's text changes when mermaid finishes; wait for it before comparing orders.
-  await expect(page.locator('.mermaid-block svg')).toBeVisible()
+  await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
   const initialOrder = await blockTexts(page)
 
   // 1. An edit in one block.

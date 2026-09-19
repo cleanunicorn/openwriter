@@ -36,6 +36,7 @@ export async function renderForExport(state: DocState): Promise<{ title: string;
       block.querySelector('pre')?.remove()
       block.className = 'diagram'
       block.removeAttribute('data-rendered')
+      block.removeAttribute('data-testid')
     }
     for (const element of stage.querySelectorAll('[data-line]')) {
       element.removeAttribute('data-line')

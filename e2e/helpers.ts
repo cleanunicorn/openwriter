@@ -19,13 +19,14 @@ export async function openArticle(page: Page): Promise<void> {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
   // The diagram renders asynchronously and shifts everything below it; wait for the layout to settle.
-  await expect(page.locator('.mermaid-block svg')).toBeVisible()
+  await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
 }
 
 /** Text of every rendered block, in document order (front matter excluded). */
 export async function blockTexts(page: Page): Promise<string[]> {
   const texts = await page
-    .locator('[data-testid="block"][data-kind="content"] .block-body')
+    .locator('[data-testid="block"][data-kind="content"]')
+    .getByTestId('block-body')
     .allInnerTexts()
   return texts.map((text) => text.trim().split('\n')[0] ?? '')
 }

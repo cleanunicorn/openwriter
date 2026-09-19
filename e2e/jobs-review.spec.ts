@@ -80,7 +80,7 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   const gutter = await first.getByTestId('gutter').boundingBox()
   await first.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
   await expect(first).toHaveClass(/is-selected/)
-  await second.locator('.rendered').click({ modifiers: ['Shift'] })
+  await second.getByTestId('rendered').click({ modifiers: ['Shift'] })
   await expect(first).toHaveClass(/is-selected/)
   await expect(second).toHaveClass(/is-selected/)
   await ask(page, 'fake:multi')
@@ -96,7 +96,7 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
     'First insert.',
   )
   await expect(
-    page.getByRole('group', { name: 'Proposed deletion 4 of 4' }).locator('.ghost-struck'),
+    page.getByRole('group', { name: 'Proposed deletion 4 of 4' }).getByTestId('ghost-struck'),
   ).toContainText('Results arrive')
 
   // Keyboard: Enter accepts the focused proposal, Backspace rejects it.

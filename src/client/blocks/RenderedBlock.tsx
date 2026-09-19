@@ -9,10 +9,15 @@ export function currentMermaidTheme(): 'default' | 'dark' {
   return dark ? 'dark' : 'default'
 }
 
-type Props = { raw: string; assetBase: string | null; className?: string }
+type Props = { raw: string; assetBase: string | null; className?: string; testId?: string }
 
 /** Rendered markdown for one block. Memoised on `raw`, so typing elsewhere re-renders nothing. */
-export const RenderedBlock = memo(function RenderedBlock({ raw, assetBase, className }: Props) {
+export const RenderedBlock = memo(function RenderedBlock({
+  raw,
+  assetBase,
+  className,
+  testId,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const html = useMemo(() => {
     const env: RenderEnv =
@@ -31,6 +36,7 @@ export const RenderedBlock = memo(function RenderedBlock({ raw, assetBase, class
     <div
       ref={ref}
       className={`rendered ${className ?? ''}`}
+      data-testid={testId ?? 'rendered'}
       // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitised by DOMPurify in renderMarkdown
       dangerouslySetInnerHTML={{ __html: html }}
     />

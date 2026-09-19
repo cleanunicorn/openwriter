@@ -410,7 +410,11 @@ adapter, including two overlapping jobs.
 
 - **Selectors:** `getByRole` / `getByLabel` first; `data-testid` only when
   there is no accessible handle (rendered blocks, drag handles); never CSS or
-  XPath tied to styling.
+  XPath tied to styling. Test ids in use: `block`, `block-body`, `rendered`,
+  `gutter`, `drag-handle`, `front-matter`, `diagram`, `ghost`, `ghost-struck`.
+  Two class selectors remain on purpose, each with a comment: highlight.js's
+  own `.hljs-keyword`, and `.diagram` in the exported file, which carries no
+  test ids by contract.
 - **Waiting:** use web-first assertions — `await expect(locator).toBeVisible()`
   auto-retries until the timeout. Never `waitForTimeout`. The fake adapter's
   timing is controlled by the test, not by sleeps.

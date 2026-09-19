@@ -63,7 +63,7 @@ export function Block({ docRef, block, focused, cursor, selected, assetBase, dec
           </button>
         )}
       </div>
-      <div className="block-body">
+      <div className="block-body" data-testid="block-body">
         {focused ? (
           <BlockEditor docRef={docRef} id={block.id} initialText={block.raw} cursor={cursor} />
         ) : (

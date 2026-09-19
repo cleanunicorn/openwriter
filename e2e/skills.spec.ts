@@ -36,12 +36,12 @@ test('a skill from the palette runs as an ordinary job; the diagram renders in t
   await release(app)
 
   // The editor has no diagram feature: the job returned a block, and blocks with mermaid render.
-  await expect(ghosts(page).locator('.mermaid-block svg')).toContainText('Draft')
+  await expect(ghosts(page).getByTestId('diagram').locator('svg')).toContainText('Draft')
   await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
   await expectFile(app.articlePath(), (file) =>
     expect(file).toContain('```mermaid\ngraph TD\n  Idea --> Draft'),
   )
-  await expect(page.locator('.mermaid-block svg')).toHaveCount(2)
+  await expect(page.getByTestId('diagram').locator('svg')).toHaveCount(2)
 })
 
 test('/name in the prompt pill runs a skill; the recording skill names the missing tools', async ({

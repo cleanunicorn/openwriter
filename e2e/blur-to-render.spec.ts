@@ -29,10 +29,11 @@ test('clicking away renders the block, and clicking another block edits that one
 
 test('mermaid fences render as diagrams and other fences are highlighted', async ({ page }) => {
   await openArticle(page)
-  const diagram = page.locator('.mermaid-block svg')
+  const diagram = page.getByTestId('diagram').locator('svg')
   await expect(diagram).toBeVisible()
   await expect(diagram).toContainText('Writer')
   await expect(
+    // A class on purpose: highlight.js's own output is the thing under test, and it carries no test id.
     blockWith(page, 'export function serialise').locator('.hljs-keyword').first(),
   ).toBeVisible()
 })

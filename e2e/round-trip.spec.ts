@@ -9,7 +9,7 @@ test('an untouched article is never written', async ({ page, app }) => {
   // Enter and leave edit mode without changing anything, then give autosave a chance to misfire.
   await page.getByRole('heading', { name: 'Why blocks' }).click()
   await page.keyboard.press('Escape')
-  await expect(page.locator('.mermaid-block svg')).toBeVisible()
+  await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
   await expect(() => expect(statSync(app.articlePath()).mtimeMs).toBe(mtime)).toPass()
   await page.getByText('Results arrive as ghost diffs').click()
   await page.keyboard.press('Escape')

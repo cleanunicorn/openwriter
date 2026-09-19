@@ -170,7 +170,12 @@ export function useGhosts(state: DocState | null): {
               op.op === 'replace' ? (
                 <SourceDiff current={block.raw} proposed={op.markdown} />
               ) : (
-                <RenderedBlock raw={block.raw} assetBase={null} className="ghost-struck" />
+                <RenderedBlock
+                  raw={block.raw}
+                  assetBase={null}
+                  className="ghost-struck"
+                  testId="ghost-struck"
+                />
               ),
               changed,
             ),
