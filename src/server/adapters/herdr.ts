@@ -106,26 +106,7 @@ export function createHerdrAdapter(
         throw new Error(`the herdr session "${session}" did not start`)
       }
 
-      // Cancel can arrive while any setup call is in flight. After every setup step the run checks
-      // the flag, so a cancelled job never goes on to start and prompt a real (paid) agent.
-      const stopIfCancelled = () => {
-        if (cancelled) throw new Error('cancelled')
-      }
-
-      const run = async (): Promise<Completion> => {
-        try {
-          await cli.run(['--version'], 5000)
-        } catch {
-          return {
-            ok: false,
-            reason: 'missing-cli',
-            message:
-              '"herdr" was not found on PATH. Install it or choose another agent in settings.',
-          }
-        }
-        stopIfCancelled()
-        await ensureServer()
-        stopIfCancelled()
+      const createPane = async (): Promise<Pane> => {
         const created = parseReply(
           await cli.run(
             scoped(
@@ -140,14 +121,10 @@ export function createHerdrAdapter(
             15_000,
           ),
         )
-        pane = created.result?.root_pane ?? {}
-        stopIfCancelled()
-        if (pane.pane_id === undefined)
-          return { ok: false, reason: 'exit', message: 'herdr did not return a pane for the job' }
-        channel.push({
-          text: `herdr pane ${pane.pane_id} — ${herdrAttachHint(session)}`,
-        })
+        return created.result?.root_pane ?? {}
+      }
 
+      const startAgent = async (paneId: string) => {
         const jobRel = path.relative(options.workspace, jobDir)
         const model = options.config.model ? ['--model', options.config.model] : []
         await cli.run(
@@ -158,7 +135,7 @@ export function createHerdrAdapter(
             '--kind',
             'claude',
             '--pane',
-            pane.pane_id,
+            paneId,
             '--timeout',
             '60000',
             '--',
@@ -168,9 +145,9 @@ export function createHerdrAdapter(
           ),
           70_000,
         )
-        stopIfCancelled()
-        channel.push({ text: 'claude is ready in the pane' })
+      }
 
+      const promptUntilDone = async () => {
         let status = statusOf(
           await cli.run(
             scoped(
@@ -202,6 +179,39 @@ export function createHerdrAdapter(
           )
         }
         channel.push({ text: `herdr reports the agent ${status ?? 'finished'}` })
+      }
+
+      // Cancel can arrive while any setup call is in flight. After every setup step the run checks
+      // the flag, so a cancelled job never goes on to start and prompt a real (paid) agent.
+      const stopIfCancelled = () => {
+        if (cancelled) throw new Error('cancelled')
+      }
+
+      const run = async (): Promise<Completion> => {
+        try {
+          await cli.run(['--version'], 5000)
+        } catch {
+          return {
+            ok: false,
+            reason: 'missing-cli',
+            message:
+              '"herdr" was not found on PATH. Install it or choose another agent in settings.',
+          }
+        }
+        stopIfCancelled()
+        await ensureServer()
+        stopIfCancelled()
+        pane = await createPane()
+        stopIfCancelled()
+        if (pane.pane_id === undefined)
+          return { ok: false, reason: 'exit', message: 'herdr did not return a pane for the job' }
+        channel.push({
+          text: `herdr pane ${pane.pane_id} — ${herdrAttachHint(session)}`,
+        })
+        await startAgent(pane.pane_id)
+        stopIfCancelled()
+        channel.push({ text: 'claude is ready in the pane' })
+        await promptUntilDone()
         return { ok: true }
       }
 
