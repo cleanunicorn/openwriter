@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { spawnAgent } from './spawn.ts'
+import { MAX_LINE, spawnAgent } from './spawn.ts'
 
 const fixture = path.join(import.meta.dirname, 'fixtures', 'echo-agent.ts')
 const temp = mkdtempSync(path.join(os.tmpdir(), 'openwrite-spawn-'))
@@ -70,6 +70,13 @@ describe('spawnAgent', () => {
     const outcome = await agent.done
     expect(lines).toHaveLength(4096)
     expect(outcome.stdoutTail.length).toBeLessThanOrEqual(64 * 1024)
+  })
+
+  it('drops a newline-free line that grows past the limit, and carries on with the next one', async () => {
+    const { agent, lines } = run('long-line')
+    await agent.done
+    expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(MAX_LINE)
+    expect(lines.map((line) => JSON.parse(line).type)).toEqual(['openwrite.truncated', 'after'])
   })
 
   it('cancel stops the whole process tree and is idempotent', async () => {

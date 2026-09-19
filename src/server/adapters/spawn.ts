@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process'
 const STDOUT_TAIL = 64 * 1024
 const STDERR_TAIL = 16 * 1024
 const KILL_GRACE_MS = 3000
+/** Longest stdout line that is kept and handed to the reader. */
+export const MAX_LINE = 1024 * 1024
 
 export type SpawnOptions = {
   command: string
@@ -41,6 +43,7 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
   let stdoutTail = ''
   let stderrTail = ''
   let pending = ''
+  let skipping = false
   let cancelled = false
   let killTimer: NodeJS.Timeout | undefined
 
@@ -72,7 +75,23 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
     stdoutTail = tail(stdoutTail + chunk, STDOUT_TAIL)
     const lines = (pending + chunk).split('\n')
     pending = lines.pop() ?? ''
+    if (skipping) {
+      // The rest of an over-long line: drop it up to the next newline, then resume.
+      if (lines.length === 0) {
+        pending = ''
+        return
+      }
+      lines.shift()
+      skipping = false
+    }
     for (const line of lines) if (line.trim() !== '') options.onLine(line)
+    if (pending.length > MAX_LINE) {
+      // One newline-free line must not grow without bound (a stream-json event carrying a huge
+      // tool result is a single line). It is dropped, not parsed; the agent's real output is files.
+      pending = ''
+      skipping = true
+      options.onLine(JSON.stringify({ type: 'openwrite.truncated', bytes: MAX_LINE }))
+    }
   })
   child.stderr?.setEncoding('utf8')
   child.stderr?.on('data', (chunk: string) => {

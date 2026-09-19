@@ -24,6 +24,13 @@ if (mode === 'exit') {
   process.stderr.write('fatal: something went wrong\n')
   process.exit(3)
 }
+if (mode === 'long-line') {
+  // 3 MiB without a newline, then a normal event.
+  const chunk = 'x'.repeat(1024 * 1024)
+  for (let i = 0; i < 3; i++) process.stdout.write(chunk)
+  process.stdout.write('\n')
+  emit({ type: 'after' })
+}
 if (mode === 'silent-exit') {
   process.exit(2)
 }
