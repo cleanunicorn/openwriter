@@ -281,27 +281,34 @@ Keep it short and useful:
 
 ```
 src/shared/           no I/O; imported by client, server, and tests
-  blocks/               split, serialise, reconcile, doc-ops, shortcodes, front-matter, corpus/
-  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types
-  config-schema.ts  api-types.ts  events.ts  key-values.ts  ports.ts
+  blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), corpus/
+  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, herdr-hint
+  config-schema.ts  api-types.ts  events.ts  key-values.ts  names.ts  contrast.ts  ports.ts
 src/server/           Hono on Node (TypeScript run natively, no build step)
   main.ts               CLI flags, binds 127.0.0.1, opens the browser
   app.ts                createApp(options): wires workspace, watcher, jobs, adapters, routes
   paths.ts security.ts  the path guard; Host/Origin/content-type hardening
+  context.ts            AppOptions and the ServerContext every route module receives
   workspace.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
+  test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
   routes/               docs (documents, articles, assets), config, jobs (+ fake control), export
-  jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery)
+  jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
+                        job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
   adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent
 src/client/           Vite + React
+  index.html main.tsx App.tsx   entry points and the shell (global keys, notices, overlays)
+  api.ts                every request, zod-parsed against src/shared/api-types.ts
   state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions)
   blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
   render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
   palette/              Palette, commands (the command registry)
   jobs/                 PromptPill, selection, GhostDiff, Tray, ResearchPanel, commands
-  settings/             Settings, commands        export.ts   theme.css
+  settings/             Settings, commands
+  export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
-scripts/              ensure-build, e2e-server, verify-adapter (manual, real agents)
+scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
+.github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)
 e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts
 docs/                 herdr-evaluation.md, screenshots/
 ```
