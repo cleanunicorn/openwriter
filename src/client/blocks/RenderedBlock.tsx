@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { type RenderEnv, renderMarkdown, renderMermaidIn } from '../render/markdown.ts'
 import { useApp } from '../state/app.ts'
 
-export function currentMermaidTheme(): 'default' | 'dark' {
+function currentMermaidTheme(): 'default' | 'dark' {
   const forced = document.documentElement.dataset.theme
   const dark =
     forced === 'dark' ||

@@ -30,7 +30,7 @@ export class ApiError extends Error {
 }
 
 /** Every response is zod-parsed: typed data between client and server, checked at the boundary. */
-export async function request<T extends z.ZodType>(
+async function request<T extends z.ZodType>(
   schema: T,
   url: string,
   init: { method?: string; body?: unknown; raw?: BodyInit; headers?: Record<string, string> } = {},

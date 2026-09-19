@@ -5,7 +5,7 @@ import { currentDoc, setPalette } from '../state/app.ts'
 import { requestJob, setTrayOpen } from '../state/jobs.ts'
 
 /** Ask for an instruction in the palette, then start an ordinary job with it. */
-export function askInPalette(options: {
+function askInPalette(options: {
   label: string
   placeholder: string
   doc: DocRef

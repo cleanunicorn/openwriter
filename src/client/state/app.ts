@@ -155,10 +155,10 @@ export function flushAll(): void {
 
 // ── loading and navigation ────────────────────────────────────────────────────────────────
 
-export const refToHash = (ref: DocRef): string =>
+const refToHash = (ref: DocRef): string =>
   ref.kind === 'strategy' ? '#/strategy' : `#/${ref.kind}/${ref.slug}`
 
-export function hashToRef(hash: string): DocRef | null {
+function hashToRef(hash: string): DocRef | null {
   const [, kind, slug] = hash.split('/')
   if (kind === 'strategy') return { kind }
   if ((kind === 'article' || kind === 'brief') && slug !== undefined && isSlug(slug)) {
@@ -203,7 +203,7 @@ export async function refreshConfig(): Promise<void> {
   store.set((state) => ({ ...state, config }))
 }
 
-export async function refreshSkills(): Promise<void> {
+async function refreshSkills(): Promise<void> {
   const { skills } = await api.skills()
   store.set((state) => ({ ...state, skills }))
 }

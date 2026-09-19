@@ -37,7 +37,7 @@ export type JobsState = {
   researchJobId: string | null
 }
 
-export const jobsStore = createStore<JobsState>({
+const jobsStore = createStore<JobsState>({
   jobs: {},
   order: [],
   held: [],

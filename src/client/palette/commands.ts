@@ -27,7 +27,7 @@ export function applyTheme(theme: (typeof THEMES)[number]): void {
   bumpThemeEpoch()
 }
 
-export async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
+async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
   applyTheme(theme)
   const current = store.get().config
   if (current === null || current.error !== null) return
