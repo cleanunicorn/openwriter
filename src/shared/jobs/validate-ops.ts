@@ -50,6 +50,7 @@ export function validateOps(result: Result, context: ValidationContext): string[
   const edited = new Set<string>()
   result.ops.forEach((op, index) => {
     const where = `ops[${index}] (${op.op} ${op.block_id})`
+    const isInsert = op.op === 'insert_after' || op.op === 'insert_before'
     if (op.block_id === START_ANCHOR) {
       if (!anchorAllowed)
         errors.push(`${where}: ${START_ANCHOR} exists only in a document without content`)
@@ -70,13 +71,13 @@ export function validateOps(result: Result, context: ValidationContext): string[
         errors.push(`${where}: a block may be replaced or deleted only once`)
       edited.add(op.block_id)
     }
-    if ((op.op === 'insert_after' || op.op === 'insert_before') && op.markdown.trim() === '') {
+    if (isInsert && op.markdown.trim() === '') {
       errors.push(`${where}: inserted markdown is empty`)
     }
     if (op.op === 'replace' && op.markdown.trim() === '') {
       errors.push(`${where}: replacement markdown is empty; use a delete op to remove a block`)
     }
-    if ((op.op === 'insert_after' || op.op === 'insert_before') && removed.has(op.block_id)) {
+    if (isInsert && removed.has(op.block_id)) {
       errors.push(
         `${where}: block ${op.block_id} is deleted by another op in this result; use one replace op, or anchor the insert on a block that stays`,
       )
