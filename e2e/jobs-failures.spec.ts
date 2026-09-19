@@ -16,7 +16,7 @@ import {
   tray,
 } from './helpers.ts'
 
-async function runToEnd(page: Page, app: App, instruction: string, repair = false) {
+async function runToEnd(page: Page, app: App, instruction: string, { repair = false } = {}) {
   await openArticle(page)
   await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
   await ask(page, instruction)
@@ -51,13 +51,13 @@ test('an auth error says how to fix it', async ({ page, app }) => {
 })
 
 test('a malformed result is repaired once', async ({ page, app }) => {
-  await runToEnd(page, app, 'fake:invalid-once', true)
+  await runToEnd(page, app, 'fake:invalid-once', { repair: true })
   await expect(tray(page)).toContainText('ready for review')
   await expect(ghosts(page)).toHaveCount(1)
 })
 
 test('after one failed repair the raw output is shown', async ({ page, app }) => {
-  await runToEnd(page, app, 'fake:invalid-twice', true)
+  await runToEnd(page, app, 'fake:invalid-twice', { repair: true })
   await expect(tray(page)).toContainText('failed · invalid result')
   await tray(page).getByText('Show the agent’s output').click()
   await expect(tray(page)).toContainText('not quite json')
