@@ -29,6 +29,25 @@ test('the palette creates a new article and switches between articles', async ({
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
 })
 
+test('the palette tells assistive technology which option is active', async ({ page }) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+k`)
+  const input = page.getByRole('combobox', { name: 'Command palette' })
+  const activeOption = async () => {
+    const id = await input.getAttribute('aria-activedescendant')
+    return id === null ? null : page.locator(`[id="${id}"]`)
+  }
+  const first = await activeOption()
+  await expect(first ?? page.locator('never')).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('ArrowDown')
+  const second = await activeOption()
+  await expect(second ?? page.locator('never')).toHaveAttribute('aria-selected', 'true')
+  expect(await second?.getAttribute('id')).not.toBe(await first?.getAttribute('id'))
+  // No match, no active descendant.
+  await input.fill('zzzz no such command')
+  await expect(input).not.toHaveAttribute('aria-activedescendant', /.+/)
+})
+
 test('Escape closes the palette without running anything', async ({ page }) => {
   await openArticle(page)
   await page.keyboard.press(`${mod}+k`)

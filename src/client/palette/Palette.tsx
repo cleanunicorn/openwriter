@@ -70,6 +70,11 @@ export function Palette({ mode }: { mode: PaletteMode }) {
           role="combobox"
           aria-expanded={mode.kind === 'commands'}
           aria-controls="palette-list"
+          aria-activedescendant={
+            mode.kind === 'commands' && commands[active] !== undefined
+              ? `palette-option-${active}`
+              : undefined
+          }
           aria-label={mode.kind === 'input' ? mode.label : 'Command palette'}
           placeholder={mode.kind === 'input' ? mode.placeholder : 'Type a command…'}
           value={query}
@@ -84,6 +89,7 @@ export function Palette({ mode }: { mode: PaletteMode }) {
             {commands.map((command, index) => (
               <div
                 key={command.id}
+                id={`palette-option-${index}`}
                 role="option"
                 tabIndex={-1}
                 aria-selected={index === active}
