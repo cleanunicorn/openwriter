@@ -25,7 +25,8 @@ const HOSTILE = [
   '[md link](javascript:window.__xss=1)',
 ].join(' ')
 
-async function expectInert(page: Page, scope = page.getByRole('main')) {
+async function expectInert(page: Page) {
+  const scope = page.getByRole('main')
   expect(await page.evaluate(() => (window as unknown as { __xss?: string }).__xss)).toBeUndefined()
   for (const selector of [
     'script',
