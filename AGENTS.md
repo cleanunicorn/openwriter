@@ -335,14 +335,10 @@ point into a Hugo site.
 - **Configuration:** user settings live in `<workspace>/.zen/config.json`,
   validated with zod on read. Each adapter's command line, model, and extra
   args are overridable there. No secrets are stored.
-- **The job file contract:** the server writes `instruction.md`, `article.md`
-  (snapshot with ID marker comments), `targets.json`, and `strategy.md` /
-  `brief.md` copies into `.zen/jobs/<id>/`. The agent may read the
-  workspace and runs with it as its working directory (`codex` is the exception:
-  its working root is the job directory, which is what confines its writes, and
-  its prompt says where the workspace is). It writes `result.json` and `assets/`
-  into the job directory and modifies nothing else. For `blocks` scope, ops may only
-  touch the target blocks or insert next to them.
+- **The job file contract** — the files the server writes into
+  `.zen/jobs/<id>/`, what the agent writes back, and `codex`'s different
+  working root — is in [README.md](README.md#the-job-file-contract). For
+  `blocks` scope, ops may only touch the target blocks or insert next to them.
 - **Job scopes:** `blocks`, `article` (exclusive: waits for running jobs, new
   block jobs queue behind it), `research` (no edits; answer goes to notes).
 - **Media are agent skills, not editor features.** The editor only knows that a
