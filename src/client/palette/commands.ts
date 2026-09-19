@@ -1,6 +1,7 @@
 import { api } from '../api.ts'
 import {
   type AppState,
+  bumpThemeEpoch,
   createArticle,
   notifyFailure,
   openDoc,
@@ -23,6 +24,7 @@ const THEMES = ['system', 'light', 'dark'] as const
 export function applyTheme(theme: (typeof THEMES)[number]): void {
   if (theme === 'system') delete document.documentElement.dataset.theme
   else document.documentElement.dataset.theme = theme
+  bumpThemeEpoch()
 }
 
 export async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {

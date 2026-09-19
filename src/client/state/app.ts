@@ -36,6 +36,8 @@ export type AppState = {
   skills: SkillInfo[]
   palette: PaletteMode | null
   panel: Panel
+  /** Bumped whenever the effective theme changes, so baked-in colours (diagrams) re-render. */
+  themeEpoch: number
 }
 
 export const store = createStore<AppState>({
@@ -47,6 +49,7 @@ export const store = createStore<AppState>({
   skills: [],
   palette: null,
   panel: null,
+  themeEpoch: 0,
 })
 
 export const useApp = <T>(selector: (state: AppState) => T): T => useStoreSlice(store, selector)
@@ -207,6 +210,8 @@ export async function createArticle(title: string): Promise<void> {
   }
 }
 
+export const bumpThemeEpoch = () =>
+  store.set((state) => ({ ...state, themeEpoch: state.themeEpoch + 1 }))
 export const setPalette = (palette: PaletteMode | null) =>
   store.set((state) => ({ ...state, palette }))
 export const setPanel = (panel: Panel) => store.set((state) => ({ ...state, panel }))

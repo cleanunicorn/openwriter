@@ -62,3 +62,22 @@ test('zen layout: a centred column of about 680px, no toolbar, no sidebar, switc
     JSON.parse(readFileSync(path.join(app.workspace, '.zen', 'config.json'), 'utf8')).theme,
   ).toBe('dark')
 })
+
+test('diagrams follow a theme switch instead of keeping the old theme', async ({ page }) => {
+  await openArticle(page)
+  const diagram = page.getByTestId('diagram').locator('svg')
+  const nodeFill = () =>
+    diagram
+      .locator('.node rect, .node polygon')
+      .first()
+      .evaluate((node) => getComputedStyle(node).fill)
+  const light = await nodeFill()
+  await page.keyboard.press(`${mod}+k`)
+  await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press(`${mod}+k`)
+  await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(async () => expect(await nodeFill()).not.toBe(light)).toPass()
+})

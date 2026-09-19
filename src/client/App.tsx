@@ -20,6 +20,7 @@ import {
   start,
   store,
   useApp,
+  bumpThemeEpoch,
 } from './state/app.ts'
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
 
@@ -53,6 +54,13 @@ export function App() {
   useEffect(() => {
     if (theme !== undefined) applyTheme(theme)
   }, [theme])
+
+  // With the "system" theme the OS can switch between light and dark at any time.
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', bumpThemeEpoch)
+    return () => media.removeEventListener('change', bumpThemeEpoch)
+  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
