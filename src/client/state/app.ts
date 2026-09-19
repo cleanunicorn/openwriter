@@ -63,6 +63,7 @@ export function dispatch(action: DocAction): void {
 // ── saving ────────────────────────────────────────────────────────────────────────────────
 
 const AUTOSAVE_MS = 750
+const SAVE_RETRY_MS = 3000
 const timers = new Map<string, number>()
 const lastSeen = new Map<string, string>()
 const inFlight = new Map<string, Promise<void>>()
@@ -83,6 +84,12 @@ async function save(ref: DocRef): Promise<void> {
       return
     }
     dispatchDoc(ref, { type: 'notice', notice: `Could not save: ${(error as Error).message}` })
+    // Try again by itself: the debounce only fires on a text change, and the writer may stop typing.
+    window.clearTimeout(timers.get(key))
+    timers.set(
+      key,
+      window.setTimeout(() => void flush(ref), SAVE_RETRY_MS),
+    )
   }
 }
 
