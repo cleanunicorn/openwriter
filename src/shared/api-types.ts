@@ -2,12 +2,10 @@ import { z } from 'zod'
 import { ConfigSchema } from './config-schema.ts'
 import { SlugSchema } from './names.ts'
 
-const Slug = SlugSchema
-
 /** The editor is document-generic: an article, the global strategy, or an article's brief. */
 export const DocRefSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('article'), slug: Slug }),
-  z.object({ kind: z.literal('brief'), slug: Slug }),
+  z.object({ kind: z.literal('article'), slug: SlugSchema }),
+  z.object({ kind: z.literal('brief'), slug: SlugSchema }),
   z.object({ kind: z.literal('strategy') }),
 ])
 export type DocRef = z.infer<typeof DocRefSchema>
@@ -28,7 +26,7 @@ export const DocResponseSchema = z.object({
 export const SaveRequestSchema = z.object({ text: z.string(), baseHash: z.string().nullable() })
 export const SaveResponseSchema = z.object({ hash: z.string() })
 
-export const ArticleSchema = z.object({ slug: Slug, title: z.string() })
+export const ArticleSchema = z.object({ slug: SlugSchema, title: z.string() })
 export type Article = z.infer<typeof ArticleSchema>
 export const ArticlesResponseSchema = z.object({ articles: z.array(ArticleSchema) })
 export const NewArticleRequestSchema = z.object({ title: z.string().trim().min(1).max(200) })
@@ -65,9 +63,9 @@ export const SkillsResponseSchema = z.object({ skills: z.array(SkillInfoSchema) 
 export const OkResponseSchema = z.object({ ok: z.boolean() })
 
 /** Export requests; the response is a zip, not JSON. */
-export const MarkdownExportRequestSchema = z.object({ slug: Slug })
+export const MarkdownExportRequestSchema = z.object({ slug: SlugSchema })
 export const HtmlExportRequestSchema = z.object({
-  slug: Slug,
+  slug: SlugSchema,
   title: z.string().max(500),
   html: z.string().max(20_000_000),
 })
