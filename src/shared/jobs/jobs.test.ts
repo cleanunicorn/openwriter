@@ -12,7 +12,7 @@ import {
   missingTargets,
   startable,
 } from './scheduler.ts'
-import { validateOps } from './validate-ops.ts'
+import { effectiveTargets, validateOps } from './validate-ops.ts'
 
 const snapshot: Snapshot = {
   blocks: [
@@ -187,6 +187,27 @@ describe('op validation', () => {
     'assets/a b.png',
   ])('rejects the asset path %j', (file) => {
     expect(validateOps(result({ assets: [{ file }] }), blocks)[0]).toContain('inside assets/')
+  })
+
+  it('sends b0 only when a request has no target that exists', () => {
+    const frontMatterOnly: Snapshot = {
+      blocks: [{ id: 'b1', raw: '---\ntitle: x\n---', kind: 'frontmatter' }],
+      gaps: ['', '\n'],
+    }
+    // A job on the front matter itself keeps its target…
+    expect(effectiveTargets('blocks', ['b1'], frontMatterOnly)).toEqual(['b1'])
+    const edit = result({
+      ops: [{ op: 'replace', block_id: 'b1', markdown: '---\ntitle: y\n---' }],
+    })
+    expect(
+      validateOps(edit, { scope: 'blocks', targets: ['b1'], snapshot: frontMatterOnly }),
+    ).toEqual([])
+    // …a draft into the empty body gets the start anchor…
+    expect(effectiveTargets('article', [], frontMatterOnly)).toEqual(['b0'])
+    expect(effectiveTargets('article', [], { blocks: [], gaps: [''] })).toEqual(['b0'])
+    // …and a document with content, or a research job, is left alone.
+    expect(effectiveTargets('blocks', ['b3'], snapshot)).toEqual(['b3'])
+    expect(effectiveTargets('research', [], frontMatterOnly)).toEqual([])
   })
 
   it('rejects a declared asset that no op references', () => {

@@ -9,6 +9,18 @@ export const START_ANCHOR = 'b0'
 export const hasContent = (snapshot: Snapshot): boolean =>
   snapshot.blocks.some((block) => block.kind === 'content')
 
+/**
+ * The targets a request is really sent with. The start anchor stands in only when the request
+ * has no target that exists: a job aimed at the front matter of an article without a body keeps
+ * its target (it would otherwise be rejected as "outside the target blocks" after two paid runs).
+ */
+export function effectiveTargets(scope: Scope, targets: string[], snapshot: Snapshot): string[] {
+  if (scope === 'research') return targets
+  const ids = new Set(snapshot.blocks.map((block) => block.id))
+  if (targets.some((target) => ids.has(target))) return targets
+  return hasContent(snapshot) ? targets : [START_ANCHOR]
+}
+
 export type ValidationContext = { scope: Scope; targets: string[]; snapshot: Snapshot }
 
 const ASSET_PATH = /^assets\/(?!.*(?:^|\/)\.\.?(?:\/|$))[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/

@@ -10,7 +10,7 @@ import {
 } from '../../shared/jobs/job-types.ts'
 import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
-import { hasContent, START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
+import { effectiveTargets } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
 import { dispatchDoc, flush, notifyFailure, setEventHandlers, store } from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
@@ -101,8 +101,7 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   if (docState === undefined) return
   const doc = liveDoc(docState)
   const snapshot = { blocks: doc.blocks, gaps: doc.gaps }
-  const targets =
-    hasContent(snapshot) || request.scope === 'research' ? request.targets : [START_ANCHOR]
+  const targets = effectiveTargets(request.scope, request.targets, snapshot)
   try {
     const job = await api.createJob({ ...request, targets, snapshot })
     createdHere.add(job.id)
