@@ -82,14 +82,15 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
       throw new HttpError(413, 'image is too large')
     const data = await readLimited(c.req.raw, MAX_ASSET_BYTES)
     if (data.byteLength === 0) throw new HttpError(400, 'empty upload')
-    let wanted = 'image'
+    let requestedName = 'image'
     try {
-      wanted = decodeURIComponent(c.req.header('x-filename') ?? 'image')
+      requestedName = decodeURIComponent(c.req.header('x-filename') ?? 'image')
     } catch {
       // A malformed header falls back to the default name.
     }
-    const safe = sanitiseFileName(wanted, extension).replace(/\.[a-z0-9]+$/, '') + extension
-    const name = storeWithoutOverwrite(workspace.bundleDir(c.req.param('slug')), safe, data)
+    // Sanitise, then force the extension the content type declares.
+    const fileName = sanitiseFileName(requestedName).replace(/\.[a-z0-9]+$/, '') + extension
+    const name = storeWithoutOverwrite(workspace.bundleDir(c.req.param('slug')), fileName, data)
     return c.json({ name }, 201)
   })
 

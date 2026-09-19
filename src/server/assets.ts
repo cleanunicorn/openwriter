@@ -17,9 +17,9 @@ export const extensionForImage = (contentType: string): string | undefined =>
   IMAGE_EXTENSIONS[contentType]
 
 /** Reduce any client- or agent-supplied name to a safe file name inside one directory. */
-export function sanitiseFileName(name: string, fallbackExtension = ''): string {
+export function sanitiseFileName(name: string): string {
   const base = path.basename(name.replaceAll('\\', '/'))
-  const extension = path.extname(base).toLowerCase() || fallbackExtension
+  const extension = path.extname(base).toLowerCase()
   const stem =
     path
       .basename(base, path.extname(base))
