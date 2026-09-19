@@ -106,7 +106,6 @@ export function createApp(options: AppOptions): CreatedApp {
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)
   mountExportRoutes(app, context)
-  // Never mounted in normal use: the route exists only with --fake-control.
   if (options.fakeControl) mountFakeControl(app, gate, events)
 
   app.all('/api/*', (c) => c.json({ error: 'not found' }, 404))
