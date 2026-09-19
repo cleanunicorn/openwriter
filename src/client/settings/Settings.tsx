@@ -99,6 +99,11 @@ export function Settings() {
             onChange={(event) => set({ contentDir: event.target.value })}
           />
         </label>
+        {loaded.contentDirError !== null && (
+          <p className="notice" role="alert">
+            {loaded.contentDirError}
+          </p>
+        )}
         {loaded.contentOutsideWorkspace && (
           <p className="notice">
             The content directory is outside the workspace: articles are read and written there

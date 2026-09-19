@@ -233,6 +233,31 @@ describe('config', () => {
     expect(readFileSync(file, 'utf8')).toBe('{ "concurrency": "many" }')
   })
 
+  it('refuses a relative content directory that leaves the workspace, and writes nothing', async () => {
+    const file = path.join(t.workspace, '.zen', 'config.json')
+    const before = readFileSync(file, 'utf8')
+    const { config } = await json(t.get('/api/config'))
+    const res = await t.send('PUT', '/api/config', { ...config, contentDir: '../hugo/content' })
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('use an absolute path')
+    expect(readFileSync(file, 'utf8')).toBe(before)
+    expect((await t.get('/api/articles')).status).toBe(200)
+  })
+
+  it('stays usable when such a value was written by hand, so settings can repair it', async () => {
+    writeFileSync(
+      path.join(t.workspace, '.zen', 'config.json'),
+      JSON.stringify({ contentDir: '../hugo/content' }),
+    )
+    const body = await json(t.get('/api/config'))
+    expect(body.contentDirError).toContain('leaves the workspace')
+    expect(body.error).toBeNull()
+    expect(await json(t.get('/api/articles'))).toEqual({ articles: [] })
+    const repaired = await t.send('PUT', '/api/config', { ...body.config, contentDir: 'content' })
+    expect(repaired.status).toBe(200)
+    expect((await json(t.get('/api/articles'))).articles).toHaveLength(1)
+  })
+
   it('saves a valid config and reports an absolute content directory', async () => {
     const { config } = await json(t.get('/api/config'))
     const outside = path.join(t.workspace, '..', `hugo-${path.basename(t.workspace)}`)

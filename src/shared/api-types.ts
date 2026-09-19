@@ -42,6 +42,8 @@ export const ConfigResponseSchema = z.object({
   config: ConfigSchema,
   /** Set when the file on disk is invalid: the server runs on defaults and never overwrites it. */
   error: z.string().nullable(),
+  /** Set when `contentDir` cannot be used (a relative path that leaves the workspace). */
+  contentDirError: z.string().nullable(),
   /** True when `contentDir` resolves outside the workspace. */
   contentOutsideWorkspace: z.boolean(),
   adapters: z.array(z.string()),

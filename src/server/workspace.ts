@@ -61,6 +61,24 @@ export class Workspace {
     return path.isAbsolute(contentDir) ? contentDir : resolveWithin(this.root, contentDir)
   }
 
+  /**
+   * Why a `contentDir` cannot be used, or null. A relative value must stay inside the workspace
+   * (`../site/content` is refused; an absolute path is the supported way to point outside).
+   */
+  static contentDirProblem(root: string, contentDir: string): string | null {
+    if (path.isAbsolute(contentDir)) return null
+    try {
+      resolveWithin(root, contentDir)
+      return null
+    } catch (error) {
+      return `contentDir "${contentDir}" leaves the workspace; use an absolute path to point outside it (${(error as Error).message})`
+    }
+  }
+
+  contentDirProblem(): string | null {
+    return Workspace.contentDirProblem(this.root, this.config().config.contentDir)
+  }
+
   contentOutsideWorkspace(): boolean {
     const relative = path.relative(this.root, this.contentRoot())
     return relative.startsWith('..') || path.isAbsolute(relative)
@@ -112,6 +130,8 @@ export class Workspace {
   }
 
   listArticles(): Article[] {
+    // A content directory that cannot be used lists nothing; /api/config says why.
+    if (this.contentDirProblem() !== null) return []
     const posts = path.join(this.contentRoot(), 'posts')
     if (!existsSync(posts)) return []
     const articles: Article[] = []
