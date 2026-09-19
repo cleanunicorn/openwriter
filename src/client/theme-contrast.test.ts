@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { contrast, WCAG_AA } from '../shared/contrast.ts'
 
 // Contrast is computed from the real tokens in theme.css; normal-size text needs 4.5:1.
-const AA = WCAG_AA
-
 const css = readFileSync(path.join(import.meta.dirname, 'theme.css'), 'utf8')
 
 /** The custom properties of every theme block: `:root`, the system-dark media block, `[data-theme=dark]`. */
@@ -62,7 +60,7 @@ describe('theme tokens meet WCAG AA for normal text', () => {
           expect(
             ratio,
             `${tokens[text]} on ${tokens[surface]} = ${ratio.toFixed(2)}:1`,
-          ).toBeGreaterThanOrEqual(AA)
+          ).toBeGreaterThanOrEqual(WCAG_AA)
         })
       }
     }
