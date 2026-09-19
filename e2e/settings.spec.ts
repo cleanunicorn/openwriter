@@ -86,3 +86,41 @@ test('the content directory can point outside the workspace, and says so', async
   await page.keyboard.press('Enter')
   await expect(page.getByText('Text in the Hugo site.')).toBeVisible()
 })
+
+test('settings is a modal dialog: focus, Escape, Tab, and no keys reach the document behind it', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await page.getByRole('heading', { name: 'Why blocks' }).click()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' edited')
+  await page.keyboard.press('Escape')
+  await openSettings(page)
+
+  const dialog = page.getByRole('dialog', { name: 'Settings' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByLabel('Main agent')).toBeFocused()
+
+  // Enter and undo on a select must not act on the article behind the dialog.
+  await page.keyboard.press('Enter')
+  await page.keyboard.press(`${mod}+z`)
+  await expect(page.getByRole('textbox', { name: 'Block editor' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Why blocks edited' })).toBeVisible()
+
+  // Tab stays inside: backwards from the first control lands on the last, and forwards again.
+  await dialog.getByRole('button', { name: 'Close' }).focus()
+  await page.keyboard.press('Shift+Tab')
+  await expect(dialog.getByRole('button', { name: 'Save' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused()
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('a click on the backdrop closes settings', async ({ page }) => {
+  await openArticle(page)
+  await openSettings(page)
+  await page.getByRole('dialog', { name: 'Settings' }).click({ position: { x: 5, y: 5 } })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})

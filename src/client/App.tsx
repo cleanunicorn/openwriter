@@ -62,6 +62,8 @@ export function App() {
         setPalette(store.get().palette === null ? { kind: 'commands' } : null)
         return
       }
+      // A modal panel owns the keyboard: no document undo or block focus behind it.
+      if (store.get().panel !== null) return
       if (inTextField(event.target)) return
       // Document-level undo and redo when no editor has the keyboard.
       if (mod && event.key.toLowerCase() === 'z') {

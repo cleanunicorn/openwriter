@@ -1,8 +1,9 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { Config } from '../../shared/config-schema.ts'
 import { ApiError, api } from '../api.ts'
 import { applyTheme } from '../palette/commands.ts'
 import { refreshArticles, refreshConfig, setPanel, useApp } from '../state/app.ts'
+import { useRestoreFocus } from '../use-restore-focus.ts'
 
 const TASKS = ['image'] as const
 const words = (text: string) => text.split(/\s+/).filter(Boolean)
@@ -12,6 +13,14 @@ export function Settings() {
   const loaded = useApp((state) => state.config)
   const [draft, setDraft] = useState<Config | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const form = useRef<HTMLFormElement>(null)
+  const ready = loaded !== null && draft !== null
+  useRestoreFocus()
+
+  // A modal dialog: the first control gets the keyboard when the form appears.
+  useEffect(() => {
+    if (ready) form.current?.querySelector<HTMLElement>('select, input')?.focus()
+  }, [ready])
 
   useEffect(() => {
     if (loaded !== null) setDraft(loaded.config)
@@ -37,12 +46,49 @@ export function Settings() {
     }
   }
 
+  const close = () => setPanel(null)
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      close()
+      return
+    }
+    if (event.key !== 'Tab' || form.current === null) return
+    // Keep Tab inside the dialog.
+    const focusable = [
+      ...form.current.querySelectorAll<HTMLElement>('button, select, input'),
+    ].filter((element) => !element.hasAttribute('disabled'))
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
+
   return (
-    <div className="palette-backdrop">
-      <form className="settings" aria-label="Settings" onSubmit={save}>
+    <div
+      className="palette-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      onClick={close}
+      onKeyDown={onKeyDown}
+    >
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: only stops the backdrop click */}
+      <form
+        ref={form}
+        className="settings"
+        aria-label="Settings"
+        onSubmit={save}
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="settings-header">
           <h2>Settings</h2>
-          <button type="button" className="link" onClick={() => setPanel(null)}>
+          <button type="button" className="link" onClick={close}>
             Close
           </button>
         </header>
