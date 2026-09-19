@@ -209,6 +209,22 @@ export async function decide(id: string, accepted: number[], rejected: number[])
 async function applyDecision(job: Job, accepted: number[], rejected: number[]): Promise<void> {
   const id = job.id
   if (job.result === null) return
+  // An accepted replace or delete of the block that is being edited must win over the open
+  // editor's draft — otherwise the draft is folded over the accepted text on the next save and
+  // the writer's decision silently disappears. Commit the draft first (it stays in the undo
+  // history), then apply. An editor on any other block is left alone.
+  const focusedId = store.get().docs[docKey(job.doc)]?.focusedId ?? null
+  const touchesFocused = accepted.some((index) => {
+    const op = job.result?.ops[index]
+    return (
+      op !== undefined &&
+      op.op !== 'insert_after' &&
+      op.op !== 'insert_before' &&
+      op.block_id === focusedId
+    )
+  })
+  if (touchesFocused) dispatchDoc(job.doc, { type: 'blur' })
+
   const { job: updated, assetMap } = await api.decide(id, accepted, rejected)
   const docState = store.get().docs[docKey(job.doc)]
   if (docState !== undefined && accepted.length > 0) {

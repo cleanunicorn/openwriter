@@ -3,6 +3,7 @@ import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   ask,
+  blockEnd,
   blockWith,
   editor,
   expectFile,
@@ -195,4 +196,39 @@ test('a selection made in edit mode carries exact offsets, and the draft survive
   await release(app)
   await expect(ghosts(page)).toHaveCount(1)
   await expect(editor(page)).toHaveCount(0)
+})
+
+test('accepting a replacement of the block being edited wins over the open draft', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  const first = blockWith(page, 'Select some text, type an instruction')
+  const gutter = await first.getByTestId('gutter').boundingBox()
+  await first.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
+  await blockWith(page, 'Results arrive as ghost diffs')
+    .getByTestId('rendered')
+    .click({ modifiers: ['Shift'] })
+  await ask(page, 'fake:multi')
+  await expectWaiting(app, 1)
+
+  // The writer edits the first target while the job runs, and is still in the editor when it ends.
+  await page.getByText('Select some text, type an instruction').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' DRAFT')
+  await release(app)
+  await expect(ghosts(page)).toHaveCount(3)
+
+  // Accept everything from another ghost, including the replacement of the block being edited.
+  await page.getByRole('group', { name: 'Proposed insertion 2 of 4' }).focus()
+  await page.keyboard.press(`${mod}+Enter`)
+  await expect(ghosts(page)).toHaveCount(0)
+  await expect(editor(page)).toHaveCount(0)
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('while the agent works. (tightened)')
+    expect(file).not.toContain('DRAFT')
+  })
+  // Nothing is lost: the draft is one undo step behind the accepted proposal.
+  await page.keyboard.press(`${mod}+z`)
+  await expect(page.getByText('while the agent works. DRAFT')).toBeVisible()
 })

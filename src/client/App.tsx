@@ -64,6 +64,8 @@ export function App() {
       }
       // A modal panel owns the keyboard: no document undo or block focus behind it.
       if (store.get().panel !== null) return
+      // A key that another control already handled (a ghost's Enter/Backspace) is not ours.
+      if (event.defaultPrevented) return
       if (inTextField(event.target)) return
       // Document-level undo and redo when no editor has the keyboard.
       if (mod && event.key.toLowerCase() === 'z') {
@@ -72,7 +74,7 @@ export function App() {
       } else if (mod && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         dispatch({ type: 'redo' })
-      } else if (event.key === 'Enter' && store.get().palette === null) {
+      } else if (event.key === 'Enter' && !mod && store.get().palette === null) {
         // Keyboard entry into the document: edit the first content block.
         const first = currentDoc(store.get())?.doc.blocks.find((block) => block.kind === 'content')
         if (first !== undefined) {
