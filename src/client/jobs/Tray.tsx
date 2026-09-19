@@ -37,7 +37,7 @@ const REASONS: Record<NonNullable<Job['reason']>, string> = {
 function OpenInHerdr({ progress }: { progress: string[] }) {
   const [copied, setCopied] = useState<'yes' | 'no' | null>(null)
   const command = progress.map(parseHerdrAttachHint).find((hint) => hint !== null)
-  if (command === undefined || command === null) return null
+  if (command === undefined) return null
   // The clipboard can be missing (an insecure context) or refuse: say which happened.
   const copy = () =>
     void (navigator.clipboard?.writeText(command) ?? Promise.reject(new Error('no clipboard')))
