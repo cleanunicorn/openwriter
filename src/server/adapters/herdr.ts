@@ -1,5 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import path from 'node:path'
+import { herdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createChannel } from './channel.ts'
 import { claudeConfinement } from './claude.ts'
 import type { AdapterHandle, AdapterOptions, AgentAdapter, Completion } from './types.ts'
@@ -138,7 +139,7 @@ export function createHerdrAdapter(
         if (pane.pane_id === undefined)
           return { ok: false, reason: 'exit', message: 'herdr did not return a pane for the job' }
         channel.push({
-          text: `herdr pane ${pane.pane_id} — attach with: herdr session attach ${session}`,
+          text: `herdr pane ${pane.pane_id} — ${herdrAttachHint(session)}`,
         })
 
         const jobRel = path.relative(options.workspace, jobDir)
@@ -185,7 +186,7 @@ export function createHerdrAdapter(
         while (status === 'blocked' && !cancelled) {
           // This is what herdr is for: the writer can attach and answer. Keep waiting meanwhile.
           channel.push({
-            text: `the agent is blocked — attach with: herdr session attach ${session}`,
+            text: `the agent is blocked — ${herdrAttachHint(session)}`,
           })
           status = statusOf(
             await cli.run(

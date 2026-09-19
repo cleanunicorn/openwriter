@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createHerdrAdapter, type HerdrCli } from './herdr.ts'
 import type { AdapterOptions } from './types.ts'
 
@@ -94,7 +95,10 @@ describe('herdr adapter', () => {
     expect(calls.find((args) => args.includes('prompt'))).toContain(options().prompt)
     // The job's workspace in herdr is closed again; nothing is left behind.
     expect(calls.at(-1)).toEqual(['--session', 'openwrite-jobs', 'workspace', 'close', 'w7'])
-    expect(progress.join('\n')).toContain('herdr session attach openwrite-jobs')
+    // The tray finds its "Open this job in herdr" command by parsing these very lines.
+    expect(progress.map(parseHerdrAttachHint).filter(Boolean)).toEqual([
+      'herdr session attach openwrite-jobs',
+    ])
   })
 
   it('always names its own session and never stops a server', async () => {
@@ -128,6 +132,7 @@ describe('herdr adapter', () => {
     expect(completion).toEqual({ ok: true })
     expect(calls.some((args) => args.includes('wait'))).toBe(true)
     expect(progress.join('\n')).toContain('the agent is blocked — attach with')
+    expect(progress.map(parseHerdrAttachHint).filter(Boolean).length).toBeGreaterThanOrEqual(2)
   })
 
   it('cancel closes the job’s own pane', async () => {

@@ -1,4 +1,5 @@
 import { docKey } from '../../shared/api-types.ts'
+import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
 import { openDoc } from '../state/app.ts'
 import {
@@ -33,10 +34,8 @@ const REASONS: Record<NonNullable<Job['reason']>, string> = {
 
 /** "Open this job in herdr": the server cannot attach a terminal for the writer, so show how. */
 function OpenInHerdr({ progress }: { progress: string[] }) {
-  const command = progress
-    .map((line) => line.match(/attach with: (herdr session attach \S+)/)?.[1])
-    .find(Boolean)
-  if (command === undefined) return null
+  const command = progress.map(parseHerdrAttachHint).find((hint) => hint !== null)
+  if (command === undefined || command === null) return null
   return (
     <div className="tray-progress">
       Open this job in herdr: <code>{command}</code>{' '}
