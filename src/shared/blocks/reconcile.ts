@@ -9,20 +9,22 @@ function lcsPairs(oldBlocks: Block[], next: { raw: string; kind: string }[]): [n
     oldBlocks[i]?.raw === next[j]?.raw && oldBlocks[i]?.kind === next[j]?.kind
   const table: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0))
   for (let i = n - 1; i >= 0; i--) {
+    const row = table[i] as number[]
+    const below = table[i + 1] as number[]
     for (let j = m - 1; j >= 0; j--) {
-      const row = table[i] as number[]
       row[j] = same(i, j)
-        ? ((table[i + 1] as number[])[j + 1] as number) + 1
-        : Math.max((table[i + 1] as number[])[j] as number, row[j + 1] as number)
+        ? (below[j + 1] as number) + 1
+        : Math.max(below[j] as number, row[j + 1] as number)
     }
   }
   const pairs: [number, number][] = []
   let i = 0
   let j = 0
   while (i < n && j < m) {
+    const down = (table[i + 1] as number[])[j] as number
+    const right = (table[i] as number[])[j + 1] as number
     if (same(i, j)) pairs.push([i++, j++])
-    else if (((table[i + 1] as number[])[j] as number) >= ((table[i] as number[])[j + 1] as number))
-      i++
+    else if (down >= right) i++
     else j++
   }
   return pairs
