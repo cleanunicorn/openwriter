@@ -35,10 +35,11 @@ type Props = {
 /** Blocks between two IDs, inclusive, in document order. The front matter is never selected. */
 function rangeOf(state: DocState, fromId: string, toId: string): string[] {
   const ids = state.doc.blocks.filter((block) => block.kind === 'content').map((block) => block.id)
-  const a = ids.indexOf(fromId)
-  const b = ids.indexOf(toId)
-  if (a === -1 || b === -1) return b === -1 ? [] : [toId]
-  return ids.slice(Math.min(a, b), Math.max(a, b) + 1)
+  const from = ids.indexOf(fromId)
+  const to = ids.indexOf(toId)
+  if (to === -1) return []
+  if (from === -1) return [toId]
+  return ids.slice(Math.min(from, to), Math.max(from, to) + 1)
 }
 
 export function BlockList({ state, decorate, rowsAfter }: Props) {
