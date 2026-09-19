@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createDoc, createIdMinter, reconcile, serialise } from './index.ts'
+import { reconcile, serialise } from './index.ts'
+import { setup } from './test-helpers.ts'
 
-function setup(text: string) {
-  const mint = createIdMinter()
-  return { doc: createDoc(text, mint), mint }
-}
 const ids = (doc: { blocks: { id: string }[] }) => doc.blocks.map((block) => block.id)
 
 describe('reconcile', () => {

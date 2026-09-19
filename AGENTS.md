@@ -284,7 +284,7 @@ Keep it short and useful:
 
 ```
 src/shared/           no I/O; imported by client, server, and tests
-  blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), corpus/
+  blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), test-helpers, corpus/
   jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, herdr-hint
   config-schema.ts  api-types.ts  events.ts  key-values.ts  names.ts  contrast.ts  ports.ts
 src/server/           Hono on Node (TypeScript run natively, no build step)

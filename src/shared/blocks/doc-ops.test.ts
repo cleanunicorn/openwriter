@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createDoc,
-  createIdMinter,
   deleteBlocks,
   insertMarkdown,
   mergeWithPrevious,
@@ -9,11 +7,8 @@ import {
   replaceBlock,
   serialise,
 } from './index.ts'
+import { setup } from './test-helpers.ts'
 
-function setup(text: string) {
-  const mint = createIdMinter()
-  return { doc: createDoc(text, mint), mint }
-}
 const raws = (doc: { blocks: { raw: string }[] }) => doc.blocks.map((block) => block.raw)
 
 describe('moveBlock', () => {

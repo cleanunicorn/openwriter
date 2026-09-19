@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDoc, createIdMinter, serialise } from '../blocks/index.ts'
+import { serialise } from '../blocks/index.ts'
+import { setup } from '../blocks/test-helpers.ts'
 import { applyOps } from './apply-ops.ts'
 import { referencedAssets, rewriteAssetRefs } from './asset-refs.ts'
 import type { Snapshot } from './job-types.ts'
@@ -243,10 +244,6 @@ describe('op validation', () => {
 })
 
 describe('op application', () => {
-  const setup = (text = 'A\n\nB\n\nC\n') => {
-    const mint = createIdMinter()
-    return { doc: createDoc(text, mint), mint }
-  }
   const apply = (
     ops: Op[],
     accepted: number[],
