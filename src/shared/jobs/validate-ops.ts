@@ -28,6 +28,13 @@ export function validateOps(result: Result, context: ValidationContext): string[
     errors.push('research jobs must not contain ops; put the answer in "notes"')
   }
 
+  // An insert anchored on a block that the same result removes would lose its anchor when the ops
+  // are applied, and the new text would silently vanish. "Replace this section" is one `replace`.
+  const removed = new Set(
+    result.ops
+      .filter((op) => op.op === 'delete' || (op.op === 'replace' && op.markdown.trim() === ''))
+      .map((op) => op.block_id),
+  )
   const edited = new Set<string>()
   result.ops.forEach((op, index) => {
     const where = `ops[${index}] (${op.op} ${op.block_id})`
@@ -53,6 +60,14 @@ export function validateOps(result: Result, context: ValidationContext): string[
     }
     if ((op.op === 'insert_after' || op.op === 'insert_before') && op.markdown.trim() === '') {
       errors.push(`${where}: inserted markdown is empty`)
+    }
+    if (op.op === 'replace' && op.markdown.trim() === '') {
+      errors.push(`${where}: replacement markdown is empty; use a delete op to remove a block`)
+    }
+    if ((op.op === 'insert_after' || op.op === 'insert_before') && removed.has(op.block_id)) {
+      errors.push(
+        `${where}: block ${op.block_id} is deleted by another op in this result; use one replace op, or anchor the insert on a block that stays`,
+      )
     }
   })
 

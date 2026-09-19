@@ -107,6 +107,41 @@ describe('op validation', () => {
     expect(errors[0]).toContain('only once')
   })
 
+  it.each([
+    [
+      'delete then insert_after',
+      [
+        { op: 'delete', block_id: 'b3' },
+        { op: 'insert_after', block_id: 'b3', markdown: 'New' },
+      ],
+    ],
+    [
+      'insert_before then delete',
+      [
+        { op: 'insert_before', block_id: 'b3', markdown: 'New' },
+        { op: 'delete', block_id: 'b3' },
+      ],
+    ],
+  ])('rejects an insert anchored on a block the same result deletes (%s)', (_name, ops) => {
+    const errors = validateOps(result({ ops }), blocks)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('deleted by another op')
+  })
+
+  it('rejects a replace with empty markdown, and an insert anchored on it', () => {
+    const errors = validateOps(
+      result({
+        ops: [
+          { op: 'replace', block_id: 'b3', markdown: ' \n' },
+          { op: 'insert_after', block_id: 'b3', markdown: 'New' },
+        ],
+      }),
+      blocks,
+    )
+    expect(errors.join('\n')).toContain('replacement markdown is empty')
+    expect(errors.join('\n')).toContain('deleted by another op')
+  })
+
   it('rejects an empty insertion', () => {
     const errors = validateOps(
       result({ ops: [{ op: 'insert_after', block_id: 'b3', markdown: ' \n' }] }),
