@@ -25,7 +25,7 @@ test('a paired shortcode survives editing of its neighbours, byte for byte', asy
 }) => {
   const shortcode =
     '{{< notice tip >}}\nA paired Hugo shortcode stays one block.\n\nEven when it has several paragraphs inside.\n{{< /notice >}}'
-  expect(readFileSync(app.articlePath(), 'utf8')).toContain(shortcode)
+  expect(app.readArticle()).toContain(shortcode)
   await openArticle(page)
 
   await page.getByRole('heading', { name: 'A shortcode that spans blocks' }).click()
@@ -45,7 +45,7 @@ test('a paired shortcode survives editing of its neighbours, byte for byte', asy
   })
   // Only the two edited lines differ from the original.
   const original = readFileSync('sample-workspace/content/posts/hello-openwrite/index.md', 'utf8')
-  expect(readFileSync(app.articlePath(), 'utf8').replaceAll(' (edited)', '')).toBe(original)
+  expect(app.readArticle().replaceAll(' (edited)', '')).toBe(original)
 })
 
 test('the whole shortcode is one block in the editor', async ({ page }) => {

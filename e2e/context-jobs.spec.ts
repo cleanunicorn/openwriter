@@ -40,7 +40,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
   app,
 }) => {
   await openArticle(page)
-  const article = readFileSync(app.articlePath(), 'utf8')
+  const article = app.readArticle()
   await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · hello-openwrite')).toBeVisible()
 
@@ -59,7 +59,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
   await expect(ghosts(page)).toHaveCount(0)
   await expectFile(briefPath(app), (file) => expect(file).toContain('# BRIEF: HELLO, OPENWRITE'))
   // Nothing reached the article.
-  expect(readFileSync(app.articlePath(), 'utf8')).toBe(article)
+  expect(app.readArticle()).toBe(article)
 })
 
 test('an empty brief is drafted through the start anchor', async ({ page, app }) => {

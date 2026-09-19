@@ -44,7 +44,7 @@ test('select → prompt → review → accept, then one undo step reverts it', a
   await expect(ghost.locator('ins').first()).toHaveText('WHY')
   await expect(ghost.locator('ins').last()).toHaveText('BLOCKS')
   await expect(tray(page)).toContainText('ready for review')
-  expect(readFileSync(app.articlePath(), 'utf8')).toContain('## Why blocks\n')
+  expect(app.readArticle()).toContain('## Why blocks\n')
 
   await acceptButton(ghost).click()
   await expect(ghosts(page)).toHaveCount(0)
@@ -60,7 +60,7 @@ test('select → prompt → review → accept, then one undo step reverts it', a
 
 test('rejecting leaves the article untouched', async ({ page, app }) => {
   await openArticle(page)
-  const before = readFileSync(app.articlePath(), 'utf8')
+  const before = app.readArticle()
   await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
   await ask(page, 'fake:upper')
   await expectWaiting(app, 1)
@@ -69,7 +69,7 @@ test('rejecting leaves the article untouched', async ({ page, app }) => {
   await expect(ghosts(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Why blocks', exact: true })).toBeVisible()
   await expect(tray(page).getByRole('button', { name: '1 done' })).toBeVisible()
-  expect(readFileSync(app.articlePath(), 'utf8')).toBe(before)
+  expect(app.readArticle()).toBe(before)
 })
 
 test('several blocks selected by shift-click; ops reviewed one by one, by mouse and keyboard', async ({

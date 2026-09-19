@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { strFromU8 } from 'fflate'
@@ -19,7 +19,7 @@ test('markdown export is the bundle as is, including an unsaved edit', async ({ 
   ])
   const markdown = strFromU8(files['hello-openwrite/index.md'] as Uint8Array)
   expect(markdown).toContain('## Why blocks exported')
-  expect(markdown).toBe(readFileSync(app.articlePath(), 'utf8'))
+  expect(markdown).toBe(app.readArticle())
 })
 
 test('HTML export is standalone: diagrams rendered, local stylesheet and assets, works offline', async ({

@@ -1,10 +1,10 @@
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { type App, expect, test } from './fixtures.ts'
 import { blockEnd, dropEventStreams, editor, expectFile, notice, openArticle } from './helpers.ts'
 
 /** The article as another program would rewrite it: one heading changed, nothing else. */
 const withHeading = (app: App, heading: string): string =>
-  readFileSync(app.articlePath(), 'utf8').replace('## Why blocks', heading)
+  app.readArticle().replace('## Why blocks', heading)
 
 test('an outside change reloads the document without losing the focused block’s edits', async ({
   page,
@@ -86,7 +86,7 @@ test('a save that loses the race with an outside change gets a 409 and keeps bot
   await expect(editor(page)).toContainText('reject the rest. MINE')
   // …and the follow-up save writes both.
   await expect(() => {
-    const file = readFileSync(app.articlePath(), 'utf8')
+    const file = app.readArticle()
     expect(file).toContain('## Why blocks, from outside')
     expect(file).toContain('reject the rest. MINE')
   }).toPass({ timeout: 8000 })

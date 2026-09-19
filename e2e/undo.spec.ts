@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   blockTexts,
@@ -12,7 +11,7 @@ import {
 
 test('undo and redo work across the whole document, reorders included', async ({ page, app }) => {
   await openArticle(page)
-  const original = readFileSync(app.articlePath(), 'utf8')
+  const original = app.readArticle()
   // The diagram block's text changes when mermaid finishes; wait for it before comparing orders.
   await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
   const initialOrder = await blockTexts(page)
