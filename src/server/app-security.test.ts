@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createTestApp, type TestApp } from './test-helpers.ts'
+import { createTestApp, HOST, type TestApp } from './test-helpers.ts'
 
 // security.test.ts checks the middleware on a throwaway app. This file checks that the REAL app
 // (createApp) has it mounted in front of every route: deleting the `app.use('*', localOnly(...))`
@@ -10,7 +10,6 @@ beforeEach(() => {
 })
 afterEach(() => t.cleanup())
 
-const HOST = '127.0.0.1:4317'
 const save = (headers: Record<string, string>, body = '{"text":"x","baseHash":null}') =>
   t.app.request('/api/docs/strategy', { method: 'PUT', headers, body })
 

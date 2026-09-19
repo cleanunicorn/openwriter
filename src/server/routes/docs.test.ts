@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { createTestApp, HOST, json, type TestApp } from '../test-helpers.ts'
 
 let t: TestApp
 beforeEach(() => {
@@ -169,7 +169,7 @@ describe('assets', () => {
     t.app.request('/api/docs/article/hello-openwrite/assets', {
       method: 'POST',
       headers: {
-        host: '127.0.0.1:4317',
+        host: HOST,
         'content-type': type,
         'x-filename': encodeURIComponent(name),
       },
@@ -193,7 +193,7 @@ describe('assets', () => {
   })
 
   it('refuses an oversized upload by its declared length, and while streaming without one', async () => {
-    const headers = { host: '127.0.0.1:4317', 'content-type': 'image/png', 'x-filename': 'big.png' }
+    const headers = { host: HOST, 'content-type': 'image/png', 'x-filename': 'big.png' }
     const declared = await t.app.request('/api/docs/article/hello-openwrite/assets', {
       method: 'POST',
       headers: { ...headers, 'content-length': String(26 * 1024 * 1024) },

@@ -4,7 +4,8 @@ import path from 'node:path'
 import { type CreatedApp, createApp } from './app.ts'
 import type { AppOptions } from './context.ts'
 
-const HOST = '127.0.0.1:4317'
+/** The Host every test request carries; the test app allows exactly this one. */
+export const HOST = '127.0.0.1:4317'
 
 export type TestApp = CreatedApp & {
   workspace: string
