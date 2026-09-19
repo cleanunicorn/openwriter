@@ -3,9 +3,9 @@ import { DocRefSchema } from '../api-types.ts'
 import { BlockKindSchema } from '../blocks/types.ts'
 import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
+import { type Scope, ScopeSchema } from './scope.ts'
 
-export const ScopeSchema = z.enum(['blocks', 'article', 'research'])
-export type Scope = z.infer<typeof ScopeSchema>
+export { type Scope, ScopeSchema }
 
 /**
  * queued → running → validating → (repairing →) ready → settled, or failed | cancelled | stale.

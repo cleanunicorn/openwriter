@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
+import { SkillDocumentSchema } from '../shared/api-types.ts'
+import { ScopeSchema } from '../shared/jobs/scope.ts'
 import { splitHeader } from '../shared/key-values.ts'
 import { SkillNameSchema } from '../shared/names.ts'
 
@@ -25,7 +27,7 @@ const flag = z
 export const SkillHeaderSchema = z.object({
   name: SkillNameSchema,
   description: z.string().min(1),
-  scope: z.enum(['blocks', 'article', 'research']).default('blocks'),
+  scope: ScopeSchema.default('blocks'),
   /** Task kind; selects a per-task agent override from settings (for example `image`). */
   task: z.string().optional(),
   /** Extra tool allowances the adapter may grant, e.g. `Bash(asciinema *)`. */
@@ -35,7 +37,7 @@ export const SkillHeaderSchema = z.object({
   requires: stringList,
   stub: flag,
   /** Which document the job edits when it is started from the palette. */
-  document: z.enum(['current', 'brief', 'article']).default('current'),
+  document: SkillDocumentSchema.default('current'),
 })
 export type Skill = z.infer<typeof SkillHeaderSchema> & { body: string }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ConfigSchema } from './config-schema.ts'
+import { ScopeSchema } from './jobs/scope.ts'
 import { SlugSchema } from './names.ts'
 
 /** The editor is document-generic: an article, the global strategy, or an article's brief. */
@@ -47,15 +48,18 @@ export const ConfigResponseSchema = z.object({
 })
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>
 
+/** Which document a skill's job edits when it is started from the palette. */
+export const SkillDocumentSchema = z.enum(['current', 'brief', 'article'])
+
 /** What the palette needs to know about a skill. The prompt body and the permission headers stay on the server. */
 export const SkillInfoSchema = z.object({
   name: z.string(),
   description: z.string(),
-  scope: z.enum(['blocks', 'article', 'research']),
+  scope: ScopeSchema,
   task: z.string().optional(),
   stub: z.boolean(),
   requires: z.array(z.string()),
-  document: z.enum(['current', 'brief', 'article']),
+  document: SkillDocumentSchema,
 })
 export type SkillInfo = z.infer<typeof SkillInfoSchema>
 export const SkillsResponseSchema = z.object({ skills: z.array(SkillInfoSchema) })
