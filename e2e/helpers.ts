@@ -63,8 +63,8 @@ export async function keyboardMove(
 }
 
 /** Autosave is debounced, so file assertions poll instead of sleeping. */
-export async function expectFile(path: string, check: (text: string) => void): Promise<void> {
-  await expect(() => check(readFileSync(path, 'utf8'))).toPass({ timeout: 5000 })
+export async function expectFile(file: string, check: (text: string) => void): Promise<void> {
+  await expect(() => check(readFileSync(file, 'utf8'))).toPass({ timeout: 5000 })
 }
 
 /** Open the command palette and type a query; the caller decides when to press Enter. */
