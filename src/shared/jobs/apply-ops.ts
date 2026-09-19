@@ -54,9 +54,9 @@ export function applyOps(
     }
     // Same-anchor, same-side inserts read in result order: land after the earlier ones that are
     // already in; for insert_before also stay above later ones that were accepted first.
-    const positionsOf = (accept: (otherIndex: number) => boolean) =>
+    const positionsOf = (matches: (otherIndex: number) => boolean) =>
       allOps.flatMap((other, otherIndex) =>
-        accept(otherIndex) && other.op === op.op && other.block_id === op.block_id
+        matches(otherIndex) && other.op === op.op && other.block_id === op.block_id
           ? placed(otherIndex)
               .map((id) => indexOf(current, id))
               .filter((position) => position !== -1)
