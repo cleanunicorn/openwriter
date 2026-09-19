@@ -22,6 +22,31 @@ function refFrom(kind: string, slug: string | undefined): DocRef {
   return parsed.data
 }
 
+/** Read a request body, giving up as soon as it exceeds `limit` (no usable content-length). */
+async function readLimited(request: Request, limit: number): Promise<Uint8Array> {
+  const reader = request.body?.getReader()
+  if (reader === undefined) return new Uint8Array()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > limit) {
+      await reader.cancel()
+      throw new HttpError(413, 'image is too large')
+    }
+    chunks.push(value)
+  }
+  const data = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    data.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return data
+}
+
 export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext): void {
   app.get('/api/articles', (c) => c.json({ articles: workspace.listArticles() }))
 
@@ -50,9 +75,13 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
     const contentType = (c.req.header('content-type') ?? '').split(';')[0]?.trim() ?? ''
     const extension = extensionForImage(contentType)
     if (extension === undefined) throw new HttpError(415, 'only images can be pasted or dropped')
-    const data = new Uint8Array(await c.req.arrayBuffer())
+    // Refuse by the declared length before reading anything: buffering first would let one
+    // request occupy as much memory as it likes before the limit applies.
+    const declared = Number(c.req.header('content-length') ?? Number.NaN)
+    if (Number.isFinite(declared) && declared > MAX_ASSET_BYTES)
+      throw new HttpError(413, 'image is too large')
+    const data = await readLimited(c.req.raw, MAX_ASSET_BYTES)
     if (data.byteLength === 0) throw new HttpError(400, 'empty upload')
-    if (data.byteLength > MAX_ASSET_BYTES) throw new HttpError(413, 'image is too large')
     let wanted = 'image'
     try {
       wanted = decodeURIComponent(c.req.header('x-filename') ?? 'image')

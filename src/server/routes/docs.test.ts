@@ -193,6 +193,33 @@ describe('assets', () => {
     expect([a.name, b.name, c.name]).toEqual(['shot.png', 'shot.png', 'shot-2.png'])
   })
 
+  it('refuses an oversized upload by its declared length, and while streaming without one', async () => {
+    const headers = { host: '127.0.0.1:4317', 'content-type': 'image/png', 'x-filename': 'big.png' }
+    const declared = await t.app.request('/api/docs/article/hello-openwrite/assets', {
+      method: 'POST',
+      headers: { ...headers, 'content-length': String(26 * 1024 * 1024) },
+      body: png,
+    })
+    expect(declared.status).toBe(413)
+    // No content-length: the body is a stream that never ends by itself.
+    let sent = 0
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += 1
+        controller.enqueue(new Uint8Array(1024 * 1024))
+      },
+    })
+    const streamed = await t.app.request('/api/docs/article/hello-openwrite/assets', {
+      method: 'POST',
+      headers,
+      body: endless,
+      duplex: 'half',
+    } as RequestInit)
+    expect(streamed.status).toBe(413)
+    expect(sent).toBeLessThan(40)
+    expect(existsSync(path.join(path.dirname(article()), 'big.png'))).toBe(false)
+  })
+
   it('rejects anything that is not an image', async () => {
     expect((await upload('x.html', Buffer.from('<script>'), 'text/html')).status).toBe(415)
   })
