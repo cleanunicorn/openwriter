@@ -15,6 +15,13 @@ directory keeps the name `.zen/`.
   formats with one dev dependency. Fallback if a tool lags TypeScript 7: pin 6.0.x.
 - **`npm run format` writes; `npm run format:check` verifies.** CI runs `format:check`, so
   unformatted code cannot pass by being rewritten in the runner.
+- **Biome's `style/noDescendingSpecificity` is off.** theme.css orders rules by component, not by
+  specificity; the rule flags two pairs that are correct as written and never match the same
+  element (`.block + .ghost` before `.ghost`, `.mermaid-block[…] > pre` before `.tray-output pre`), and with `--error-on-warnings` that would
+  fail the gate. No other rule is disabled.
+- **`sample-workspace/` is excluded from Biome.** It is test data and the writer's content: the
+  sample `config.json` and the markdown must stay byte-for-byte what the tests expect, not what a
+  formatter prefers.
 - **`npm run lint` uses `--error-on-warnings`.** Biome reports several recommended rules as
   warnings, which exit 0; the gate must fail on them.
 - **`scripts/ensure-build.ts` builds the client only when `dist/client` is missing or older than
