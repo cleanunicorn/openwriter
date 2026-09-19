@@ -326,6 +326,36 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **`job.json` lives in that directory too,** so it is re-validated with zod on every read and
   never trusted for anything the in-memory job does not already know.
 
+## Decisions made while fixing the review findings
+
+- **Only a `blocks` job goes stale when a target disappears.** A whole-article job lists every
+  block as a target; an ordinary merge must not cancel a long, paid draft. A vanished block is
+  reported when its op is applied.
+- **An insert anchored on a block the same result deletes is a validation error,** as is a
+  replace with empty markdown: applying them would silently drop the new text. The one repair
+  attempt gets a message that says what to write instead.
+- **A declared asset that no op references is a validation error,** and `./assets/x` and
+  reference-style definitions count as references. Otherwise the file is never copied into the
+  bundle and the article keeps a dead `assets/…` link.
+- **Each op is decided once.** The client drops indices that are decided or in flight; the server
+  ignores an already decided index (the first decision stands) and refuses accept+reject of one op.
+- **An accepted replace or delete of the block being edited commits the open draft first.** The
+  draft stays one undo step behind; without this it was folded back over the accepted text.
+- **Shutdown kills agents at once (`cancel({ force: true })`) and the server waits for it,** up
+  to two seconds. Agents run in their own process groups and would otherwise survive Ctrl-C.
+- **Every (re)connect of the event stream re-checks open documents, settings, and the article
+  list.** The server keeps no event log, so that is the only way to see what happened meanwhile.
+- **The research panel reserves layout space** (beside the text from 1160px, below it on narrower
+  windows) instead of covering the text the writer is typing in. It still opens by itself.
+- **The prompt pill is not keyed on its targets,** so extending a selection keeps what was typed.
+- **A relative `contentDir` that leaves the workspace is refused before it is saved;** an
+  absolute path is the supported way to point outside. `GET /api/config` never throws on a bad
+  value, so settings can always repair it.
+- **A failed save retries by itself after three seconds** and its notice is sticky; leaving the
+  tab saves at once, and the unload guard also covers a dirty document.
+- **Test-only server routes** (`/api/__fake/release`, `/waiting`, `/drop-events`) exist only with
+  `--fake-control`; a unit test asserts 404 without it.
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point

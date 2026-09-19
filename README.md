@@ -54,6 +54,8 @@ The server binds `127.0.0.1` only.
   rejected, then runs against the outcome. A whole-article job runs alone. Editing is never
   blocked; if you edit a block while its job runs, the result is compared with your current
   text and marked "changed since request".
+- If a save fails, a notice stays in view and the save is retried by itself; leaving the tab
+  saves at once.
 - The tray in the bottom-right corner appears while there are jobs: status, streamed progress,
   cancel, and the raw output of failed or stale jobs.
 
