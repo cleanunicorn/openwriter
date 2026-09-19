@@ -164,7 +164,7 @@ Shipped command line (cwd = workspace, prompt on stdin):
 claude -p --output-format stream-json --verbose
   --permission-mode dontAsk --permission-prompts none --restricted
   --tools Read,Glob,Grep,Edit,Write
-  --allowedTools "Edit(.zen/jobs/<id>/**)" "Write(.zen/jobs/<id>/**)"
+  --allowedTools "Edit(.zen/jobs/<id>/**)"
   --safe-mode --no-session-persistence [--model <m>] [...extraArgs]
 ```
 
@@ -173,6 +173,11 @@ claude -p --output-format stream-json --verbose
 | 1 | allow list + `--permission-prompts none` only (the first plan) | pass | **fail** | pass | **fail** |
 | 2 | run 1 + `--permission-mode dontAsk --restricted` | pass | pass | pass | pass |
 | 3 | the shipped default above | pass | pass | pass | pass |
+
+Runs 2 and 3 also passed a `"Write(.zen/jobs/<id>/**)"` rule. claude reports that rule as never
+matched ("only Edit(path) rules are"), so it was removed afterwards without changing what is
+allowed; see "herdr (milestone 5)" below. The block above is the command line the code builds
+(`claudeConfinement` in `src/server/adapters/claude.ts`, pinned by `adapters.test.ts`).
 
 - **An allow list alone confines nothing.** In run 1 the agent created `probe.txt` in the
   workspace root and read the secret outside the workspace: the writer's own settings decide what
