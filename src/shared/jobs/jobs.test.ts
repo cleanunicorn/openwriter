@@ -6,6 +6,7 @@ import type { Snapshot } from './job-types.ts'
 import { type Op, ResultSchema } from './result-schema.ts'
 import {
   blockersOf,
+  lostItsTargets,
   type Claim,
   changedSinceRequest,
   missingTargets,
@@ -367,6 +368,16 @@ describe('queueing and conflict rules', () => {
   it('a deleted target makes the job stale', () => {
     expect(missingTargets(['b1', 'b2'], ['b2', 'b3'])).toEqual(['b1'])
     expect(missingTargets(['b0'], [])).toEqual([])
+  })
+
+  it('only a blocks job goes stale when a target disappears', () => {
+    // A Backspace merge removes one id: b4 is gone.
+    const after = ['b1', 'b2', 'b3']
+    expect(lostItsTargets('blocks', ['b3', 'b4'], after)).toBe(true)
+    expect(lostItsTargets('blocks', ['b2', 'b3'], after)).toBe(false)
+    // A whole-article draft lists every block as a target; an ordinary edit must not cancel it.
+    expect(lostItsTargets('article', ['b2', 'b3', 'b4'], after)).toBe(false)
+    expect(lostItsTargets('research', [], after)).toBe(false)
   })
 
   it('an edit during the job is flagged as changed since request', () => {

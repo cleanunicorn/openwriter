@@ -37,6 +37,16 @@ export function startable(held: Claim[], unsettled: Claim[]): Claim[] {
   return ready
 }
 
+/**
+ * Did the job lose what it was asked to edit? Only a `blocks` job can: its ops are confined to
+ * its targets. For `article` scope the targets are just "everything that was there" — an
+ * ordinary merge or delete while a long draft runs must not cancel it (ops on a vanished block
+ * are reported when they are applied) — and `research` edits nothing.
+ */
+export function lostItsTargets(scope: Scope, targets: string[], blockIds: string[]): boolean {
+  return scope === 'blocks' && missingTargets(targets, blockIds).length > 0
+}
+
 /** Targets that no longer exist in the document: the job (or held request) is stale. */
 export function missingTargets(targets: string[], blockIds: string[]): string[] {
   const present = new Set(blockIds)

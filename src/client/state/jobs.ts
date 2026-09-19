@@ -3,7 +3,7 @@ import { applyOps } from '../../shared/jobs/apply-ops.ts'
 import { rewriteAssetRefs } from '../../shared/jobs/asset-refs.ts'
 import { isUnsettled, type Job, type JobRequest } from '../../shared/jobs/job-types.ts'
 import type { Op } from '../../shared/jobs/result-schema.ts'
-import { blockersOf, type Claim, missingTargets, startable } from '../../shared/jobs/scheduler.ts'
+import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { hasContent, START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
 import { dispatchDoc, flush, setEventHandlers, store } from './app.ts'
@@ -282,7 +282,7 @@ function checkTargets(): void {
     if (docState === undefined || docState.status !== 'ready') continue
     const ids = docState.doc.blocks.map((block) => block.id)
     // While a target is being edited its text may be empty for a moment; only a committed delete counts.
-    if (missingTargets(job.targets, ids).length === 0) continue
+    if (!lostItsTargets(job.scope, job.targets, ids)) continue
     reportedStale.add(id)
     void api
       .staleJob(id, 'A target block was deleted before the result was reviewed.')
@@ -292,12 +292,8 @@ function checkTargets(): void {
   for (const request of held) {
     const docState = store.get().docs[docKey(request.request.doc)]
     if (docState === undefined) continue
-    if (
-      missingTargets(
-        request.request.targets,
-        docState.doc.blocks.map((block) => block.id),
-      ).length > 0
-    ) {
+    const ids = docState.doc.blocks.map((block) => block.id)
+    if (lostItsTargets(request.request.scope, request.request.targets, ids)) {
       dropHeld(request.id)
       dispatchDoc(request.request.doc, {
         type: 'notice',

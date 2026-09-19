@@ -3,6 +3,7 @@ import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   ask,
+  blockStart,
   blockWith,
   expectFile,
   expectWaiting,
@@ -135,6 +136,34 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   expect(
     readFileSync(path.join(app.workspace, '.zen', 'jobs', lateJob ?? '', 'instruction.md'), 'utf8'),
   ).toContain('late block job')
+})
+
+test('an ordinary merge while a whole-article job runs does not cancel it', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+k`)
+  await page.getByRole('combobox', { name: 'Command palette' }).fill('whole article')
+  await page.keyboard.press('Enter')
+  await page
+    .getByRole('combobox', { name: 'Instruction for the whole article' })
+    .fill('fake:insert long draft')
+  await page.keyboard.press('Enter')
+  await expectWaiting(app, 1)
+
+  // Backspace at the start of a paragraph merges it into the one above: one block id disappears.
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockStart)
+  await page.keyboard.press('Backspace')
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('Results arrive as ghost diffs')).toBeVisible()
+
+  await release(app)
+  await expect(ghosts(page)).toHaveCount(1)
+  await tray(page).getByRole('button').first().click()
+  await expect(tray(page)).toContainText('ready for review')
+  await expect(tray(page)).not.toContainText('stale')
 })
 
 test('deleting a target block marks the job stale and keeps its output', async ({ page, app }) => {
