@@ -257,6 +257,18 @@ describe('op application', () => {
       prior,
       base.mint,
     )
+  /** Accept one op at a time in `order`, handing each step where the earlier inserts landed. */
+  const acceptInOrder = (ops: Op[], order: number[]) => {
+    const base = setup()
+    let doc = base.doc
+    let prior: Record<number, string[]> = {}
+    for (const index of order) {
+      const step = apply(ops, [index], prior, { doc, mint: base.mint })
+      doc = step.doc
+      prior = { ...prior, ...step.inserted }
+    }
+    return doc
+  }
 
   it('replaces, inserts and deletes against the live document', () => {
     const ops: Op[] = [
@@ -284,23 +296,7 @@ describe('op application', () => {
       { op: 'insert_after', block_id: 'b1', markdown: 'two' },
       { op: 'insert_after', block_id: 'b1', markdown: 'three' },
     ]
-    const base = setup()
-    const first = applyOps(base.doc, [{ index: 2, op: ops[2] as Op }], ops, {}, base.mint)
-    const second = applyOps(
-      first.doc,
-      [{ index: 0, op: ops[0] as Op }],
-      ops,
-      first.inserted,
-      base.mint,
-    )
-    const third = applyOps(
-      second.doc,
-      [{ index: 1, op: ops[1] as Op }],
-      ops,
-      { ...first.inserted, ...second.inserted },
-      base.mint,
-    )
-    expect(serialise(third.doc)).toBe('A\n\none\n\ntwo\n\nthree\n\nB\n\nC\n')
+    expect(serialise(acceptInOrder(ops, [2, 0, 1]))).toBe('A\n\none\n\ntwo\n\nthree\n\nB\n\nC\n')
   })
 
   it('keeps the result order for insert_before as well', () => {
@@ -308,16 +304,7 @@ describe('op application', () => {
       { op: 'insert_before', block_id: 'b2', markdown: 'one' },
       { op: 'insert_before', block_id: 'b2', markdown: 'two' },
     ]
-    const base = setup()
-    const first = applyOps(base.doc, [{ index: 1, op: ops[1] as Op }], ops, {}, base.mint)
-    const second = applyOps(
-      first.doc,
-      [{ index: 0, op: ops[0] as Op }],
-      ops,
-      first.inserted,
-      base.mint,
-    )
-    expect(serialise(second.doc)).toBe('A\n\none\n\ntwo\n\nB\n\nC\n')
+    expect(serialise(acceptInOrder(ops, [1, 0]))).toBe('A\n\none\n\ntwo\n\nB\n\nC\n')
     expect(serialise(apply(ops, [0, 1]).doc)).toBe('A\n\none\n\ntwo\n\nB\n\nC\n')
   })
 
