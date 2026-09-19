@@ -111,6 +111,26 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
 }
 
 /**
+ * The focused block vanished on disk: put its editor text back into `disk` after its nearest
+ * surviving neighbour, under its old ID, so the open editor still points at a block.
+ */
+function keepFocusedBlock(previous: Doc, disk: Doc, draft: Draft, mint: MintId): Doc {
+  const oldIndex = indexOf(previous, draft.id)
+  const survivor = previous.blocks
+    .slice(0, oldIndex)
+    .reverse()
+    .find((block: Block) => indexOf(disk, block.id) !== -1)
+  const at = survivor === undefined ? 0 : indexOf(disk, survivor.id) + 1
+  const known = new Set(disk.blocks.map((block) => block.id))
+  const inserted = insertMarkdown(disk, at, draft.text.trim() === '' ? '…' : draft.text, mint)
+  const fresh = inserted.blocks.find((block) => !known.has(block.id))
+  return {
+    ...inserted,
+    blocks: inserted.blocks.map((block) => (block === fresh ? { ...block, id: draft.id } : block)),
+  }
+}
+
+/**
  * Index at which the open slot's text goes. A null anchor is the top of the document; an anchor
  * that is no longer in the document means the end, never index 0.
  */
@@ -324,22 +344,7 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       const draft = state.draft
       // Disk wins everywhere except the focused block, which keeps its editor text.
       if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
-        // The focused block vanished on disk: put it back after its nearest surviving neighbour.
-        const oldIndex = indexOf(state.doc, draft.id)
-        const survivor = state.doc.blocks
-          .slice(0, oldIndex)
-          .reverse()
-          .find((block: Block) => indexOf(doc, block.id) !== -1)
-        const at = survivor === undefined ? 0 : indexOf(doc, survivor.id) + 1
-        const known = new Set(doc.blocks.map((block) => block.id))
-        const inserted = insertMarkdown(doc, at, draft.text.trim() === '' ? '…' : draft.text, mint)
-        const fresh = inserted.blocks.find((block) => !known.has(block.id))
-        doc = {
-          ...inserted,
-          blocks: inserted.blocks.map((block) =>
-            block === fresh ? { ...block, id: draft.id } : block,
-          ),
-        }
+        doc = keepFocusedBlock(state.doc, doc, draft, mint)
         notice = 'The file changed on disk. The block you are editing was kept.'
       }
       return change({ ...state, status: 'ready' }, doc, next(), {
