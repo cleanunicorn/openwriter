@@ -71,6 +71,55 @@ The server binds `127.0.0.1` only.
 path to point straight into a Hugo site's `content/` directory; articles then live where Hugo
 wants them and `hugo server` is the true preview.
 
+## Agents and settings
+
+Settings are reachable from the palette (`Settings…`) and stored in `<workspace>/.zen/config.json`
+(validated; an invalid file is reported and never overwritten):
+
+| Key | Meaning |
+| --- | --- |
+| `mainAgent` | `claude`, `codex`, or `fake`. Switching is a settings change, nothing else. |
+| `taskAgents` | per-task overrides, for example `{ "image": "codex" }`; resolved before `mainAgent` |
+| `contentDir` | `content` by default; relative to the workspace, or an absolute path into a Hugo site |
+| `theme` | `system`, `light`, `dark` |
+| `concurrency` | how many agent processes run at once (jobs waiting for review do not count) |
+| `jobTimeoutSec` | a job that produces no result in this time is stopped |
+| `adapters.<name>` | `command`, `model`, `extraArgs`, and `baseArgs` (replaces the verified default command line; `{jobDir}`, `{jobRel}`, `{workspace}` are substituted) |
+
+The agent CLIs use your own logins; openwrite stores no keys. Agents run with the narrowest
+permissions that work: `claude` may read the workspace and write only inside its job directory;
+`codex` may write only inside its job directory (its sandbox cannot restrict reads). The exact
+command lines and how they were verified are in [DECISIONS.md](DECISIONS.md), "Real agents".
+`npm start -- --adapter fake` forces the built-in fake agent for a session.
+
+Every job gets copies of `strategy.md` and the article's `brief.md` and is told to follow them.
+The palette has `Edit strategy`, `Edit brief`, `Draft brief from my notes`, and
+`Draft article from brief`; the two drafts are ordinary jobs whose proposal you review.
+
+To check a real adapter on your machine (spends credits, never part of the test suite):
+
+```bash
+node scripts/verify-adapter.ts claude --extra="--max-budget-usd 0.50"
+node scripts/verify-adapter.ts codex
+```
+
+## Adding an adapter
+
+An adapter only launches a process and relays progress; the file contract does the rest.
+
+1. Implement `AgentAdapter` from `src/server/adapters/types.ts`:
+   `start(jobDir, options) → { progress: AsyncIterable<{ text }>, done: Promise<Completion>, cancel() }`.
+   For a CLI, describe it as a `CliSpec` (`buildArgs`, `readLine`, `authPattern`, `loginHint`) and
+   wrap it with `createProcessAdapter` from `process-adapter.ts` — see `claude.ts` and `codex.ts`.
+   Launching, line splitting, bounded output, process-tree cancel, and failure mapping come with it.
+2. Register it in `createApp` (`src/server/app.ts`): `registry.register(createMyAdapter())`. It
+   then appears in settings; `adapters.<name>` overrides work without further code.
+3. Verify every flag against the tool's `--help`, prove the write confinement with
+   `scripts/verify-adapter.ts`, and record both in `DECISIONS.md`. Never default to a permission
+   bypass.
+4. Test the command line and the stream mapping like `src/server/adapters/adapters.test.ts`.
+   No test may need the real CLI.
+
 ## The job file contract
 
 The contract between the editor and an agent is files, so it works with any agent. For each job

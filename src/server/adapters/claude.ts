@@ -1,0 +1,100 @@
+import path from 'node:path'
+import { type CliSpec, createProcessAdapter, substitute } from './process-adapter.ts'
+import type { AdapterOptions } from './types.ts'
+
+const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
+
+/**
+ * `claude` in headless print mode with streamed JSON. Flags verified against
+ * `claude --help` 2.1.278 — see DECISIONS.md, "Real agents".
+ *
+ * Permissions are an allow list, not a bypass: `--permission-prompts none` denies anything that
+ * would prompt, `--tools` limits the built-in tools, and the only write rule is the job directory.
+ */
+export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string[] {
+  const jobRel = path.relative(options.workspace, jobDir)
+  // A skill may need to run a tool (`allow: Bash(asciinema *)`); then Bash joins the tool list.
+  const tools = ['Read', 'Glob', 'Grep', 'Edit', 'Write']
+  for (const rule of options.allow) {
+    const tool = rule.split('(')[0]?.trim()
+    if (tool && !tools.includes(tool)) tools.push(tool)
+  }
+  const base = options.config.baseArgs
+    ? substitute(options.config.baseArgs, jobDir, options.workspace)
+    : [
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        // Deny, never ask: whatever the allow list below does not cover is refused.
+        '--permission-mode',
+        'dontAsk',
+        '--permission-prompts',
+        'none',
+        // Ignores user/project settings (a broad allow rule there would defeat the list) and
+        // confines the file tools to the working directory, so nothing outside the workspace
+        // can be read.
+        '--restricted',
+        '--tools',
+        tools.join(','),
+        '--allowedTools',
+        `Edit(${jobRel}/**)`,
+        `Write(${jobRel}/**)`,
+        ...options.allow,
+        '--safe-mode',
+        '--no-session-persistence',
+      ]
+  const model = options.config.model ? ['--model', options.config.model] : []
+  return [...base, ...model, ...options.config.extraArgs]
+}
+
+type StreamLine = {
+  type?: string
+  subtype?: string
+  model?: string
+  is_error?: boolean
+  result?: string
+  message?: {
+    content?: { type?: string; text?: string; name?: string; input?: Record<string, unknown> }[]
+  }
+}
+
+export function readClaudeLine(line: string): { progress?: string; error?: string } {
+  let event: StreamLine
+  try {
+    event = JSON.parse(line) as StreamLine
+  } catch {
+    return {}
+  }
+  if (event.type === 'system' && event.subtype === 'init')
+    return { progress: `claude started (${event.model ?? 'default model'})` }
+  if (event.type === 'assistant') {
+    for (const part of event.message?.content ?? []) {
+      if (part.type === 'tool_use') {
+        const input = part.input ?? {}
+        const detail = input.file_path ?? input.path ?? input.pattern ?? input.command ?? ''
+        return { progress: clip(`${part.name ?? 'tool'} ${String(detail)}`) }
+      }
+      if (part.type === 'text' && part.text?.trim()) return { progress: clip(part.text) }
+    }
+    return {}
+  }
+  if (event.type === 'result') {
+    return event.is_error
+      ? { error: clip(event.result ?? event.subtype ?? 'error') }
+      : { progress: 'claude finished' }
+  }
+  return {}
+}
+
+export const claudeSpec: CliSpec = {
+  name: 'claude',
+  command: 'claude',
+  buildArgs: buildClaudeArgs,
+  readLine: readClaudeLine,
+  authPattern:
+    /invalid api key|please run \/login|not logged in|authentication|unauthorized|oauth token/i,
+  loginHint: 'Run `claude` once in a terminal and sign in.',
+}
+
+export const createClaudeAdapter = () => createProcessAdapter(claudeSpec)

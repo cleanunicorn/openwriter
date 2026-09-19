@@ -3,6 +3,8 @@ import path from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { createClaudeAdapter } from './adapters/claude.ts'
+import { createCodexAdapter } from './adapters/codex.ts'
 import { createFakeAdapter, FakeGate } from './adapters/fake.ts'
 import { AdapterRegistry } from './adapters/registry.ts'
 import type { AppOptions, ServerContext } from './context.ts'
@@ -32,7 +34,10 @@ export function createApp(options: AppOptions): CreatedApp {
   const events = new EventHub()
   const watcher = new DocWatcher(workspace, events)
   const gate = new FakeGate(options.fakeControl)
-  const registry = new AdapterRegistry().register(createFakeAdapter(gate))
+  const registry = new AdapterRegistry()
+    .register(createClaudeAdapter())
+    .register(createCodexAdapter())
+    .register(createFakeAdapter(gate))
   const context: ServerContext = {
     options,
     workspace,

@@ -1,0 +1,90 @@
+import path from 'node:path'
+import { type CliSpec, createProcessAdapter, substitute } from './process-adapter.ts'
+import type { AdapterOptions } from './types.ts'
+
+const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
+
+/**
+ * `codex exec` with JSONL output. Flags verified against `codex exec --help` 0.155.1 — see
+ * DECISIONS.md, "Real agents", for the sandbox rows that were tried and which one ships.
+ */
+export function buildCodexArgs(jobDir: string, options: AdapterOptions): string[] {
+  const base = options.config.baseArgs
+    ? substitute(options.config.baseArgs, jobDir, options.workspace)
+    : [
+        'exec',
+        '--json',
+        '--skip-git-repo-check',
+        '--ephemeral',
+        '-o',
+        path.join(jobDir, 'last-message.txt'),
+        // The job directory is the only writable root. `-s read-only --add-dir <jobDir>` does not
+        // work: --add-dir only extends workspace-write. /tmp and $TMPDIR are excluded as well.
+        '-C',
+        jobDir,
+        '-s',
+        'workspace-write',
+        '-c',
+        'sandbox_workspace_write.exclude_slash_tmp=true',
+        '-c',
+        'sandbox_workspace_write.exclude_tmpdir_env_var=true',
+      ]
+  // codex has no per-command allow list; a skill that needs the network says so explicitly.
+  const network = options.network ? ['-c', 'sandbox_workspace_write.network_access=true'] : []
+  const model = options.config.model ? ['-m', options.config.model] : []
+  return [...base, ...network, ...model, ...options.config.extraArgs, '-']
+}
+
+/**
+ * codex runs with the job directory as its working root (a recorded deviation from the spec's
+ * "workspace as working directory": it is what makes the job directory the only writable place).
+ * The prompt therefore says where the workspace is and how the paths in instruction.md map.
+ */
+export function codexPrompt(jobDir: string, options: AdapterOptions): string {
+  const jobRel = path.relative(options.workspace, jobDir)
+  return [
+    `Your working directory is the job directory: ${jobDir}`,
+    `The workspace root is ${options.workspace}. You may read it (for example sources/), but you can only write in your working directory.`,
+    `Paths that start with ${jobRel}/ in the instructions are files in your working directory.`,
+    options.prompt.replaceAll(`${jobRel}/`, ''),
+  ].join('\n')
+}
+
+type CodexLine = {
+  type?: string
+  message?: string
+  error?: { message?: string }
+  item?: { type?: string; text?: string; command?: string; path?: string }
+}
+
+export function readCodexLine(line: string): { progress?: string; error?: string } {
+  let event: CodexLine
+  try {
+    event = JSON.parse(line) as CodexLine
+  } catch {
+    return {}
+  }
+  if (event.type === 'thread.started') return { progress: 'codex started' }
+  if (event.type === 'error' || event.type === 'turn.failed') {
+    return { error: clip(event.error?.message ?? event.message ?? 'codex reported an error') }
+  }
+  if (event.type === 'turn.completed') return { progress: 'codex finished' }
+  const item = event.item
+  if (item === undefined || event.type !== 'item.completed') return {}
+  if (item.command) return { progress: clip(`$ ${item.command}`) }
+  if (item.text?.trim()) return { progress: clip(item.text) }
+  if (item.path) return { progress: clip(`${item.type ?? 'file'} ${item.path}`) }
+  return {}
+}
+
+export const codexSpec: CliSpec = {
+  name: 'codex',
+  command: 'codex',
+  buildArgs: buildCodexArgs,
+  buildPrompt: codexPrompt,
+  readLine: readCodexLine,
+  authPattern: /not logged in|401|unauthorized|api key|login required|codex login/i,
+  loginHint: 'Run `codex login` in a terminal.',
+}
+
+export const createCodexAdapter = () => createProcessAdapter(codexSpec)

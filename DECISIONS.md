@@ -147,6 +147,96 @@ directory keeps the name `.zen/`.
 - **Always-visible control: the job tray,** and only while at least one job exists. It is the
   one place that shows running, failed, and stale work, so nothing is lost silently.
 
+## Real agents (verified 2026-09-19)
+
+Flags were read from the installed tools' `--help` and then exercised with
+`node scripts/verify-adapter.ts <adapter>`: one small job in a throwaway copy of the sample
+workspace, with sentinel files instead of trust in the prompt. The four checks: (1) a valid
+`result.json` arrives (write inside the job directory works), (2) nothing else in the workspace
+changed and a probe file the agent was told to create does not exist, (3) the result reflects
+`article.md` (the workspace is readable), (4) a secret file outside the workspace was not read.
+
+### claude (Claude Code 2.1.278)
+
+Shipped command line (cwd = workspace, prompt on stdin):
+
+```
+claude -p --output-format stream-json --verbose
+  --permission-mode dontAsk --permission-prompts none --restricted
+  --tools Read,Glob,Grep,Edit,Write
+  --allowedTools "Edit(.zen/jobs/<id>/**)" "Write(.zen/jobs/<id>/**)"
+  --safe-mode --no-session-persistence [--model <m>] [...extraArgs]
+```
+
+| Run | Flags | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | allow list + `--permission-prompts none` only (the first plan) | pass | **fail** | pass | **fail** |
+| 2 | run 1 + `--permission-mode dontAsk --restricted` | pass | pass | pass | pass |
+| 3 | the shipped default above | pass | pass | pass | pass |
+
+- **An allow list alone confines nothing.** In run 1 the agent created `probe.txt` in the
+  workspace root and read the secret outside the workspace: the writer's own settings decide what
+  is allowed beyond the list. `--permission-mode dontAsk` denies everything the list does not
+  cover ("Permission to use Write has been denied because Claude Code is running in don't ask
+  mode"), and `--restricted` ignores user/project settings and confines the file tools to the
+  working directory ("… is outside <workspace>; --restricted confines the file tools to the
+  working directory").
+- `--restricted` removes Bash unless `--tools` names it; a skill that declares
+  `allow: Bash(asciinema *)` gets `Bash` added to `--tools` and its rule to `--allowedTools`.
+- `--restricted` also ignores the model in the writer's settings; set `model` for the adapter in
+  openwrite's settings to choose one.
+- `--safe-mode` keeps the writer's hooks, plugins, MCP servers and `CLAUDE.md` out of job runs.
+  `--bare` was rejected: it needs an API key, and the writer uses their login.
+- Differences from the spec: it only says "headless print mode with streamed JSON output".
+  `--verbose` is kept with `stream-json`; running without it was not tried.
+- Cost of the three runs: each capped with `--max-budget-usd 0.50`, 19–24 s each.
+
+### codex (codex-cli 0.155.1)
+
+Shipped command line (prompt on stdin, `-` last):
+
+```
+codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
+  -C <jobDir> -s workspace-write
+  -c sandbox_workspace_write.exclude_slash_tmp=true
+  -c sandbox_workspace_write.exclude_tmpdir_env_var=true [-m <model>] [...extraArgs] -
+```
+
+| Run | Sandbox | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `-C <workspace> -s read-only --add-dir <jobDir>` | **fail** | pass | — | — |
+| 2 | `-C <jobDir> -s workspace-write`, /tmp excluded (shipped) | pass | pass | pass | **fail** |
+| 3 | run 2 + `-c sandbox_permissions=[]` | pass | pass | pass | **fail** |
+
+- **`--add-dir` does not make a directory writable under `read-only`** (run 1: "the read-only
+  sandbox blocked writing `result.json`"); it only extends `workspace-write`.
+- **The job directory is codex's working root.** That is what makes it the only writable place.
+  It deviates from the spec's "workspace as working directory"; the adapter's prompt tells the
+  agent where the workspace is and how the paths in `instruction.md` map. Writing to the
+  workspace root was denied ("read-only file system").
+- **codex cannot confine reads.** Its sandbox restricts writes only: in runs 2 and 3 the agent
+  read the secret outside the workspace with `cat`. No flag in `codex exec --help` changes that.
+  Writes — the part the file contract depends on — are confined to the job directory.
+  Workspace-wide write (`-C <workspace> -s workspace-write`) was not needed and is not shipped.
+- codex has no per-command allow list; a skill that declares `network: true` adds
+  `-c sandbox_workspace_write.network_access=true`.
+
+### Both
+
+- No default command line contains a bypass flag (`--dangerously-skip-permissions`,
+  `bypassPermissions`, `--dangerously-bypass-approvals-and-sandbox`, `danger-full-access`); a unit
+  test asserts it. `command`, `model`, `baseArgs` (with `{jobDir}`, `{jobRel}`, `{workspace}`),
+  and `extraArgs` are the writer's to override in settings — the spec forbids a bypass
+  *default*, not the writer's own choice.
+- One `spawnAgent` launches every process: executable plus argv (never a shell), the prompt on
+  stdin, stdout split into lines across chunks, bounded output tails, `ENOENT` → `missing-cli`,
+  and cancel signals the whole process group (SIGTERM, then SIGKILL after 3 s) because agent
+  CLIs spawn children.
+- Auth failures are recognised per adapter from the stream's error event or stderr and become
+  `failed · not signed in` with the command to run. They are never "repaired".
+- Real agents never run in `npm test` or CI: `scripts/verify-adapter.ts` is manual, and its
+  report scrubs home and temp paths.
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point

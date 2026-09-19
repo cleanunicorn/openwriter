@@ -73,13 +73,15 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
 
       const run = async (): Promise<Completion> => {
         const instruction = readFileSync(path.join(jobDir, 'instruction.md'), 'utf8')
-        const scenario = instruction.match(/fake:([a-z-]+)/)?.[1] ?? 'upper'
+        const named = instruction.match(/fake:([a-z-]+)/)?.[1]
         const targets = JSON.parse(
           readFileSync(path.join(jobDir, 'targets.json'), 'utf8'),
         ) as Targets
         const blocks = readBlocks(jobDir)
         const byId = new Map(blocks.map((block) => [block.id, block.raw]))
         const first = targets.blockIds[0] ?? 'b0'
+        // An empty document can only be drafted into; everything else defaults to `upper`.
+        const scenario = named ?? (first === 'b0' ? 'draft' : 'upper')
         channel.push({ text: `fake agent: scenario "${scenario}"${isRepair ? ' (repair)' : ''}` })
         channel.push({ text: `read ${blocks.length} blocks, ${targets.blockIds.length} targets` })
 

@@ -232,6 +232,32 @@ describe('lifecycle', () => {
   })
 })
 
+describe('agent selection', () => {
+  it('switching the main agent is a settings change: the next job uses it', async () => {
+    const plain = createTestApp({ adapterOverride: undefined })
+    const config = path.join(plain.workspace, '.zen', 'config.json')
+    const missing = { command: 'openwrite-no-such-cli' }
+    try {
+      for (const agent of ['claude', 'codex']) {
+        writeFileSync(
+          config,
+          JSON.stringify({ mainAgent: agent, adapters: { claude: missing, codex: missing } }),
+        )
+        const job = await json(
+          plain.send('POST', '/api/jobs', { ...request('x', byText('## Why blocks')) }),
+        )
+        expect(job.adapter).toBe(agent)
+        await expect.poll(() => plain.jobs.get(job.id).state, { timeout: 5000 }).toBe('failed')
+        // The command override from settings was used, and a missing CLI is a clear job state.
+        expect(plain.jobs.get(job.id)).toMatchObject({ reason: 'missing-cli' })
+        expect(plain.jobs.get(job.id).error).toContain('openwrite-no-such-cli')
+      }
+    } finally {
+      plain.cleanup()
+    }
+  })
+})
+
 describe('review decisions', () => {
   async function readyJob(instruction: string, text = 'Results arrive'): Promise<Job> {
     const job = await start(request(instruction, byText(text)))

@@ -6,6 +6,8 @@ import { ResearchPanel } from './jobs/ResearchPanel.tsx'
 import { useSelectionPill } from './jobs/selection.ts'
 import { Tray } from './jobs/Tray.tsx'
 import './jobs/commands.ts'
+import './settings/commands.ts'
+import { Settings } from './settings/Settings.tsx'
 import { startJobs } from './state/jobs.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
@@ -28,6 +30,7 @@ export function App() {
   const doc = useApp(currentDoc)
   const palette = useApp((state) => state.palette)
   const theme = useApp((state) => state.config?.config.theme)
+  const panel = useApp((state) => state.panel)
 
   const ghosts = useGhosts(doc)
   const [pill, setPill] = useSelectionPill()
@@ -140,6 +143,7 @@ export function App() {
       </main>
       <ResearchPanel />
       <Tray />
+      {panel === 'settings' && <Settings />}
       {palette !== null && <Palette mode={palette} />}
     </>
   )
