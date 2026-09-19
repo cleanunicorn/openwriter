@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
-import { blockWith, briefPath, configPath, mod, openArticle } from './helpers.ts'
+import { blockWith, briefPath, configPath, mod, openArticle, runCommand } from './helpers.ts'
 
 test('the palette creates a new article and switches between articles', async ({ page, app }) => {
   await openArticle(page)
@@ -20,9 +20,7 @@ test('the palette creates a new article and switches between articles', async ({
   expect(existsSync(app.articlePath('shipping-a-block-editor'))).toBe(true)
   expect(existsSync(briefPath(app, 'shipping-a-block-editor'))).toBe(true)
 
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('open hello')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'open hello')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
 })
 
@@ -67,9 +65,7 @@ test('zen layout: a centred column of about 680px, no toolbar, no sidebar, switc
   await expect(page.getByRole('navigation')).toHaveCount(0)
 
   for (const next of ['light', 'dark']) {
-    await page.keyboard.press(`${mod}+k`)
-    await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
-    await page.keyboard.press('Enter')
+    await runCommand(page, 'theme')
     await expect(page.locator('html')).toHaveAttribute('data-theme', next)
   }
   const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
@@ -86,12 +82,8 @@ test('diagrams follow a theme switch instead of keeping the old theme', async ({
       .first()
       .evaluate((node) => getComputedStyle(node).fill)
   const light = await nodeFill()
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
-  await page.keyboard.press('Enter')
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('theme')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'theme')
+  await runCommand(page, 'theme')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(async () => expect(await nodeFill()).not.toBe(light)).toPass()
 })

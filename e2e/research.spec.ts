@@ -4,9 +4,9 @@ import {
   expectFile,
   expectWaiting,
   ghosts,
-  mod,
   openArticle,
   release,
+  runCommand,
 } from './helpers.ts'
 
 test('a research answer opens in a side panel and a note can be inserted as a block', async ({
@@ -16,9 +16,7 @@ test('a research answer opens in a side panel and a note can be inserted as a bl
   await openArticle(page)
   await expect(page.getByRole('complementary')).toHaveCount(0)
 
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('research')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'research')
   await page
     .getByRole('combobox', { name: 'Research question' })
     .fill('fake:research what do my notes say about blocks?')
@@ -53,9 +51,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport)
     await openArticle(page)
-    await page.keyboard.press(`${mod}+k`)
-    await page.getByRole('combobox', { name: 'Command palette' }).fill('research')
-    await page.keyboard.press('Enter')
+    await runCommand(page, 'research')
     await page.getByRole('combobox', { name: 'Research question' }).fill('fake:research anything')
     await page.keyboard.press('Enter')
     await expectWaiting(app, 1)

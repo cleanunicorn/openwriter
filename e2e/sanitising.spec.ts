@@ -12,6 +12,7 @@ import {
   ghosts,
   mod,
   openArticle,
+  openPalette,
   release,
   selectWord,
 } from './helpers.ts'
@@ -76,8 +77,7 @@ test('hostile markup in an agent result renders inert in the ghost and after acc
 test('the standalone HTML export carries none of it', async ({ page }) => {
   await openArticle(page)
   await typeHostileBlock(page)
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('export html')
+  await openPalette(page, 'export html')
   const download = page.waitForEvent('download')
   await page.keyboard.press('Enter')
   const saved = path.join(mkdtempSync(path.join(os.tmpdir(), 'openwrite-xss-')), 'export.zip')

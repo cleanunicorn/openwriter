@@ -14,6 +14,7 @@ import {
   openArticle,
   rejectButton,
   release,
+  runCommand,
   selectWord,
   tray,
   waitingJobs,
@@ -99,9 +100,7 @@ test('an article job is exclusive: it waits for running jobs, and new block jobs
   await ask(page, 'fake:upper block job')
   const [blockJob] = await expectWaiting(app, 1)
 
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('whole article')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'whole article')
   await page
     .getByRole('combobox', { name: 'Instruction for the whole article' })
     .fill('fake:insert article job')
@@ -133,9 +132,7 @@ test('an ordinary merge while a whole-article job runs does not cancel it', asyn
   app,
 }) => {
   await openArticle(page)
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('whole article')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'whole article')
   await page
     .getByRole('combobox', { name: 'Instruction for the whole article' })
     .fill('fake:insert long draft')

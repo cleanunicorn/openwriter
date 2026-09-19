@@ -8,9 +8,9 @@ import {
   expectWaiting,
   ghosts,
   jobFile,
-  mod,
   openArticle,
   release,
+  runCommand,
   selectWord,
   tray,
 } from './helpers.ts'
@@ -20,9 +20,7 @@ test('a skill from the palette runs as an ordinary job; the diagram renders in t
   app,
 }) => {
   await openArticle(page)
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('run skill diagram')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'run skill diagram')
   await page
     .getByRole('combobox', { name: 'Instruction for the diagram skill' })
     .fill('fake:diagram from idea to post')

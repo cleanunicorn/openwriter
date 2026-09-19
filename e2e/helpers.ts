@@ -65,6 +65,18 @@ export async function expectFile(path: string, check: (text: string) => void): P
   await expect(() => check(readFileSync(path, 'utf8'))).toPass({ timeout: 5000 })
 }
 
+/** Open the command palette and type a query; the caller decides when to press Enter. */
+export async function openPalette(page: Page, query: string): Promise<void> {
+  await page.keyboard.press(`${mod}+k`)
+  await page.getByRole('combobox', { name: 'Command palette' }).fill(query)
+}
+
+/** Run the palette command that `query` matches first. */
+export async function runCommand(page: Page, query: string): Promise<void> {
+  await openPalette(page, query)
+  await page.keyboard.press('Enter')
+}
+
 // ── jobs ──────────────────────────────────────────────────────────────────────────────────
 
 export const pill = (page: Page): Locator =>

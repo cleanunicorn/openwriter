@@ -1,12 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './fixtures.ts'
-import { configPath, mod, openArticle } from './helpers.ts'
+import { configPath, mod, openArticle, runCommand } from './helpers.ts'
 
 async function openSettings(page: import('@playwright/test').Page) {
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('settings')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'settings')
   await expect(page.getByRole('form', { name: 'Settings' })).toBeVisible()
 }
 
@@ -84,9 +82,7 @@ test('the content directory can point outside the workspace, and says so', async
   await expect(form).toContainText('outside the workspace')
   await form.getByRole('button', { name: 'Close' }).click()
 
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('From Hugo')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'From Hugo')
   await expect(page.getByText('Text in the Hugo site.')).toBeVisible()
 })
 

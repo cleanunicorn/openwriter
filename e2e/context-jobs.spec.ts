@@ -10,24 +10,18 @@ import {
   expectWaiting,
   ghosts,
   jobFile,
-  mod,
   openArticle,
   release,
+  runCommand,
 } from './helpers.ts'
-
-async function palette(page: import('@playwright/test').Page, query: string) {
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill(query)
-  await page.keyboard.press('Enter')
-}
 
 test('strategy and brief open in the same block editor', async ({ page, app }) => {
   await openArticle(page)
-  await palette(page, 'edit strategy')
+  await runCommand(page, 'edit strategy')
   await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
   await expect(page.getByText('strategy.md', { exact: true })).toBeVisible()
 
-  await palette(page, 'edit brief')
+  await runCommand(page, 'edit brief')
   await expect(page.getByText('brief · hello-openwrite')).toBeVisible()
   await page.getByText('Target reader:').click()
   await page.keyboard.press(blockEnd)
@@ -37,7 +31,7 @@ test('strategy and brief open in the same block editor', async ({ page, app }) =
     expect(file).toContain('publishes with Hugo. They deploy on Fridays.'),
   )
 
-  await palette(page, 'open article hello')
+  await runCommand(page, 'open article hello')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
 })
 
@@ -47,7 +41,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
 }) => {
   await openArticle(page)
   const article = readFileSync(app.articlePath(), 'utf8')
-  await palette(page, 'draft brief')
+  await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · hello-openwrite')).toBeVisible()
 
   const [jobId] = await expectWaiting(app, 1)
@@ -70,12 +64,12 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
 
 test('an empty brief is drafted through the start anchor', async ({ page, app }) => {
   await openArticle(page)
-  await palette(page, 'new article')
+  await runCommand(page, 'new article')
   await page.getByRole('combobox', { name: 'Article title' }).fill('Fresh Post')
   await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: 'Fresh Post', level: 1 })).toBeVisible()
 
-  await palette(page, 'draft brief')
+  await runCommand(page, 'draft brief')
   await expect(page.getByText('brief · fresh-post')).toBeVisible()
   const [jobId] = await expectWaiting(app, 1)
   expect(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8')).toContain('"b0"')
@@ -88,8 +82,8 @@ test('an empty brief is drafted through the start anchor', async ({ page, app })
 
 test('"draft article from brief" targets the article', async ({ page, app }) => {
   await openArticle(page)
-  await palette(page, 'edit strategy')
-  await palette(page, 'draft article')
+  await runCommand(page, 'edit strategy')
+  await runCommand(page, 'draft article')
   await expect(page.getByRole('heading', { name: 'Hello, openwrite', level: 1 })).toBeVisible()
   const [jobId] = await expectWaiting(app, 1)
   const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')

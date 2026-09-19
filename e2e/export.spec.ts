@@ -4,11 +4,10 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { strFromU8, unzipSync } from 'fflate'
 import { expect, test } from './fixtures.ts'
-import { mod, notice, openArticle } from './helpers.ts'
+import { notice, openArticle, openPalette, runCommand } from './helpers.ts'
 
 async function exportVia(page: import('@playwright/test').Page, query: string) {
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill(query)
+  await openPalette(page, query)
   const download = page.waitForEvent('download')
   await page.keyboard.press('Enter')
   const file = await download
@@ -86,8 +85,6 @@ test('a diagram that cannot render fails the export with a message', async ({ pa
   writeFileSync(app.articlePath(), '# Broken\n\n```mermaid\nthis is not a diagram\n```\n')
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Broken' })).toBeVisible()
-  await page.keyboard.press(`${mod}+k`)
-  await page.getByRole('combobox', { name: 'Command palette' }).fill('export html')
-  await page.keyboard.press('Enter')
+  await runCommand(page, 'export html')
   await expect(notice(page)).toContainText('diagram could not be rendered')
 })
