@@ -22,7 +22,7 @@ function Ghost(props: {
   changed: boolean
   children: ReactNode
 }) {
-  const { job, index, op, first, changed } = props
+  const { job, index, total, op, first, changed, children } = props
   const accept = () => void decide(job.id, [index], []).then(focusNextGhost)
   const reject = () => void decide(job.id, [], [index]).then(focusNextGhost)
   const onKeyDown = (event: KeyboardEvent) => {
@@ -49,7 +49,7 @@ function Ghost(props: {
       role="group"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a proposal is reviewed from the keyboard (Enter / Backspace)
       tabIndex={0}
-      aria-label={`Proposed ${kind} ${index + 1} of ${props.total}`}
+      aria-label={`Proposed ${kind} ${index + 1} of ${total}`}
       data-testid="ghost"
       data-job-id={job.id}
       onKeyDown={onKeyDown}
@@ -78,7 +78,7 @@ function Ghost(props: {
       {changed && (
         <div className="ghost-flag">changed since request — compared with your current text</div>
       )}
-      <div className="ghost-body">{props.children}</div>
+      <div className="ghost-body">{children}</div>
       <div className="ghost-actions">
         <button type="button" className="link" onMouseDown={keepFocus} onClick={accept}>
           Accept
