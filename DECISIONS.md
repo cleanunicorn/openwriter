@@ -268,6 +268,10 @@ codex exec --json --skip-git-repo-check --ephemeral
   the browser anyway, so the HTML body is rendered by the editor's own pipeline (export mode) and
   posted; the server wraps it in a template with one `style.css`, adds the bundle's files, and
   zips with `fflate`. No headless browser on the server, no CDN in the page.
+- **The standalone HTML export is baked light.** Diagrams are rendered to SVG once, with
+  mermaid's light theme; a `prefers-color-scheme: dark` block in the export stylesheet would put
+  those light diagrams on a dark page, so there is none. Its colours are the app's light tokens
+  and `export.test.ts` checks their contrast.
 - **Exports commit the open editor and save first,** so the zip equals what is on disk.
 - **Symlinks in a bundle are never followed or exported.**
 

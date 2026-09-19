@@ -2,6 +2,8 @@ import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { contrast, WCAG_AA } from '../shared/contrast.ts'
+import { EXPORT_STYLESHEET } from './export.ts'
 import { createTestApp, type TestApp } from './test-helpers.ts'
 
 let t: TestApp
@@ -81,5 +83,27 @@ describe('html export', () => {
       await t.send('POST', '/api/export/html', { slug: 'bare', title: 'Bare', html: '<p>x</p>' }),
     )
     expect(Object.keys(files).sort()).toEqual(['bare/index.html', 'bare/style.css'])
+  })
+})
+
+describe('export stylesheet', () => {
+  it('is baked light: no dark variant that the baked-light diagrams would contradict', () => {
+    expect(EXPORT_STYLESHEET).toContain('color-scheme: light;')
+    expect(EXPORT_STYLESHEET).not.toContain('prefers-color-scheme')
+  })
+
+  it('every text colour meets WCAG AA on the page and on code backgrounds', () => {
+    const colours = [...EXPORT_STYLESHEET.matchAll(/[\s{;]color:\s*(#[0-9a-f]{6})/g)].map(
+      (match) => match[1] as string,
+    )
+    expect(colours.length).toBeGreaterThanOrEqual(8)
+    for (const colour of new Set(colours)) {
+      for (const background of ['#fbfaf8', '#f1efea']) {
+        const ratio = contrast(colour, background)
+        expect(ratio, `${colour} on ${background} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(
+          WCAG_AA,
+        )
+      }
+    }
   })
 })

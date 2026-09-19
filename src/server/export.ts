@@ -27,7 +27,12 @@ export function markdownZip(bundleDir: string, slug: string): Uint8Array {
   return zipSync(under(slug, readBundle(bundleDir)), { level: 6 })
 }
 
-export const EXPORT_STYLESHEET = `:root { color-scheme: light dark; }
+/**
+ * The exported page is baked light, on purpose: its diagrams are rendered to SVG once, with
+ * mermaid's light theme, so a dark variant of the page would put light diagrams on a dark
+ * background. Colours are the app's light tokens (theme.css); export.test.ts checks their contrast.
+ */
+export const EXPORT_STYLESHEET = `:root { color-scheme: light; }
 body { margin: 0; font: 18px/1.7 Charter, 'Iowan Old Style', Georgia, serif; color: #22211f; background: #fbfaf8; }
 main { width: min(680px, 100% - 48px); margin: 0 auto; padding: 72px 0 96px; }
 h1 { font-size: 2em; line-height: 1.2; margin: 0 0 0.6em; }
@@ -36,8 +41,8 @@ h3 { font-size: 1.15em; margin: 1.6em 0 0.4em; }
 a { color: #3b6ea5; }
 img, svg, video { max-width: 100%; height: auto; }
 figure { margin: 1.5em 0; text-align: center; }
-figcaption { font-size: 0.85em; color: #8a8780; }
-blockquote { margin: 1.2em 0; padding-left: 16px; border-left: 3px solid #e6e3dd; color: #6f6c66; }
+figcaption { font-size: 0.85em; color: #66635d; }
+blockquote { margin: 1.2em 0; padding-left: 16px; border-left: 3px solid #e6e3dd; color: #66635d; }
 code { font: 0.85em ui-monospace, 'SF Mono', Menlo, Consolas, monospace; background: #f1efea; padding: 0.1em 0.3em; border-radius: 3px; }
 pre { background: #f1efea; padding: 14px 16px; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
 pre code { background: none; padding: 0; }
@@ -45,17 +50,11 @@ table { border-collapse: collapse; font-size: 0.9em; }
 th, td { border-bottom: 1px solid #e6e3dd; padding: 6px 12px; text-align: left; }
 hr { border: 0; border-top: 1px solid #e6e3dd; margin: 2em 0; }
 .diagram { text-align: center; margin: 1.5em 0; }
-.hljs-keyword, .hljs-built_in, .hljs-type { color: #a3509a; }
-.hljs-string, .hljs-attr { color: #2f7d4b; }
-.hljs-comment { color: #8a8780; font-style: italic; }
-.hljs-number, .hljs-literal { color: #b2611f; }
+.hljs-keyword, .hljs-built_in, .hljs-type { color: #8a3f82; }
+.hljs-string, .hljs-attr { color: #226138; }
+.hljs-comment { color: #66635d; font-style: italic; }
+.hljs-number, .hljs-literal { color: #8f4c14; }
 .hljs-title, .hljs-function { color: #3b6ea5; }
-@media (prefers-color-scheme: dark) {
-  body { color: #dddad4; background: #191919; }
-  a { color: #7fb0e6; }
-  code, pre { background: #232321; }
-  th, td, hr, blockquote { border-color: #2e2d2b; }
-}
 `
 
 const escapeHtml = (text: string) =>
