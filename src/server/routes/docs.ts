@@ -13,7 +13,7 @@ import {
   storeWithoutOverwrite,
 } from '../assets.ts'
 import type { ServerContext } from '../context.ts'
-import { contentTypeFor, HttpError, parseBody } from '../http.ts'
+import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
 import { resolveWithin } from '../paths.ts'
 
 function refFrom(kind: string, slug: string | undefined): DocRef {
@@ -65,14 +65,10 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
   })
 
   app.get('/api/docs/article/:slug/assets/*', (c) => {
-    const prefix = `/api/docs/article/${c.req.param('slug')}/assets/`
-    const relative = decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
-    const file = resolveWithin(workspace.bundleDir(c.req.param('slug')), relative)
+    const slug = c.req.param('slug')
+    const relative = pathTail(c, `/api/docs/article/${slug}/assets/`)
+    const file = resolveWithin(workspace.bundleDir(slug), relative)
     if (!existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, 'asset not found')
-    return c.body(readFileSync(file), 200, {
-      'content-type': contentTypeFor(file),
-      'x-content-type-options': 'nosniff',
-      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
-    })
+    return fileResponse(c, readFileSync(file), file)
   })
 }

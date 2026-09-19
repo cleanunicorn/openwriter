@@ -4,7 +4,7 @@ import { SkillInfoSchema } from '../../shared/api-types.ts'
 import { DecisionsRequestSchema, JobRequestSchema } from '../../shared/jobs/job-types.ts'
 import type { FakeGate } from '../adapters/fake.ts'
 import type { ServerContext } from '../context.ts'
-import { contentTypeFor, HttpError, parseBody } from '../http.ts'
+import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
 import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
 import { listSkills } from '../skills.ts'
@@ -34,17 +34,12 @@ export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobMana
   // Ghost previews load job assets from here until they are accepted into the bundle.
   app.get('/api/jobs/:id/assets/*', (c) => {
     const id = c.req.param('id')
-    const prefix = `/api/jobs/${id}/assets/`
-    const relative = decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
+    const relative = pathTail(c, `/api/jobs/${id}/assets/`)
     // Resolved from the trusted job directory and read without following links: `assets` itself
     // is agent-writable and may be a symlink.
     const data = readJobAsset(jobs.jobDir(id), `assets/${relative}`)
     if (data === null) throw new HttpError(404, 'asset not found')
-    return c.body(new Uint8Array(data), 200, {
-      'content-type': contentTypeFor(relative),
-      'x-content-type-options': 'nosniff',
-      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
-    })
+    return fileResponse(c, data, relative)
   })
 
   // Only what the palette needs: the prompt body and the permission headers stay on the server.

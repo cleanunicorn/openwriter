@@ -46,3 +46,20 @@ const CONTENT_TYPES: Record<string, string> = {
 
 export const contentTypeFor = (file: string): string =>
   CONTENT_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()] ?? 'application/octet-stream'
+
+/** The part of the request path after `prefix`, decoded. */
+export function pathTail(c: Context, prefix: string): string {
+  return decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
+}
+
+/**
+ * Answer with a file from the workspace. Assets can be anything an agent or the writer put
+ * there, so they are never sniffed and never allowed to run anything when opened directly.
+ */
+export function fileResponse(c: Context, data: Uint8Array, name: string): Response {
+  return c.body(new Uint8Array(data), 200, {
+    'content-type': contentTypeFor(name),
+    'x-content-type-options': 'nosniff',
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",
+  })
+}
