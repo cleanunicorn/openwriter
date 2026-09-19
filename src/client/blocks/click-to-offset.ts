@@ -32,7 +32,7 @@ export function clickToOffset(raw: string, target: Element, x: number, y: number
   const region = raw.slice(from, to)
   for (const length of [24, 12, 6, 3]) {
     const needle = before.slice(-length)
-    if (needle.length < Math.min(length, 3)) continue
+    if (needle.length < 3) continue
     const found = region.indexOf(needle)
     if (found !== -1) return from + found + needle.length
   }

@@ -46,7 +46,7 @@ function targetFromSelection(): PillTarget | null {
   const range = selection.getRangeAt(0)
   const container = range.commonAncestorContainer
   const element = container instanceof Element ? container : container.parentElement
-  if (element === null || element === undefined || element.closest('.blocks') === null) return null
+  if (element === null || element.closest('.blocks') === null) return null
   if (element.closest('.ghost') !== null) return null
   const block = element.closest<HTMLElement>('[data-testid="block"]')
   const blockId = block?.dataset.blockId
