@@ -1,4 +1,8 @@
-export type BlockKind = 'frontmatter' | 'content'
+import { z } from 'zod'
+
+/** The one list of block kinds: the type, and the schema of a job's snapshot, both come from it. */
+export const BlockKindSchema = z.enum(['frontmatter', 'content'])
+export type BlockKind = z.infer<typeof BlockKindSchema>
 
 export type Slice = { raw: string; kind: BlockKind }
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DocRefSchema } from '../api-types.ts'
+import { BlockKindSchema } from '../blocks/types.ts'
 import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
 
@@ -45,9 +46,7 @@ export const SelectionSchema = z.object({
 })
 
 export const SnapshotSchema = z.object({
-  blocks: z.array(
-    z.object({ id: BlockId, raw: z.string(), kind: z.enum(['frontmatter', 'content']) }),
-  ),
+  blocks: z.array(z.object({ id: BlockId, raw: z.string(), kind: BlockKindSchema })),
   gaps: z.array(z.string()),
 })
 export type Snapshot = z.infer<typeof SnapshotSchema>
