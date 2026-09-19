@@ -7,7 +7,7 @@ import { Workspace } from '../workspace.ts'
 
 export function mountConfigRoutes(app: Hono, context: ServerContext): void {
   const { workspace, events, options } = context
-  const response = () => {
+  const configBody = () => {
     const { config, error } = workspace.config()
     // Never throws: a bad contentDir (hand-edited) must still leave settings reachable to fix it.
     const contentDirError = workspace.contentDirProblem()
@@ -21,7 +21,7 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     }
   }
 
-  app.get('/api/config', (c) => c.json(response()))
+  app.get('/api/config', (c) => c.json(configBody()))
 
   app.put('/api/config', async (c) => {
     const config = await parseBody(c, ConfigSchema)
@@ -39,6 +39,6 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     }
     context.watcher.reset()
     events.emit({ type: 'config.changed' })
-    return c.json(response())
+    return c.json(configBody())
   })
 }
