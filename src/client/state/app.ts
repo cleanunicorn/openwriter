@@ -18,6 +18,8 @@ export type PaletteMode =
 export type Panel = 'settings' | 'research' | null
 
 export type AppState = {
+  /** The first load: loading, ready, or why it failed. Empty and failed must not look alike. */
+  boot: 'loading' | 'ready' | { error: string }
   current: DocRef | null
   /** Every document opened this session keeps its IDs, history, and jobs across switches. */
   docs: Record<string, DocState>
@@ -30,6 +32,7 @@ export type AppState = {
 }
 
 export const store = createStore<AppState>({
+  boot: 'loading',
   current: null,
   docs: {},
   articles: [],
@@ -221,13 +224,24 @@ export function connectEvents(): () => void {
   return () => source.close()
 }
 
+let listeningForHash = false
+
 export async function start(): Promise<void> {
-  await Promise.all([refreshArticles(), refreshConfig(), refreshSkills()])
-  const fromHash = hashToRef(window.location.hash)
-  const first = store.get().articles[0]
-  const initial =
-    fromHash ?? (first === undefined ? null : ({ kind: 'article', slug: first.slug } as const))
-  if (initial !== null) await openDoc(initial)
+  store.set((state) => ({ ...state, boot: 'loading' }))
+  try {
+    await Promise.all([refreshArticles(), refreshConfig(), refreshSkills()])
+    const fromHash = hashToRef(window.location.hash)
+    const first = store.get().articles[0]
+    const initial =
+      fromHash ?? (first === undefined ? null : ({ kind: 'article', slug: first.slug } as const))
+    if (initial !== null) await openDoc(initial)
+    store.set((state) => ({ ...state, boot: 'ready' }))
+  } catch (error) {
+    store.set((state) => ({ ...state, boot: { error: (error as Error).message } }))
+    return
+  }
+  if (listeningForHash) return
+  listeningForHash = true
   window.addEventListener('hashchange', () => {
     const ref = hashToRef(window.location.hash)
     if (ref !== null) void openDoc(ref)

@@ -29,6 +29,7 @@ const inTextField = (target: EventTarget | null) =>
 
 export function App() {
   const doc = useApp(currentDoc)
+  const boot = useApp((state) => state.boot)
   const palette = useApp((state) => state.palette)
   const theme = useApp((state) => state.config?.config.theme)
   const panel = useApp((state) => state.panel)
@@ -97,7 +98,16 @@ export function App() {
             </button>
           </p>
         )}
-        {doc === null && (
+        {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
+        {typeof boot === 'object' && (
+          <p className="notice" role="alert">
+            openwrite could not load the workspace: {boot.error}{' '}
+            <button type="button" className="link" onClick={() => void start()}>
+              Retry
+            </button>
+          </p>
+        )}
+        {boot === 'ready' && doc === null && (
           <p className="quiet">No article yet. Press Ctrl/Cmd+K and choose “New article…”.</p>
         )}
         {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
