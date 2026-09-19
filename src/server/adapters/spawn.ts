@@ -115,8 +115,8 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
 
   return {
     done,
-    cancel: async (options) => {
-      if (options?.force) {
+    cancel: async ({ force } = {}) => {
+      if (force) {
         cancelled = true
         clearTimeout(killTimer)
         signalGroup('SIGKILL')
