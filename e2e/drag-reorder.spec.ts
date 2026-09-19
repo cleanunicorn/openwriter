@@ -1,5 +1,12 @@
 import { expect, test } from './fixtures.ts'
-import { blockTexts, blockWith, expectFile, keyboardMove, openArticle } from './helpers.ts'
+import {
+  blockTexts,
+  blockWith,
+  boundingBox,
+  expectFile,
+  keyboardMove,
+  openArticle,
+} from './helpers.ts'
 
 test('the drag handle appears on hover and reorders blocks with the keyboard', async ({
   page,
@@ -31,9 +38,8 @@ test('dragging a block by its handle with the mouse moves it', async ({ page, ap
   const source = blockWith(page, 'Results arrive as ghost diffs')
   const target = blockWith(page, 'What is next')
   await source.hover()
-  const handle = await source.getByTestId('drag-handle').boundingBox()
-  const destination = await target.boundingBox()
-  if (handle === null || destination === null) throw new Error('no box')
+  const handle = await boundingBox(source.getByTestId('drag-handle'))
+  const destination = await boundingBox(target)
 
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
   await page.mouse.down()

@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.ts'
-import { blockWith, editor, expectFile, openArticle } from './helpers.ts'
+import { blockWith, boundingBox, editor, expectFile, openArticle } from './helpers.ts'
 
 test('clicking a block swaps it to its raw markdown with the cursor near the click', async ({
   page,
@@ -7,8 +7,7 @@ test('clicking a block swaps it to its raw markdown with the cursor near the cli
 }) => {
   await openArticle(page)
   const paragraph = blockWith(page, 'Every paragraph, list')
-  const box = await paragraph.getByTestId('rendered').boundingBox()
-  if (box === null) throw new Error('no box')
+  const box = await boundingBox(paragraph.getByTestId('rendered'))
   // Click in the middle of the first line.
   await page.mouse.click(box.x + box.width / 2, box.y + 12)
 

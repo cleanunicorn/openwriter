@@ -1,5 +1,13 @@
 import { expect, test } from './fixtures.ts'
-import { expectFile, expectWaiting, ghosts, mod, openArticle, release } from './helpers.ts'
+import {
+  boundingBox,
+  expectFile,
+  expectWaiting,
+  ghosts,
+  mod,
+  openArticle,
+  release,
+} from './helpers.ts'
 
 test('a research answer opens in a side panel and a note can be inserted as a block', async ({
   page,
@@ -60,9 +68,8 @@ for (const viewport of [
     await expect(panel).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Block editor' })).toBeFocused()
 
-    const column = await page.getByRole('main').boundingBox()
-    const notes = await panel.boundingBox()
-    if (column === null || notes === null) throw new Error('no box')
+    const column = await boundingBox(page.getByRole('main'))
+    const notes = await boundingBox(panel)
     const besideTheText = column.x + column.width <= notes.x
     const belowTheText = column.y + column.height <= notes.y
     expect(besideTheText || belowTheText).toBe(true)

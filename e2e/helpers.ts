@@ -23,6 +23,13 @@ export async function openArticle(page: Page): Promise<void> {
   await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
 }
 
+/** The element's box in page coordinates; an element that is not rendered fails the test. */
+export async function boundingBox(locator: Locator) {
+  const box = await locator.boundingBox()
+  if (box === null) throw new Error('no box')
+  return box
+}
+
 /** Text of every rendered block, in document order (front matter excluded). */
 export async function blockTexts(page: Page): Promise<string[]> {
   const texts = await page
