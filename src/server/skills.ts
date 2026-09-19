@@ -58,7 +58,7 @@ export const findSkill = (name: string, dir = SKILLS_DIR): Skill | undefined =>
 export type ToolLookup = (tool: string) => boolean
 
 /** Is `tool` an executable on PATH? Injected in tests, so nothing has to be installed. */
-export const onPath: ToolLookup = (tool) =>
+const onPath: ToolLookup = (tool) =>
   (process.env.PATH ?? '')
     .split(path.delimiter)
     .some((dir) => dir !== '' && existsSync(path.join(dir, tool)))

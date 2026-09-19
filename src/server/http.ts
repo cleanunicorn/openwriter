@@ -41,7 +41,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webm': 'video/webm',
 }
 
-export function contentTypeFor(file: string): string {
+function contentTypeFor(file: string): string {
   const dot = file.lastIndexOf('.')
   // Not path.extname: a dotfile such as `.png` is served by its name.
   const extension = dot === -1 ? '' : file.slice(dot).toLowerCase()

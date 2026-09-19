@@ -25,7 +25,7 @@ export class ConflictError extends Error {
   }
 }
 
-export const hashText = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
+const hashText = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 

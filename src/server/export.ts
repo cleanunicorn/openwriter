@@ -3,7 +3,7 @@ import path from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 
 /** Files of a leaf bundle, relative paths → bytes. Symlinks are never followed or included. */
-export function readBundle(bundleDir: string): Record<string, Uint8Array> {
+function readBundle(bundleDir: string): Record<string, Uint8Array> {
   const files: Record<string, Uint8Array> = {}
   const walk = (dir: string) => {
     for (const name of readdirSync(dir).sort()) {
