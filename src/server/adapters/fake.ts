@@ -115,6 +115,12 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
             ops: [{ op: 'insert_after', block_id: first, markdown: 'Inserted by the fake agent.' }],
           },
           delete: { summary: 'Deleted the block.', ops: [{ op: 'delete', block_id: first }] },
+          // Agent output that repeats its input verbatim: lets a test send hostile markup through
+          // the path that renders agent output (a ghost insert).
+          echo: {
+            summary: 'Echoed the block.',
+            ops: [{ op: 'insert_after', block_id: first, markdown: byId.get(first) ?? '' }],
+          },
           multi: {
             summary: 'Rewrote, inserted two paragraphs, and deleted one.',
             ops: [
