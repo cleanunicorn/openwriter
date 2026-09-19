@@ -3,7 +3,7 @@ import path from 'node:path'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
 import {
   type FailureReason,
-  isUnsettled,
+  isActive,
   PROGRESS_TAIL,
   type Job,
   type JobRequest,
@@ -249,7 +249,7 @@ export class JobManager {
     void entry.handle?.cancel().catch(() => {})
     entry.handle = undefined
     try {
-      if (isUnsettled(entry.file.job.state) && entry.file.job.state !== 'ready') {
+      if (isActive(entry.file.job.state)) {
         this.fail(entry, 'exit', `The job stopped on an internal error: ${message}`)
       }
     } catch (persistError) {
@@ -412,9 +412,9 @@ export class JobManager {
   async cancel(id: string): Promise<Job> {
     const entry = this.entry(id)
     const { state } = entry.file.job
-    // A proposal that is already complete stays reviewable if cancel races with completion.
-    if (state === 'ready' || state === 'settled') return entry.file.job
-    if (state === 'failed' || state === 'cancelled' || state === 'stale') return entry.file.job
+    // A proposal that is already complete stays reviewable if cancel races with completion, and a
+    // job that has already ended has nothing to cancel.
+    if (!isActive(state)) return entry.file.job
     this.update(entry, { state: 'cancelled', error: 'Cancelled by the writer.' })
     await entry.handle?.cancel()
     const written = readJobTextOrNull(this.jobDir(id), 'result.json')
