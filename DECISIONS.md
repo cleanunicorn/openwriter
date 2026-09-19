@@ -368,6 +368,11 @@ codex exec --json --skip-git-repo-check --ephemeral
   A failed withdraw leaves the old behaviour (a notice), so it is never worse than before.
 - **An image upload that finishes after its editor closed is announced,** with the file name and
   the reference to type; the reference is not guessed into a block the writer has left.
+- **The block of an open editor is always in the document.** Every structural change goes through
+  `change()` in the doc reducer; if a change takes the focused block away without touching it (an
+  accepted op that opens a code fence swallows the blocks after it), the typed text is put back
+  after its nearest surviving predecessor, under its old ID, with a notice. An untouched open editor
+  just closes. Deleting the focused block on purpose closes its editor and is not rescued.
 - **Test-only server routes** (`/api/__fake/release`, `/waiting`, `/drop-events`) exist only with
   `--fake-control`; a unit test asserts 404 without it.
 

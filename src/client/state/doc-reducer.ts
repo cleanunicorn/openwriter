@@ -115,6 +115,7 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
  * surviving neighbour, under its old ID, so the open editor still points at a block.
  */
 function keepFocusedBlock(previous: Doc, disk: Doc, draft: Draft, mint: MintId): Doc {
+  // `previous` always has the block: `change()` never lets an open draft lose its block.
   const oldIndex = indexOf(previous, draft.id)
   const survivor = previous.blocks
     .slice(0, oldIndex)
@@ -149,9 +150,30 @@ function change(
   extra: Partial<DocState> = {},
 ): DocState {
   if (doc === state.doc) return { ...state, ...extra }
+  // Every structural change passes through here, so this is where the invariant is kept: the
+  // block of an open editor is in the document. A change can take it away without touching it —
+  // an accepted op that opens a code fence swallows the blocks after it — and then the draft would
+  // drop out of the live text and be lost on blur. `state.doc` still has the block, so its place
+  // is known.
+  const draft = state.draft
+  let rescued: Partial<DocState> = {}
+  if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
+    const { mint, next } = minter({ ...state, nextId })
+    doc = keepFocusedBlock(state.doc, doc, draft, mint)
+    nextId = next()
+    rescued = { notice: 'A change replaced the block you are editing. Your text was kept.' }
+  } else if (
+    state.focusedId !== null &&
+    state.focusedId !== NEW_BLOCK_ID &&
+    indexOf(doc, state.focusedId) === -1
+  ) {
+    // Nothing was typed, so there is nothing to keep: the editor of a block that is gone closes.
+    rescued = { focusedId: null }
+  }
   return {
     ...state,
     pendingNew: reanchor(state.doc, doc, state.pendingNew),
+    ...rescued,
     ...extra,
     doc,
     nextId,
@@ -199,7 +221,8 @@ const blurred = { focusedId: null, draft: null, pendingNew: null } satisfies Par
 
 function commit(state: DocState, id: string, text: string): DocState {
   const { doc, nextId } = withDraft(state, id, text)
-  return change(state, doc, nextId, blurred)
+  // The draft is what is being folded in: its block may legitimately split, merge or vanish.
+  return change({ ...state, draft: null }, doc, nextId, blurred)
 }
 
 export function docReducer(state: DocState, action: DocAction): DocState {
@@ -305,7 +328,10 @@ export function docReducer(state: DocState, action: DocAction): DocState {
     case 'delete': {
       const { mint, next } = minter(state)
       const indices = action.ids.map((id) => indexOf(state.doc, id)).filter((index) => index >= 0)
-      return change(state, deleteBlocks(state.doc, indices, mint), next(), { selectedIds: [] })
+      // Deleting the block that is being edited closes its editor; it is not rescued.
+      const closing = state.draft !== null && action.ids.includes(state.draft.id)
+      const from = closing ? { ...state, ...blurred } : state
+      return change(from, deleteBlocks(state.doc, indices, mint), next(), { selectedIds: [] })
     }
     case 'replace-doc':
       return change(state, action.doc, action.nextId)

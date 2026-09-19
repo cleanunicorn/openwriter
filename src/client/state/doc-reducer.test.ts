@@ -1,3 +1,4 @@
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { serialise } from '../../shared/blocks/index.ts'
 import {
@@ -315,5 +316,125 @@ describe('outside changes', () => {
     const state = run(loaded(), { type: 'external', text: '', hash: null, exists: false })
     expect(state.status).toBe('missing')
     expect(isDirty(state)).toBe(false)
+  })
+})
+
+describe('an open editor never loses its block', () => {
+  const editing = () =>
+    run(
+      loaded('A\n\nB\n\nC\n\nD\n'),
+      { type: 'focus', id: 'b2', cursor: 0 },
+      { type: 'draft', id: 'b2', text: 'B typed by the writer' },
+    )
+  // Neither the open editor nor its draft may point at a block that is not in the document.
+  const dangling = (state: DocState) =>
+    [state.focusedId, state.draft?.id ?? null].some(
+      (id) =>
+        id !== null && id !== NEW_BLOCK_ID && !state.doc.blocks.some((block) => block.id === id),
+    )
+
+  it('an accepted op that swallows the focused block keeps the editor text, in place', () => {
+    const before = editing()
+    // What applyOps produces for a replace of b1 that opens a code fence and never closes it.
+    const swallowed = run(loaded('A2\n\n```js\nconst x = 1\n\nB\n\nC\n\nD\n')).doc
+    expect(swallowed.blocks).toHaveLength(2)
+    const doc = {
+      ...swallowed,
+      blocks: swallowed.blocks.map((b, i) => ({ ...b, id: `b${i + 7}` })),
+    }
+    const after = docReducer(before, { type: 'replace-doc', doc, nextId: 20 })
+
+    expect(dangling(after)).toBe(false)
+    expect(after.focusedId).toBe('b2')
+    expect(after.doc.blocks.map((block) => block.id)[0]).toBe('b2')
+    expect(liveText(after)).toContain('B typed by the writer')
+    expect(after.notice).toContain('Your text was kept')
+    // Blur keeps it, and one undo takes the whole accepted change back.
+    expect(text(docReducer(after, { type: 'blur' }))).toContain('B typed by the writer')
+    expect(text(run(after, { type: 'blur' }, { type: 'undo' }, { type: 'undo' }))).toBe(
+      'A\n\nB\n\nC\n\nD\n',
+    )
+  })
+
+  it('deleting the block that is being edited closes the editor, and a later reload does not bring it back', () => {
+    const deleted = docReducer(editing(), { type: 'delete', ids: ['b2'] })
+    expect(deleted.draft).toBeNull()
+    expect(deleted.focusedId).toBeNull()
+    const reloaded = docReducer(deleted, {
+      type: 'external',
+      text: 'A\n\nC\n\nD\n\nE\n',
+      hash: 'h1',
+      exists: true,
+    })
+    expect(text(reloaded)).toBe('A\n\nC\n\nD\n\nE\n')
+  })
+
+  it('emptying the focused block and leaving it still deletes it', () => {
+    const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
+    expect(text(state)).toBe('A\n\nC\n\nD\n')
+  })
+
+  it('holds for any sequence of structural changes', () => {
+    const fence = '```js\nnever closed'
+    const step = fc.oneof(
+      fc.record({
+        type: fc.constant('focus' as const),
+        id: fc.constantFrom('b1', 'b2', 'b3', 'b4'),
+        cursor: fc.constant(0),
+      }),
+      // The focused editor reports its text; which block that is depends on the state.
+      fc.record({
+        type: fc.constant('type' as const),
+        text: fc.constantFrom('typed', 'typed\n\ntwice', fence),
+      }),
+      fc.record({
+        type: fc.constant('insert' as const),
+        index: fc.nat(4),
+        markdown: fc.constantFrom('new', fence, '{{< note >}}'),
+      }),
+      fc.record({ type: fc.constant('move' as const), from: fc.nat(3), to: fc.nat(3) }),
+      fc.record({
+        type: fc.constant('delete' as const),
+        ids: fc.subarray(['b1', 'b2', 'b3', 'b4']),
+      }),
+      fc.record({
+        type: fc.constant('external' as const),
+        text: fc.constantFrom('A\n\nC\n', `${fence}\n\nB\n`, 'X\n\nB\n\nY\n'),
+        hash: fc.string({ minLength: 1, maxLength: 4 }),
+        exists: fc.constant(true),
+      }),
+      // What accepting a proposal dispatches: a whole new document, here with every ID changed.
+      fc
+        .constantFrom('A\n\nC\n', `A\n\n${fence}\n\nB\n\nC\n`, 'A\n\nB2\n\nC\n\nD\n')
+        .map((replaced) => ({
+          type: 'replace-doc' as const,
+          doc: {
+            ...loaded(replaced).doc,
+            blocks: loaded(replaced).doc.blocks.map((block, i) => ({ ...block, id: `b${i + 90}` })),
+          },
+          nextId: 99,
+        })),
+      fc.constant({ type: 'blur' as const }),
+      fc.constant({ type: 'undo' as const }),
+    )
+    fc.assert(
+      fc.property(fc.array(step, { maxLength: 12 }), (steps) => {
+        let state = loaded('A\n\nB\n\nC\n\nD\n')
+        for (const action of steps) {
+          if (action.type === 'focus' && !state.doc.blocks.some((block) => block.id === action.id))
+            continue
+          if (action.type === 'type') {
+            if (state.focusedId === null || state.focusedId === NEW_BLOCK_ID) continue
+            state = docReducer(state, { type: 'draft', id: state.focusedId, text: action.text })
+          } else {
+            state = docReducer(state, action as DocAction)
+          }
+          expect(dangling(state)).toBe(false)
+          if (state.draft !== null && state.draft.text.trim() !== '')
+            expect(liveText(state)).toContain(state.draft.text)
+        }
+      }),
+      { numRuns: 300, seed: 20260919 },
+    )
   })
 })
