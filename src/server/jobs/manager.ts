@@ -456,34 +456,43 @@ export class JobManager {
     }
     const accepted = undecidedOnly(wantAccepted)
     const rejected = undecidedOnly(wantRejected)
-    const assetMap: Record<string, string> = {}
-    if (job.doc.kind === 'article') {
-      const files = job.result.assets.map((asset) => asset.file)
-      const bundle = this.options.workspace.bundleDir(job.doc.slug)
-      for (const index of accepted) {
-        const op = ops[index]
-        if (op === undefined || op.op === 'delete') continue
-        for (const file of referencedAssets(op.markdown, files)) {
-          const known = entry.file.promoted[file]
-          if (known !== undefined) {
-            assetMap[file] = known
-            continue
-          }
-          // An escaping path throws (PathEscapeError → 400); anything else that is not a plain file is a 409.
-          const data = readJobAsset(this.jobDir(id), file)
-          if (data === null) throw new HttpError(409, `asset ${file} is missing`)
-          const name = storeWithoutOverwrite(bundle, sanitiseFileName(path.basename(file)), data)
-          entry.file.promoted[file] = name
-          assetMap[file] = name
-        }
-      }
-    }
+    const assetMap = this.promoteAssets(entry, job.result, accepted)
     const decisions = { ...job.decisions }
     for (const index of accepted) decisions[String(index)] = 'accepted'
     for (const index of rejected) decisions[String(index)] = 'rejected'
     const settled = ops.every((_, index) => decisions[String(index)] !== undefined)
     this.update(entry, { decisions, state: settled ? 'settled' : 'ready' })
     return { job: entry.file.job, assetMap }
+  }
+
+  /**
+   * Copy the assets that the accepted ops reference into the article's bundle, and return
+   * `assets/<file>` → name in the bundle. Only an article has a bundle.
+   */
+  private promoteAssets(entry: Entry, result: Result, accepted: number[]): Record<string, string> {
+    const { id, doc } = entry.file.job
+    const assetMap: Record<string, string> = {}
+    if (doc.kind !== 'article') return assetMap
+    const files = result.assets.map((asset) => asset.file)
+    const bundle = this.options.workspace.bundleDir(doc.slug)
+    for (const index of accepted) {
+      const op = result.ops[index]
+      if (op === undefined || op.op === 'delete') continue
+      for (const file of referencedAssets(op.markdown, files)) {
+        const known = entry.file.promoted[file]
+        if (known !== undefined) {
+          assetMap[file] = known
+          continue
+        }
+        // An escaping path throws (PathEscapeError → 400); anything else that is not a plain file is a 409.
+        const data = readJobAsset(this.jobDir(id), file)
+        if (data === null) throw new HttpError(409, `asset ${file} is missing`)
+        const name = storeWithoutOverwrite(bundle, sanitiseFileName(path.basename(file)), data)
+        entry.file.promoted[file] = name
+        assetMap[file] = name
+      }
+    }
+    return assetMap
   }
 
   /** Stop every running agent; used when the server shuts down. */
