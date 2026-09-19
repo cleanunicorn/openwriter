@@ -241,6 +241,21 @@ describe('op validation', () => {
     })
     expect(validateOps(twice, blocks)[0]).toContain('twice')
   })
+
+  it('reports a malformed asset path once, and not also as unreferenced or listed twice', () => {
+    const errors = validateOps(
+      result({
+        ops: [{ op: 'insert_after', block_id: 'b3', markdown: 'See the diagram.' }],
+        assets: [{ file: '../d.png' }, { file: '../d.png' }, { file: 'assets/ok.png' }],
+      }),
+      blocks,
+    )
+    expect(errors).toEqual([
+      'assets[0]: "../d.png" must be a plain path inside assets/',
+      'assets[1]: "../d.png" must be a plain path inside assets/',
+      'asset "assets/ok.png" is declared but no op references it as `assets/ok.png`',
+    ])
+  })
 })
 
 describe('op application', () => {

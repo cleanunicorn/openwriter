@@ -90,15 +90,16 @@ export function validateOps(result: Result, context: ValidationContext): string[
       errors.push(`assets[${index}]: "${asset.file}" must be a plain path inside assets/`)
     } else if (seen.has(asset.file)) {
       errors.push(`assets[${index}]: "${asset.file}" is listed twice`)
+    } else {
+      seen.add(asset.file)
     }
-    seen.add(asset.file)
   })
 
   // A declared asset that no op references would never be copied into the bundle, and a
   // reference the matcher cannot see would stay `assets/…` — a dead link in the article.
   const markdown = result.ops.map((op) => (op.op === 'delete' ? '' : op.markdown)).join('\n\n')
   for (const file of seen) {
-    if (ASSET_PATH.test(file) && referencedAssets(markdown, [file]).length === 0) {
+    if (referencedAssets(markdown, [file]).length === 0) {
       errors.push(`asset "${file}" is declared but no op references it as \`${file}\``)
     }
   }
