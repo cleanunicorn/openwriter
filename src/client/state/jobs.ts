@@ -191,9 +191,27 @@ export const undecided = (job: Job): number[] =>
  * returns the final names; references are rewritten and the ops applied to the *current* text
  * as one undoable step. Undoing it later is an ordinary edit: it never re-runs the job.
  */
-export async function decide(id: string, accepted: number[], rejected: number[]): Promise<void> {
+/** jobId → op indices whose decision is on its way to the server. */
+const inFlight = new Map<string, Set<number>>()
+
+export async function decide(
+  id: string,
+  wantAccepted: number[],
+  wantRejected: number[],
+): Promise<void> {
   const job = jobsStore.get().jobs[id]
   if (job === undefined || job.result === null || job.state !== 'ready') return
+  // An op is decided once. A second click, a key repeat, or "Accept" followed by "Accept all"
+  // inside one round trip must not apply the same insertion twice.
+  const pending = inFlight.get(id) ?? new Set<number>()
+  inFlight.set(id, pending)
+  const fresh = (index: number) => job.decisions[String(index)] === undefined && !pending.has(index)
+  const accepted = [...new Set(wantAccepted)].filter(fresh)
+  const rejected = [...new Set(wantRejected)].filter(
+    (index) => fresh(index) && !accepted.includes(index),
+  )
+  if (accepted.length + rejected.length === 0 && job.result.ops.length > 0) return
+  for (const index of [...accepted, ...rejected]) pending.add(index)
   deciding++
   try {
     await applyDecision(job, accepted, rejected)
@@ -201,6 +219,7 @@ export async function decide(id: string, accepted: number[], rejected: number[])
     // The ghost stays on screen: nothing was applied, and the writer can decide again.
     notifyFailure('Could not record the decision', error, job.doc)
   } finally {
+    for (const index of [...accepted, ...rejected]) pending.delete(index)
     deciding--
     pump()
   }

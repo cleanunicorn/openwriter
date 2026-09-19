@@ -430,17 +430,25 @@ export class JobManager {
    */
   decide(
     id: string,
-    accepted: number[],
-    rejected: number[],
+    wantAccepted: number[],
+    wantRejected: number[],
   ): { job: Job; assetMap: Record<string, string> } {
     const entry = this.entry(id)
     const job = entry.file.job
     if (job.state !== 'ready' || job.result === null)
       throw new HttpError(409, `job is ${job.state}, not ready for review`)
     const ops = job.result.ops
-    for (const index of [...accepted, ...rejected]) {
+    if (wantAccepted.some((index) => wantRejected.includes(index))) {
+      throw new HttpError(400, 'an op cannot be accepted and rejected at once')
+    }
+    // Idempotent: an index that already has a decision is ignored, not decided again.
+    const undecidedOnly = (indices: number[]) =>
+      [...new Set(indices)].filter((index) => job.decisions[String(index)] === undefined)
+    for (const index of [...wantAccepted, ...wantRejected]) {
       if (index >= ops.length) throw new HttpError(400, `no op ${index}`)
     }
+    const accepted = undecidedOnly(wantAccepted)
+    const rejected = undecidedOnly(wantRejected)
     const assetMap: Record<string, string> = {}
     if (job.doc.kind === 'article') {
       const files = job.result.assets.map((asset) => asset.file)

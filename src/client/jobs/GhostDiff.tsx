@@ -27,7 +27,7 @@ function Ghost(props: {
   const accept = () => void decide(job.id, [index], []).then(focusNextGhost)
   const reject = () => void decide(job.id, [], [index]).then(focusNextGhost)
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget || event.repeat) return
     const mod = event.metaKey || event.ctrlKey
     if (event.key === 'Enter' || event.key === 'a') {
       event.preventDefault()

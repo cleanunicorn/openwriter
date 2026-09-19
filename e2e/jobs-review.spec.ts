@@ -232,3 +232,30 @@ test('accepting a replacement of the block being edited wins over the open draft
   await page.keyboard.press(`${mod}+z`)
   await expect(page.getByText('while the agent works. DRAFT')).toBeVisible()
 })
+
+test('accepting the same insertion twice in a row inserts it once', async ({ page, app }) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Results arrive as ghost diffs'), 'Results')
+  await ask(page, 'fake:multi')
+  await expectWaiting(app, 1)
+  await release(app)
+  await expect(ghosts(page)).toHaveCount(3)
+
+  // Slow the server down so both actions land inside one round trip.
+  await page.route('**/api/jobs/*/decisions', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await route.continue()
+  })
+  const insertion = page.getByRole('group', { name: 'Proposed insertion 2 of 3' })
+  await insertion.getByRole('button', { name: 'Accept', exact: true }).click()
+  await insertion
+    .getByRole('button', { name: 'Accept all' })
+    .or(ghosts(page).first().getByRole('button', { name: 'Accept all' }))
+    .first()
+    .click()
+  await expect(ghosts(page)).toHaveCount(0)
+  await expectFile(app.articlePath(), (file) => {
+    expect(file.split('First insert.').length - 1).toBe(1)
+    expect(file.split('Second insert.').length - 1).toBe(1)
+  })
+})

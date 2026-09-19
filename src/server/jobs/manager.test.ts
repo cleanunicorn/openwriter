@@ -456,6 +456,25 @@ describe('review decisions', () => {
     expect(rest.job.decisions).toEqual({ '0': 'accepted', '1': 'accepted', '2': 'rejected' })
   })
 
+  it('decides an op once: a repeated accept changes nothing, and accept+reject of one op is refused', async () => {
+    const job = await readyJob('fake:multi')
+    const first = await json(
+      t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [1], rejected: [] }),
+    )
+    expect(first.job.decisions).toEqual({ '1': 'accepted' })
+    // The same op again, this time as a reject: ignored, the first decision stands.
+    const again = await json(
+      t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [], rejected: [1] }),
+    )
+    expect(again.job.decisions).toEqual({ '1': 'accepted' })
+    expect(again.job.state).toBe('ready')
+    const both = await t.send('POST', `/api/jobs/${job.id}/decisions`, {
+      accepted: [0],
+      rejected: [0],
+    })
+    expect(both.status).toBe(400)
+  })
+
   it('refuses decisions on a job that is not ready, and unknown op indices', async () => {
     const job = await start(request('fake:upper', byText('## Why blocks')))
     expect(
