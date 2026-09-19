@@ -11,7 +11,7 @@ export const editorSelection: {
 
 const column = () => document.querySelector<HTMLElement>('.column')
 
-/** Anchor the pill to a block, `gap` pixels below `rect` (or above the block when negative). */
+/** Anchor the pill to a block: just below `rect`, or above the block when there is none. */
 function anchorFor(block: HTMLElement, rect: DOMRect | null): PillTarget['anchor'] {
   const host = column()?.getBoundingClientRect()
   const blockRect = block.getBoundingClientRect()
