@@ -57,6 +57,21 @@ export function dispatchDoc(ref: DocRef, action: DocAction): void {
   })
 }
 
+/**
+ * Tell the writer that a background action failed. Every fire-and-forget action ends here instead
+ * of in an unhandled rejection that nobody sees.
+ */
+export function notifyFailure(
+  what: string,
+  error: unknown,
+  ref: DocRef | null = store.get().current,
+): void {
+  const message = `${what}: ${error instanceof Error ? error.message : String(error)}`
+  if (ref !== null && store.get().docs[docKey(ref)] !== undefined)
+    dispatchDoc(ref, { type: 'notice', notice: message })
+  else console.error(message)
+}
+
 /** Dispatch to the document on screen. */
 export function dispatch(action: DocAction): void {
   const ref = store.get().current
@@ -180,9 +195,13 @@ export async function refreshSkills(): Promise<void> {
 }
 
 export async function createArticle(title: string): Promise<void> {
-  const article = await api.createArticle(title)
-  await refreshArticles()
-  await openDoc({ kind: 'article', slug: article.slug })
+  try {
+    const article = await api.createArticle(title)
+    await refreshArticles()
+    await openDoc({ kind: 'article', slug: article.slug })
+  } catch (error) {
+    notifyFailure('Could not create the article', error)
+  }
 }
 
 export const setPalette = (palette: PaletteMode | null) =>
@@ -218,8 +237,11 @@ export function connectEvents(): () => void {
     if (!parsed.success) return
     const event = parsed.data
     if (event.type === 'doc.changed') void onDocChanged(event.ref, event.hash)
-    else if (event.type === 'config.changed') void refreshConfig()
-    else handlers.onJobEvent?.(event)
+    else if (event.type === 'config.changed') {
+      void refreshConfig().catch((error: unknown) =>
+        notifyFailure('Could not reload the settings', error),
+      )
+    } else handlers.onJobEvent?.(event)
   }
   return () => source.close()
 }

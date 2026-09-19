@@ -1,5 +1,12 @@
 import { api } from '../api.ts'
-import { type AppState, createArticle, openDoc, setPalette, store } from '../state/app.ts'
+import {
+  type AppState,
+  createArticle,
+  notifyFailure,
+  openDoc,
+  setPalette,
+  store,
+} from '../state/app.ts'
 
 export type Command = { id: string; title: string; hint?: string; run: () => void | Promise<void> }
 
@@ -25,7 +32,11 @@ export async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
   // Update the store first: the next toggle must see this theme even if the save is still in flight.
   const config = { ...current.config, theme }
   store.set((state) => ({ ...state, config: { ...current, config } }))
-  await api.saveConfig(config)
+  try {
+    await api.saveConfig(config)
+  } catch (error) {
+    notifyFailure('The theme is set for now, but could not be saved', error)
+  }
 }
 
 registerCommands((state) => {

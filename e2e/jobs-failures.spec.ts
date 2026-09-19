@@ -7,6 +7,7 @@ import {
   expectWaiting,
   ghosts,
   jobState,
+  notice,
   openArticle,
   release,
   selectWord,
@@ -71,4 +72,27 @@ test('a running job can be cancelled from the tray', async ({ page, app }) => {
   await expect(blockWith(page, 'Why blocks')).not.toHaveClass(/is-pending/)
   await tray(page).getByRole('button', { name: 'Dismiss' }).click()
   await expect(tray(page)).toHaveCount(0)
+})
+
+test('a decision the server cannot record says so and keeps the proposal on screen', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
+  await ask(page, 'fake:upper')
+  await expectWaiting(app, 1)
+  await release(app)
+  await expect(ghosts(page)).toHaveCount(1)
+
+  await page.route('**/api/jobs/*/decisions', (route) => route.abort('failed'))
+  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await expect(notice(page)).toContainText('Could not record the decision')
+  await expect(ghosts(page)).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: 'Why blocks', exact: true })).toHaveCount(0)
+
+  // Once the server answers again the same proposal can still be accepted.
+  await page.unroute('**/api/jobs/*/decisions')
+  await ghosts(page).getByRole('button', { name: 'Accept', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'WHY BLOCKS' })).toBeVisible()
 })

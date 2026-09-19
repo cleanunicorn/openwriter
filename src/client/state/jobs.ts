@@ -6,7 +6,7 @@ import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { hasContent, START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
-import { dispatchDoc, flush, setEventHandlers, store } from './app.ts'
+import { dispatchDoc, flush, notifyFailure, setEventHandlers, store } from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
@@ -145,14 +145,25 @@ export const dropHeld = (id: string) =>
   jobsStore.set((state) => ({ ...state, held: state.held.filter((held) => held.id !== id) }))
 
 export async function cancelJob(id: string): Promise<void> {
-  upsert(await api.cancelJob(id))
+  try {
+    upsert(await api.cancelJob(id))
+  } catch (error) {
+    notifyFailure('Could not cancel the job', error, jobsStore.get().jobs[id]?.doc)
+  }
   pump()
 }
 
 export async function dismissJob(id: string): Promise<void> {
   const job = jobsStore.get().jobs[id]
-  if (job?.state === 'ready') await decide(id, [], job.result?.ops.map((_, index) => index) ?? [])
-  await api.dismissJob(id)
+  try {
+    if (job?.state === 'ready') await decide(id, [], undecided(job))
+    // decide() reports its own failure; a job that is still waiting for review is not dismissed.
+    if (jobsStore.get().jobs[id]?.state === 'ready') return
+    await api.dismissJob(id)
+  } catch (error) {
+    notifyFailure('Could not dismiss the job', error, job?.doc)
+    return
+  }
   jobsStore.set((state) => {
     const { [id]: _gone, ...jobs } = state.jobs
     return {
@@ -180,6 +191,9 @@ export async function decide(id: string, accepted: number[], rejected: number[])
   deciding++
   try {
     await applyDecision(job, accepted, rejected)
+  } catch (error) {
+    // The ghost stays on screen: nothing was applied, and the writer can decide again.
+    notifyFailure('Could not record the decision', error, job.doc)
   } finally {
     deciding--
     pump()
@@ -288,6 +302,8 @@ function checkTargets(): void {
       .staleJob(id, 'A target block was deleted before the result was reviewed.')
       .then(upsert)
       .then(pump)
+      // Not recorded as reported: the next document change tries again.
+      .catch(() => reportedStale.delete(id))
   }
   for (const request of held) {
     const docState = store.get().docs[docKey(request.request.doc)]
@@ -324,7 +340,8 @@ async function sync(): Promise<void> {
 
 export function startJobs(): void {
   setEventHandlers({
-    onConnect: () => void sync(),
+    onConnect: () =>
+      void sync().catch((error: unknown) => notifyFailure('Could not load the jobs', error)),
     onJobEvent: (event) => {
       if (event.type === 'job.state') {
         upsert(event.job)
