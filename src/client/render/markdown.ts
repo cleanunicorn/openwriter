@@ -109,12 +109,11 @@ md.core.ruler.push('shortcodes', (state) => {
       }
       let last = 0
       for (const match of child.content.matchAll(SHORTCODE)) {
-        const before = child.content.slice(last, match.index ?? 0)
+        const before = child.content.slice(last, match.index)
         if (before !== '') children.push(token('text', before))
         const tag = match[0]
-        const at = match.index ?? 0
         children.push(token('html_inline', shortcodeHtml(tag, env)))
-        last = at + tag.length
+        last = match.index + tag.length
       }
       const rest = child.content.slice(last)
       if (rest !== '') children.push(token('text', rest))
