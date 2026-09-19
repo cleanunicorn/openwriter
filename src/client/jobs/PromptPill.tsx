@@ -72,8 +72,9 @@ export function PromptPill({ target, onClose }: { target: PillTarget; onClose: (
     const typed = text.trim()
     const slash = typed.match(SLASH_SKILL)
     const skill = slash?.[1] ?? target.skill
-    const instruction =
-      (slash ? slash[2] : typed)?.trim() || (skill ? `Run the ${skill} skill.` : '')
+    const body = (slash === null ? typed : (slash[2] ?? '')).trim()
+    // A skill with no words after it runs bare.
+    const instruction = body === '' && skill !== undefined ? `Run the ${skill} skill.` : body
     if (instruction === '') return
     requestJob({
       doc: target.docRef,
