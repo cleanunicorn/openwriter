@@ -4,6 +4,7 @@ import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
 import {
   type FailureReason,
   isUnsettled,
+  PROGRESS_TAIL,
   type Job,
   type JobRequest,
   type JobState,
@@ -29,7 +30,6 @@ import {
 } from './job-io.ts'
 import { type JobFile, recoverJobs, saveJobFile } from './store.ts'
 
-const PROGRESS_TAIL = 40
 const PROGRESS_LOG_LIMIT = 512 * 1024
 
 export type ManagerOptions = {

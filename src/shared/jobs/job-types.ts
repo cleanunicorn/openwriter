@@ -105,6 +105,9 @@ export const DecisionsResponseSchema = z.object({
   assetMap: z.record(z.string(), z.string()),
 })
 
+/** How many progress lines a job keeps in memory and on the wire; the full log is progress.log. */
+export const PROGRESS_TAIL = 40
+
 export const ACTIVE_STATES: readonly JobState[] = ['queued', 'running', 'validating', 'repairing']
 export const isActive = (state: JobState): boolean => ACTIVE_STATES.includes(state)
 /** A job holds its block locks until it is settled or can no longer produce a review. */

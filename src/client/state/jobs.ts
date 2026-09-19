@@ -1,7 +1,13 @@
 import { type DocRef, docKey } from '../../shared/api-types.ts'
 import { applyOps } from '../../shared/jobs/apply-ops.ts'
 import { rewriteAssetRefs } from '../../shared/jobs/asset-refs.ts'
-import { isActive, isUnsettled, type Job, type JobRequest } from '../../shared/jobs/job-types.ts'
+import {
+  isActive,
+  isUnsettled,
+  type Job,
+  type JobRequest,
+  PROGRESS_TAIL,
+} from '../../shared/jobs/job-types.ts'
 import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { hasContent, START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
@@ -349,7 +355,7 @@ export function startJobs(): void {
             ...state,
             jobs: {
               ...state.jobs,
-              [event.id]: { ...job, progress: [...job.progress, event.text].slice(-40) },
+              [event.id]: { ...job, progress: [...job.progress, event.text].slice(-PROGRESS_TAIL) },
             },
           }
         })
