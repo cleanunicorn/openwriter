@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { docKey } from '../../shared/api-types.ts'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
@@ -34,18 +35,24 @@ const REASONS: Record<NonNullable<Job['reason']>, string> = {
 
 /** "Open this job in herdr": the server cannot attach a terminal for the writer, so show how. */
 function OpenInHerdr({ progress }: { progress: string[] }) {
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null)
   const command = progress.map(parseHerdrAttachHint).find((hint) => hint !== null)
   if (command === undefined || command === null) return null
+  // The clipboard can be missing (an insecure context) or refuse: say which happened.
+  const copy = () =>
+    void (navigator.clipboard?.writeText(command) ?? Promise.reject(new Error('no clipboard')))
+      .then(() => setCopied('yes'))
+      .catch(() => setCopied('no'))
   return (
     <div className="tray-progress">
       Open this job in herdr: <code>{command}</code>{' '}
-      <button
-        type="button"
-        className="link"
-        onClick={() => void navigator.clipboard?.writeText(command)}
-      >
+      <button type="button" className="link" onClick={copy}>
         Copy
-      </button>
+      </button>{' '}
+      <span role="status" aria-label="Copy result">
+        {copied === 'yes' && 'Copied.'}
+        {copied === 'no' && 'Could not copy — select the command instead.'}
+      </span>
     </div>
   )
 }
