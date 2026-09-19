@@ -155,11 +155,7 @@ export async function jobState(app: App, jobId: string): Promise<string> {
 
 /** End every open event stream on the server, as a network drop would. */
 export async function dropEventStreams(app: App): Promise<void> {
-  await fetch(`${app.url}/api/__fake/drop-events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  })
+  await fakeControl(app, 'POST', 'drop-events')
 }
 
 /** A file of a job's contract directory (`.zen/jobs/<id>/<name>`), or the directory itself. */
