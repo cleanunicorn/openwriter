@@ -1,7 +1,9 @@
 export type BlockKind = 'frontmatter' | 'content'
 
+export type Slice = { raw: string; kind: BlockKind }
+
 /** A block is a slice of the original text. Its ID is session-scoped and never written to disk. */
-export type Block = { id: string; raw: string; kind: BlockKind }
+export type Block = Slice & { id: string }
 
 /**
  * `gaps.length === blocks.length + 1`. A gap is the exact whitespace at a position (before the
@@ -10,7 +12,6 @@ export type Block = { id: string; raw: string; kind: BlockKind }
  */
 export type Doc = { blocks: Block[]; gaps: string[] }
 
-export type Slice = { raw: string; kind: BlockKind }
 export type SplitResult = { slices: Slice[]; gaps: string[] }
 
 export type MintId = () => string
