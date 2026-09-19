@@ -93,7 +93,6 @@ export function deleteBlocks(doc: Doc, indices: number[], mintId: MintId): Doc {
     if (index < 0 || index >= blocks.length) continue
     const isLast = index === blocks.length - 1
     blocks.splice(index, 1)
-    // Keep the gap before the block; for the last block keep the file's trailing gap instead.
     gaps.splice(isLast && index > 0 ? index : index + 1, 1)
   }
   return settle({ blocks, gaps }, mintId)
