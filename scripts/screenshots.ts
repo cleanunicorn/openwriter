@@ -1,32 +1,15 @@
 // Light and dark screenshots for the PR: the editor at rest, and a review in progress.
 // Usage: node scripts/screenshots.ts   (starts its own server on a temp copy of the sample)
-import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { chromium } from '@playwright/test'
+import { startE2eServer } from '../e2e/start-server.ts'
 
 const root = path.resolve(import.meta.dirname, '..')
 const out = path.join(root, 'docs', 'screenshots')
 mkdirSync(out, { recursive: true })
 
-function startServer(): Promise<{ url: string; child: ChildProcess }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [path.join(root, 'scripts', 'e2e-server.ts'), '--fake-control'],
-      { cwd: root },
-    )
-    let output = ''
-    child.stdout?.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-      const url = output.match(/listening on (http:\/\/127\.0\.0\.1:\d+)/)?.[1]
-      if (url !== undefined) resolve({ url, child })
-    })
-    child.once('exit', () => reject(new Error(output)))
-  })
-}
-
-const { url, child } = await startServer()
+const { url, child } = await startE2eServer()
 const browser = await chromium.launch()
 try {
   for (const theme of ['light', 'dark'] as const) {

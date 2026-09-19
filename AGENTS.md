@@ -313,7 +313,8 @@ skills/               prompt templates: diagram, terminal-recording, image, vide
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
 scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
 .github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)
-e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts
+e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts,
+                      start-server.ts (spawns scripts/e2e-server.ts; also used by scripts/screenshots.ts)
 docs/                 herdr-evaluation.md, screenshots/
 ```
 
