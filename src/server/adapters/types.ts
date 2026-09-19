@@ -8,10 +8,16 @@ export type Completion =
   | { ok: false; reason: FailureReason; message: string; output?: string }
 
 export type AdapterOptions = {
-  /** The agent's working directory, so it can read `sources/` freely. */
+  /**
+   * The workspace root, which the agent may read (`sources/`). claude and the herdr pane run with
+   * it as their working directory; codex re-roots itself to the job directory.
+   */
   workspace: string
   jobId: string
-  /** What the agent is told on stdin. The real instructions are files in the job directory. */
+  /**
+   * What the agent is told to do: the process adapters send it on stdin, herdr passes it to
+   * `agent prompt`. The real instructions are files in the job directory.
+   */
   prompt: string
   /** The writer's overrides for this adapter from `.zen/config.json`. */
   config: AdapterConfig
