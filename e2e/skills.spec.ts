@@ -45,7 +45,8 @@ test('/name in the prompt pill runs a skill; the recording skill names the missi
   await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
   await ask(page, '/terminal-recording show npm test running')
   await tray(page).getByRole('button').first().click()
-  // asciinema and agg are not installed on the test machine or in CI: the job says so at once.
+  // scripts/e2e-server.ts makes every `requires:` tool count as missing, on any machine: the job
+  // says so at once.
   await expect(tray(page)).toContainText('failed · missing tool')
   await expect(tray(page)).toContainText('Missing on PATH: asciinema, agg')
 })
