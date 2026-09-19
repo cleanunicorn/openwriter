@@ -106,7 +106,7 @@ export function createHerdrAdapter(
         throw new Error(`the herdr session "${session}" did not start`)
       }
 
-      // Cancel can arrive while any setup call is in flight. After every await the run checks
+      // Cancel can arrive while any setup call is in flight. After every setup step the run checks
       // the flag, so a cancelled job never goes on to start and prompt a real (paid) agent.
       const stopIfCancelled = () => {
         if (cancelled) throw new Error('cancelled')
