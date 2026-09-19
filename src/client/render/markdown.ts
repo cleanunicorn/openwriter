@@ -80,9 +80,25 @@ const SHORTCODE = /\{\{[<%][\s\S]*?[>%]\}\}/g
 const attribute = (tag: string, name: string) =>
   tag.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`))?.[1] ?? ''
 
+/** What a shortcode renders as: a quiet chip in the editor; on export a <figure>, or nothing. */
+function shortcodeHtml(tag: string, env: RenderEnv): string {
+  if (!env.exportMode) return `<span class="shortcode">${escapeHtml(tag)}</span>`
+  if (!/^\{\{[<%]\s*figure\b/.test(tag)) return ''
+  const src = attribute(tag, 'src')
+  const caption = attribute(tag, 'caption') || attribute(tag, 'title')
+  return `<figure><img src="${escapeHtml(src)}" alt="${escapeHtml(attribute(tag, 'alt') || caption)}">${
+    caption === '' ? '' : `<figcaption>${escapeHtml(caption)}</figcaption>`
+  }</figure>`
+}
+
 // Hugo shortcodes are shown as quiet chips in the editor; Hugo itself is the true preview.
 md.core.ruler.push('shortcodes', (state) => {
   const env = state.env as RenderEnv
+  const token = (type: 'text' | 'html_inline', content: string) => {
+    const made = new state.Token(type, '', 0)
+    made.content = content
+    return made
+  }
   for (const blockToken of state.tokens) {
     if (blockToken.type !== 'inline' || blockToken.children === null) continue
     const children: typeof blockToken.children = []
@@ -94,34 +110,14 @@ md.core.ruler.push('shortcodes', (state) => {
       let last = 0
       for (const match of child.content.matchAll(SHORTCODE)) {
         const before = child.content.slice(last, match.index ?? 0)
-        if (before !== '') {
-          const text = new state.Token('text', '', 0)
-          text.content = before
-          children.push(text)
-        }
-        const html = new state.Token('html_inline', '', 0)
+        if (before !== '') children.push(token('text', before))
         const tag = match[0]
         const at = match.index ?? 0
-        if (!env.exportMode) {
-          html.content = `<span class="shortcode">${escapeHtml(tag)}</span>`
-        } else if (/^\{\{[<%]\s*figure\b/.test(tag)) {
-          const src = attribute(tag, 'src')
-          const caption = attribute(tag, 'caption') || attribute(tag, 'title')
-          html.content = `<figure><img src="${escapeHtml(src)}" alt="${escapeHtml(attribute(tag, 'alt') || caption)}">${
-            caption === '' ? '' : `<figcaption>${escapeHtml(caption)}</figcaption>`
-          }</figure>`
-        } else {
-          html.content = ''
-        }
-        children.push(html)
+        children.push(token('html_inline', shortcodeHtml(tag, env)))
         last = at + tag.length
       }
       const rest = child.content.slice(last)
-      if (rest !== '') {
-        const text = new state.Token('text', '', 0)
-        text.content = rest
-        children.push(text)
-      }
+      if (rest !== '') children.push(token('text', rest))
     }
     blockToken.children = children
   }
