@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { DocRefSchema } from '../api-types.ts'
-import { BlockKindSchema } from '../blocks/types.ts'
+import { BlockIdSchema, BlockKindSchema } from '../blocks/types.ts'
 import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
 import { type Scope, ScopeSchema } from './scope.ts'
@@ -35,10 +35,8 @@ export const FailureReasonSchema = z.enum([
 ])
 export type FailureReason = z.infer<typeof FailureReasonSchema>
 
-const BlockId = z.string().regex(/^b\d+$/)
-
 export const SelectionSchema = z.object({
-  blockId: BlockId,
+  blockId: BlockIdSchema,
   text: z.string(),
   /** UTF-16 offsets into the block's raw text; present only for a selection made in edit mode. */
   from: z.number().int().min(0).optional(),
@@ -46,7 +44,7 @@ export const SelectionSchema = z.object({
 })
 
 export const SnapshotSchema = z.object({
-  blocks: z.array(z.object({ id: BlockId, raw: z.string(), kind: BlockKindSchema })),
+  blocks: z.array(z.object({ id: BlockIdSchema, raw: z.string(), kind: BlockKindSchema })),
   gaps: z.array(z.string()),
 })
 export type Snapshot = z.infer<typeof SnapshotSchema>
@@ -57,7 +55,7 @@ export const JobRequestSchema = z.object({
   scope: ScopeSchema,
   instruction: z.string().trim().min(1).max(20000),
   skill: SkillNameSchema.optional(),
-  targets: z.array(BlockId),
+  targets: z.array(BlockIdSchema),
   selection: SelectionSchema.optional(),
   snapshot: SnapshotSchema,
 })

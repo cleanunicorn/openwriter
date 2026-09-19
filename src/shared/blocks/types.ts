@@ -20,6 +20,9 @@ export type SplitResult = { slices: Slice[]; gaps: string[] }
 
 export type MintId = () => string
 
+/** The shape of a block ID wherever one crosses a boundary (a job request, a `result.json`). */
+export const BlockIdSchema = z.string().regex(/^b\d+$/)
+
 /** IDs are `b<n>` from a per-document counter. `b0` is reserved for the virtual start anchor. */
 export function createIdMinter(start = 1): MintId {
   let next = start

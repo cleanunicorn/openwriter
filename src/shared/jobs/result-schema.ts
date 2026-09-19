@@ -1,6 +1,5 @@
 import { z } from 'zod'
-
-const BlockId = z.string().regex(/^b\d+$/)
+import { BlockIdSchema as BlockId } from '../blocks/types.ts'
 
 /** The four ops of the file contract. Strict: an unknown op or key rejects the whole result. */
 export const OpSchema = z.discriminatedUnion('op', [
