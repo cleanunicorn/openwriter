@@ -12,6 +12,7 @@ import { HttpError } from './http.ts'
 import { PathEscapeError } from './paths.ts'
 import { mountConfigRoutes } from './routes/config.ts'
 import { mountDocRoutes } from './routes/docs.ts'
+import { mountExportRoutes } from './routes/export.ts'
 import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
 import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
@@ -88,6 +89,7 @@ export function createApp(options: AppOptions): CreatedApp {
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)
+  mountExportRoutes(app, context)
   // Never mounted in normal use: the route exists only with --fake-control.
   if (options.fakeControl) mountFakeControl(app, gate)
 

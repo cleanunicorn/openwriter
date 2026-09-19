@@ -61,5 +61,29 @@ registerCommands((state) => {
         }),
     },
     { id: 'show-jobs', title: 'Show agent jobs', run: () => setTrayOpen(true) },
+    // One command per skill file. A new media type adds a file to skills/, never code here.
+    ...state.skills
+      .filter((skill) => skill.document === 'current')
+      .map((skill) => ({
+        id: `skill:${skill.name}`,
+        title: `Run skill: ${skill.name}`,
+        hint: skill.stub ? `${skill.description} — stub` : skill.description,
+        run: () =>
+          askInPalette({
+            label: `Instruction for the ${skill.name} skill`,
+            placeholder: skill.description,
+            doc: doc.ref,
+            scope: skill.scope,
+            skill: skill.name,
+            targets:
+              skill.scope === 'research'
+                ? []
+                : doc.selectedIds.length > 0
+                  ? doc.selectedIds
+                  : skill.scope === 'article'
+                    ? content
+                    : content.slice(-1),
+          }),
+      })),
   ]
 })

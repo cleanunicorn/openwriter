@@ -17,6 +17,8 @@ export type StartOptions = {
   dev?: boolean
   adapterOverride?: string
   fakeControl?: boolean
+  /** PATH lookup for skill prerequisites; the e2e server pins it so tests do not depend on the machine. */
+  toolLookup?: (tool: string) => boolean
 }
 
 export type RunningServer = {
@@ -46,6 +48,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     clientDir: options.dev ? undefined : path.join(REPO_ROOT, 'dist', 'client'),
     adapterOverride: options.adapterOverride,
     fakeControl: options.fakeControl ?? false,
+    toolLookup: options.toolLookup,
     allowedHosts: () => hostsFor(port, options.dev ? VITE_PORT : undefined),
   })
 

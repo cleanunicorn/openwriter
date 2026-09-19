@@ -120,6 +120,58 @@ An adapter only launches a process and relays progress; the file contract does t
 4. Test the command line and the stream mapping like `src/server/adapters/adapters.test.ts`.
    No test may need the real CLI.
 
+## Skills and media
+
+Media types are agent skills, not editor features: the editor only knows that a job can return
+assets plus blocks that reference them. A skill is a prompt template in `skills/` that any
+adapter can run. Run one from the palette (`Run skill: <name>`) or start an instruction with
+`/name`.
+
+| Skill | What it does |
+| --- | --- |
+| `diagram` | returns a fenced `mermaid` block (the editor renders mermaid fences anyway) |
+| `terminal-recording` | writes a script, records it with `asciinema`, converts it to a gif with `agg`, returns the cast and the gif. Needs both tools on `PATH`; when one is missing the job fails at once with "Missing on PATH: …" and no agent is started. openwrite never installs them. |
+| `image` | runs on the agent configured for image tasks in settings (`taskAgents.image`), otherwise on the main agent |
+| `video` | **a stub.** It is listed and refuses to run. A real one would be a prompt like `image`, an agent or tool that can produce video, and an `.mp4`/`.webm` asset referenced from a Hugo `video` shortcode or a `<video>` tag. |
+| `draft-brief`, `draft-article` | behind the palette's "Draft brief from my notes" and "Draft article from brief" |
+
+## Adding a skill
+
+Add `skills/<name>.md`. Nothing else changes: the server lists the directory, the palette gets a
+"Run skill" entry, and `/name` works in the prompt pill.
+
+```markdown
+---
+name: haiku                      # must match the file name
+description: Rewrite as a haiku  # shown in the palette
+scope: blocks                    # blocks | article | research (default: blocks)
+task: text                       # optional; picks taskAgents.<task> from settings
+requires: [sometool]             # optional; checked on PATH before an agent starts
+allow: [Bash(sometool *)]        # optional; extra tool allowances (claude adds them to its allow list)
+network: false                   # optional; codex opens the network only when true
+stub: false                      # optional; true lists the skill but refuses to run it
+---
+The prompt: what to produce, as ops on the target blocks, and which files to put into `assets/`.
+```
+
+The body is inserted into the job's `instruction.md` under "Skill: <name>", between the writer's
+instruction and the contract rules, so it should describe the *what* and leave the `result.json`
+format to the contract.
+
+## Export
+
+From the palette, for the article on screen; each produces a zip download:
+
+- **Export: markdown + assets** — the leaf bundle as is: exact markdown bytes and every file next
+  to it.
+- **Export: standalone HTML + assets** — `index.html`, one `style.css`, and the assets. The
+  article is rendered with the editor's own pipeline; mermaid diagrams become inline SVG, so the
+  page needs no script and opens offline. Hugo `figure` shortcodes become `<figure>`; other
+  shortcode tags are dropped and their inner content kept. A diagram that cannot render fails
+  the export with a message.
+
+No DOCX or PDF.
+
 ## The job file contract
 
 The contract between the editor and an agent is files, so it works with any agent. For each job

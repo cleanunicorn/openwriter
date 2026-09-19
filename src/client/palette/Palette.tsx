@@ -9,11 +9,12 @@ export function Palette({ mode }: { mode: PaletteMode }) {
   const input = useRef<HTMLInputElement>(null)
   const articles = useApp((state) => state.articles)
   const config = useApp((state) => state.config)
+  const skills = useApp((state) => state.skills)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the list depends on app state slices
   const commands = useMemo(
     () => (mode.kind === 'commands' ? filterCommands(allCommands(store.get()), query) : []),
-    [mode, query, articles, config],
+    [mode, query, articles, config, skills],
   )
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the mode changes

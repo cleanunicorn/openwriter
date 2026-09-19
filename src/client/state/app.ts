@@ -1,6 +1,6 @@
 import { type Article, type ConfigResponse, type DocRef, docKey } from '../../shared/api-types.ts'
 import { ServerEventSchema } from '../../shared/events.ts'
-import { ApiError, api } from '../api.ts'
+import { ApiError, api, type SkillInfo } from '../api.ts'
 import {
   type DocAction,
   type DocState,
@@ -23,6 +23,8 @@ export type AppState = {
   docs: Record<string, DocState>
   articles: Article[]
   config: ConfigResponse | null
+  /** Prompt templates from `skills/`; the palette lists them, the editor knows nothing else. */
+  skills: SkillInfo[]
   palette: PaletteMode | null
   panel: Panel
 }
@@ -32,6 +34,7 @@ export const store = createStore<AppState>({
   docs: {},
   articles: [],
   config: null,
+  skills: [],
   palette: null,
   panel: null,
 })
@@ -161,6 +164,11 @@ export async function refreshConfig(): Promise<void> {
   store.set((state) => ({ ...state, config }))
 }
 
+export async function refreshSkills(): Promise<void> {
+  const { skills } = await api.skills()
+  store.set((state) => ({ ...state, skills }))
+}
+
 export async function createArticle(title: string): Promise<void> {
   const article = await api.createArticle(title)
   await refreshArticles()
@@ -207,7 +215,7 @@ export function connectEvents(): () => void {
 }
 
 export async function start(): Promise<void> {
-  await Promise.all([refreshArticles(), refreshConfig()])
+  await Promise.all([refreshArticles(), refreshConfig(), refreshSkills()])
   const fromHash = hashToRef(window.location.hash)
   const first = store.get().articles[0]
   const initial =

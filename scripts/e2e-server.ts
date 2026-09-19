@@ -22,6 +22,8 @@ const server = await startServer({
   port: Number(values.port),
   adapterOverride: 'fake',
   fakeControl: values['fake-control'],
+  // Deterministic on every machine: the recording skill's tools count as missing, as in CI.
+  toolLookup: () => false,
 })
 console.log(`openwrite listening on ${server.url}`)
 console.log(`workspace: ${workspace}`)

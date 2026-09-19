@@ -237,6 +237,26 @@ codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
 - Real agents never run in `npm test` or CI: `scripts/verify-adapter.ts` is manual, and its
   report scrubs home and temp paths.
 
+## Skills and export
+
+- **A skill is a file, `skills/<name>.md`:** a small header read by the same dependency-free
+  key/value reader as front matter (validated with zod) plus a prompt body. The server lists the
+  directory; the palette and `/name` are generic. No editor code exists per media type.
+- **Missing tools are detected by the server, generically, before an agent starts** (`requires`
+  in the header, looked up on `PATH`; the lookup is injected in tests). It names the tools, spends
+  nothing, and is testable without installing anything. The recording template still carries the
+  `command -v asciinema agg` instruction as a second line of defence.
+- **`image` is routed by task** (`taskAgents.image`, else the main agent) through the same
+  registry. The spec allows the main agent to spawn another agent CLI as a subprocess; routing
+  the job instead keeps one confined process per job and needs no nested permissions.
+- **`video` is a stub:** listed, marked `stub: true`, and refused with a pointer to the README.
+- **Export: the client renders, the server zips.** DOMPurify needs a DOM, and mermaid renders in
+  the browser anyway, so the HTML body is rendered by the editor's own pipeline (export mode) and
+  posted; the server wraps it in a template with one `style.css`, adds the bundle's files, and
+  zips with `fflate`. No headless browser on the server, no CDN in the page.
+- **Exports commit the open editor and save first,** so the zip equals what is on disk.
+- **Symlinks in a bundle are never followed or exported.**
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point
