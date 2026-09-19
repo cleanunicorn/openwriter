@@ -47,20 +47,28 @@ export function recoverJobs(jobsDir: string): JobFile[] {
     const jobDir = path.join(jobsDir, entry.name)
     const file = readJobFile(jobDir)
     if (file === undefined || file.dismissed) continue
-    const job: Job = file.job
-    if (isUnsettled(job.state)) {
-      const rawOutput = job.rawOutput ?? readJobTextOrNull(jobDir, 'result.json')
-      file.job = {
-        ...job,
-        state: 'stale',
-        error:
-          'The app restarted before this job was reviewed. Its output is kept here; start a new job to apply it.',
-        rawOutput,
-        updatedAt: new Date().toISOString(),
-      }
-      saveJobFile(jobDir, file)
+    try {
+      recoverOne(jobDir, file, recovered)
+    } catch (error) {
+      // One unreadable job directory must not stop the server from starting.
+      console.error(`could not recover job ${entry.name}`, error)
     }
-    if (file.job.state === 'stale') recovered.push(file)
   }
   return recovered
+}
+
+function recoverOne(jobDir: string, file: JobFile, recovered: JobFile[]): void {
+  const job: Job = file.job
+  if (isUnsettled(job.state)) {
+    file.job = {
+      ...job,
+      state: 'stale',
+      error:
+        'The app restarted before this job was reviewed. Its output is kept here; start a new job to apply it.',
+      rawOutput: job.rawOutput ?? readJobTextOrNull(jobDir, 'result.json'),
+      updatedAt: new Date().toISOString(),
+    }
+    saveJobFile(jobDir, file)
+  }
+  if (file.job.state === 'stale') recovered.push(file)
 }

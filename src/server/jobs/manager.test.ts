@@ -12,8 +12,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
 import type { ServerEvent } from '../../shared/events.ts'
 import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
+import { AdapterRegistry } from '../adapters/registry.ts'
+import type { AdapterHandle, AgentAdapter, Completion } from '../adapters/types.ts'
 import { createApp } from '../app.ts'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { JobManager } from './manager.ts'
 
 let t: TestApp
 beforeEach(() => {
@@ -237,6 +240,92 @@ describe('lifecycle', () => {
     } finally {
       other.cleanup()
     }
+  })
+})
+
+describe('nothing inside a job run can take the server down', () => {
+  const adapterThat = (behaviour: (jobDir: string) => AdapterHandle): AgentAdapter => ({
+    name: 'fake',
+    start: (dir) => behaviour(dir),
+  })
+  const handle = (
+    done: Promise<Completion>,
+    progress: AsyncIterable<{ text: string }> = (async function* () {})(),
+  ) => ({
+    progress,
+    done,
+    cancel: async () => {},
+  })
+  const runWith = async (adapter: AgentAdapter) => {
+    const manager = new JobManager({
+      workspace: t.context.workspace,
+      events: t.context.events,
+      registry: new AdapterRegistry().register(adapter),
+    })
+    const job = manager.create(request('x', byText('## Why blocks')))
+    await expect.poll(() => manager.get(job.id).state, { timeout: 5000 }).toBe('failed')
+    return manager.get(job.id)
+  }
+
+  it('an agent that leaves a directory named result.json', async () => {
+    const failed = await runWith(
+      adapterThat((dir) => {
+        mkdirSync(path.join(dir, 'result.json'), { recursive: true })
+        return handle(Promise.resolve({ ok: true }))
+      }),
+    )
+    expect(failed.reason).toBe('invalid-result')
+    expect(failed.error).toContain('not a plain file')
+  })
+
+  it('an adapter whose start throws', async () => {
+    const failed = await runWith(
+      adapterThat(() => {
+        throw new Error('spawn exploded')
+      }),
+    )
+    expect(failed).toMatchObject({ reason: 'exit' })
+    expect(failed.error).toContain('spawn exploded')
+  })
+
+  it('an adapter whose completion rejects', async () => {
+    const failed = await runWith(
+      adapterThat(() => handle(Promise.reject(new Error('completion rejected')))),
+    )
+    expect(failed.error).toContain('completion rejected')
+  })
+
+  it('an adapter whose progress stream throws', async () => {
+    const broken = (async function* () {
+      yield { text: 'one' }
+      throw new Error('progress broke')
+    })()
+    const failed = await runWith(adapterThat(() => handle(new Promise(() => {}), broken)))
+    expect(failed.error).toContain('progress broke')
+  })
+
+  it('a job directory that can no longer be written', async () => {
+    const failed = await runWith(
+      adapterThat((dir) => {
+        rmSync(dir, { recursive: true, force: true })
+        writeFileSync(dir, 'now a file')
+        return handle(Promise.resolve({ ok: true }))
+      }),
+    )
+    expect(failed.state).toBe('failed')
+  })
+
+  it('an unreadable job directory does not stop the next server start', () => {
+    mkdirSync(path.join(t.workspace, '.zen', 'jobs', '20260101-000000-dead', 'job.json'), {
+      recursive: true,
+    })
+    const restarted = createApp({
+      workspace: t.workspace,
+      fakeControl: false,
+      allowedHosts: () => [],
+    })
+    expect(restarted.jobs.list()).toEqual([])
+    restarted.dispose()
   })
 })
 

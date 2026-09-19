@@ -1,7 +1,13 @@
 import path from 'node:path'
 import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
-import type { FailureReason, Job, JobRequest, JobState } from '../../shared/jobs/job-types.ts'
+import {
+  type FailureReason,
+  isUnsettled,
+  type Job,
+  type JobRequest,
+  type JobState,
+} from '../../shared/jobs/job-types.ts'
 import { type Result, ResultSchema } from '../../shared/jobs/result-schema.ts'
 import { START_ANCHOR, validateOps } from '../../shared/jobs/validate-ops.ts'
 import type { AdapterRegistry } from '../adapters/registry.ts'
@@ -219,6 +225,26 @@ export class JobManager {
     return entry.file.job
   }
 
+  /**
+   * Last line of defence for the job lifecycle: whatever throws inside run() — a filesystem error,
+   * an adapter that throws or rejects — becomes a failed job. It must never become an unhandled
+   * rejection, which would take the server (and the writer's autosave) down.
+   */
+  private crashed(entry: Entry, error: unknown): void {
+    const message = error instanceof Error ? error.message : String(error)
+    void entry.handle?.cancel().catch(() => {})
+    entry.handle = undefined
+    try {
+      if (isUnsettled(entry.file.job.state) && entry.file.job.state !== 'ready') {
+        this.fail(entry, 'exit', `The job stopped on an internal error: ${message}`)
+      }
+    } catch (persistError) {
+      // Even recording the failure failed (disk full, directory gone): keep it in memory.
+      entry.file.job = { ...entry.file.job, state: 'failed', reason: 'exit', error: message }
+      console.error('could not record a failed job', persistError)
+    }
+  }
+
   /** Start queued jobs while process slots are free. Waiting for review holds no slot. */
   private pump(): void {
     const limit = this.options.workspace.config().config.concurrency
@@ -227,10 +253,12 @@ export class JobManager {
       const entry = this.entries.get(id)
       if (entry === undefined || entry.file.job.state !== 'queued') continue
       this.running++
-      void this.run(entry).finally(() => {
-        this.running--
-        this.pump()
-      })
+      void this.run(entry)
+        .catch((error: unknown) => this.crashed(entry, error))
+        .finally(() => {
+          this.running--
+          this.pump()
+        })
     }
   }
 
@@ -260,7 +288,16 @@ export class JobManager {
     const timeout = new Promise<'timeout'>((resolve) => {
       timer = setTimeout(() => resolve('timeout'), entry.file.effectiveConfig.timeoutSec * 1000)
     })
-    const outcome = await Promise.race([handle.done, timeout])
+    // A progress stream that throws must fail the run now, not surface later as an unhandled
+    // rejection; a stream that simply ends keeps waiting for completion.
+    const relayFailure = relay.then(() => new Promise<never>(() => {}))
+    let outcome: Awaited<typeof handle.done> | 'timeout'
+    try {
+      outcome = await Promise.race([handle.done, timeout, relayFailure])
+    } catch (error) {
+      clearTimeout(timer)
+      throw error
+    }
     clearTimeout(timer)
     if (outcome === 'timeout') {
       await handle.cancel()
@@ -375,7 +412,7 @@ export class JobManager {
     const entry = this.entry(id)
     if (entry.file.job.state === 'settled') return entry.file.job
     const rawOutput = entry.file.job.rawOutput ?? readJobTextOrNull(this.jobDir(id), 'result.json')
-    void entry.handle?.cancel()
+    void entry.handle?.cancel().catch(() => {})
     this.update(entry, { state: 'stale', error: reason, rawOutput })
     return entry.file.job
   }

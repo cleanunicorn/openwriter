@@ -76,7 +76,8 @@ export function createApp(options: AppOptions): CreatedApp {
   app.get('/api/events', (c) =>
     streamSSE(c, async (stream) => {
       const unsubscribe = events.subscribe((event) => {
-        void stream.writeSSE({ data: JSON.stringify(event) })
+        // A client that went away mid-write must not become an unhandled rejection.
+        void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})
       })
       stream.onAbort(unsubscribe)
       await stream.writeSSE({ event: 'hello', data: '{}' })

@@ -126,6 +126,9 @@ async function main(): Promise<void> {
   })
   console.log(`openwrite listening on ${server.url}`)
   console.log(`workspace: ${workspace}`)
+  // A backstop, not a strategy: the writer's editor and autosave must outlive a bug in a
+  // background job. Every known path is handled where it happens; this only logs the unknown.
+  process.on('unhandledRejection', (reason) => console.error('unhandled rejection', reason))
   if (values.open) openBrowser(server.url)
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
