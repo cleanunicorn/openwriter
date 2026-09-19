@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../shared/blocks/index.ts'
 import type { JobRequest } from '../shared/jobs/job-types.ts'
+import { buildClaudeArgs } from './adapters/claude.ts'
 import { findSkill, listSkills, missingTools, parseSkill, SKILLS_DIR } from './skills.ts'
 import { createTestApp, json, type TestApp } from './test-helpers.ts'
 
@@ -24,6 +25,42 @@ describe('the shipped skills', () => {
       expect(skill.body.length).toBeGreaterThan(40)
     }
     expect(listSkills().map((skill) => skill.name)).toHaveLength(files.length)
+  })
+
+  it('pins every skill’s extra allowances: a new Bash rule is a reviewed change', () => {
+    // A `Bash(...)` rule gives claude a shell that --restricted does not confine (it confines the
+    // file tools only). Such a skill trades confinement for its purpose; see DECISIONS.md. This
+    // list must change in the same commit as a skill's `allow:` header, and a widened command
+    // line is sentinel-checked with `node scripts/verify-adapter.ts claude --skill=<name>`.
+    const allowances = Object.fromEntries(listSkills().map((skill) => [skill.name, skill.allow]))
+    expect(allowances).toEqual({
+      diagram: [],
+      'draft-article': [],
+      'draft-brief': [],
+      image: [],
+      'terminal-recording': [
+        'Bash(asciinema *)',
+        'Bash(agg *)',
+        'Bash(command -v *)',
+        'Bash(bash *)',
+      ],
+      video: [],
+    })
+  })
+
+  it('builds the real command line of the one skill that widens it', () => {
+    const skill = findSkill('terminal-recording')
+    const args = buildClaudeArgs('/ws/.zen/jobs/j', {
+      workspace: '/ws',
+      jobId: 'j',
+      prompt: '',
+      config: { extraArgs: [] },
+      allow: skill?.allow ?? [],
+      network: false,
+    })
+    expect(args[args.indexOf('--tools') + 1]).toBe('Read,Glob,Grep,Edit,Write,Bash')
+    expect(args).toContain('--restricted')
+    expect(args[args.indexOf('--permission-mode') + 1]).toBe('dontAsk')
   })
 
   it('diagram asks for a fenced mermaid block', () => {

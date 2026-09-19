@@ -242,6 +242,17 @@ codex exec --json --skip-git-repo-check --ephemeral
 
 ## Skills and export
 
+- **A skill with a `Bash(...)` rule runs with a shell that is not confined.** claude's
+  `--restricted` confines the file tools only, so `terminal-recording`
+  (`allow: Bash(asciinema *) …`) can run arbitrary commands as the writer — `asciinema rec -c`
+  alone is an arbitrary-command path, so trimming the list would narrow nothing. That is the
+  price of a skill whose purpose is to run a script. Consequences: a skill file is reviewed like
+  code; `skills.test.ts` pins every skill's `allow` list so a new rule cannot land unnoticed;
+  and a widened command line can be sentinel-checked with
+  `node scripts/verify-adapter.ts claude --skill=<name>`. **Not run for `terminal-recording`:**
+  `asciinema` and `agg` are not installed here (the job stops at the preflight), and the
+  real-agent run budget of this build was spent. codex ignores `allow` entirely.
+
 - **A skill is a file, `skills/<name>.md`:** a small header read by the same dependency-free
   key/value reader as front matter (validated with zod) plus a prompt body. The server lists the
   directory; the palette and `/name` are generic. No editor code exists per media type.
