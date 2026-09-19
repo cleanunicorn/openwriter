@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { Locator, Page } from '@playwright/test'
+import { unzipSync } from 'fflate'
 import { type App, expect } from './fixtures.ts'
 
 export const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
@@ -75,6 +77,24 @@ export async function openPalette(page: Page, query: string): Promise<void> {
 export async function runCommand(page: Page, query: string): Promise<void> {
   await openPalette(page, query)
   await page.keyboard.press('Enter')
+}
+
+/** Run an export command and unzip the download: its name, its entries, the temp directory. */
+export async function exportVia(page: Page, query: string) {
+  await openPalette(page, query)
+  const download = page.waitForEvent('download')
+  await page.keyboard.press('Enter')
+  const file = await download
+  const saved = path.join(
+    mkdtempSync(path.join(os.tmpdir(), 'openwrite-export-')),
+    file.suggestedFilename(),
+  )
+  await file.saveAs(saved)
+  return {
+    name: file.suggestedFilename(),
+    files: unzipSync(new Uint8Array(readFileSync(saved))),
+    dir: path.dirname(saved),
+  }
 }
 
 // ── jobs ──────────────────────────────────────────────────────────────────────────────────

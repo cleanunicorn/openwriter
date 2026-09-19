@@ -1,28 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { Page } from '@playwright/test'
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8 } from 'fflate'
 import { expect, test } from './fixtures.ts'
-import { notice, openArticle, openPalette, runCommand } from './helpers.ts'
-
-async function exportVia(page: Page, query: string) {
-  await openPalette(page, query)
-  const download = page.waitForEvent('download')
-  await page.keyboard.press('Enter')
-  const file = await download
-  const saved = path.join(
-    mkdtempSync(path.join(os.tmpdir(), 'openwrite-export-')),
-    file.suggestedFilename(),
-  )
-  await file.saveAs(saved)
-  return {
-    name: file.suggestedFilename(),
-    files: unzipSync(new Uint8Array(readFileSync(saved))),
-    dir: path.dirname(saved),
-  }
-}
+import { exportVia, notice, openArticle, runCommand } from './helpers.ts'
 
 test('markdown export is the bundle as is, including an unsaved edit', async ({ page, app }) => {
   await openArticle(page)

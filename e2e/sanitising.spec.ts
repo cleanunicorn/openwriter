@@ -1,18 +1,15 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import type { Page } from '@playwright/test'
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8 } from 'fflate'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
   ask,
   blockWith,
+  exportVia,
   expectWaiting,
   ghosts,
   mod,
   openArticle,
-  openPalette,
   release,
   selectWord,
 } from './helpers.ts'
@@ -77,14 +74,8 @@ test('hostile markup in an agent result renders inert in the ghost and after acc
 test('the standalone HTML export carries none of it', async ({ page }) => {
   await openArticle(page)
   await typeHostileBlock(page)
-  await openPalette(page, 'export html')
-  const download = page.waitForEvent('download')
-  await page.keyboard.press('Enter')
-  const saved = path.join(mkdtempSync(path.join(os.tmpdir(), 'openwrite-xss-')), 'export.zip')
-  await (await download).saveAs(saved)
-  const html = strFromU8(
-    unzipSync(new Uint8Array(readFileSync(saved)))['hello-openwrite/index.html'] as Uint8Array,
-  )
+  const { files } = await exportVia(page, 'export html')
+  const html = strFromU8(files['hello-openwrite/index.html'] as Uint8Array)
   expect(html).toContain('Hostile')
   // markdown-it refuses to turn `[x](javascript:…)` into a link, so that one stays as plain text.
   expect(html).not.toMatch(/<script|<iframe|onerror|onload|(href|src)\s*=\s*["']?\s*javascript:/i)
