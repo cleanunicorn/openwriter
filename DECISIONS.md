@@ -288,6 +288,10 @@ codex exec --json --skip-git-repo-check --ephemeral
   `docs/herdr-evaluation.md`.
 - **Every herdr call removes the inherited `HERDR_*` variables and names its session.** openwrite
   may run inside a herdr pane; an unscoped command would act on the writer's own session.
+- **`adapters.<name>.session` is a herdr-only key in the shared adapter schema.** A generic
+  `options` bag would keep the schema adapter-neutral but move the validation of that one key out
+  of zod; with a single adapter-specific key and a single reader (`herdr.ts`) the typed key wins.
+  Revisit when a second adapter needs an option of its own.
 - **Interactive claude inside herdr reuses the direct adapter's confinement flags.** Print-only
   flags (`--permission-prompts`, `--max-budget-usd`, `--no-session-persistence`) are left out.
 - **"Open this job in herdr" shows the attach command** instead of opening a terminal: a local
