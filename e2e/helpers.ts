@@ -134,6 +134,11 @@ export async function dropEventStreams(app: App): Promise<void> {
 export const jobFile = (app: App, jobId: string | undefined, name = ''): string =>
   path.join(app.workspace, '.zen', 'jobs', jobId ?? '', name)
 
+export const briefPath = (app: App, slug = 'hello-openwrite'): string =>
+  path.join(app.workspace, '.zen', 'articles', slug, 'brief.md')
+
+export const configPath = (app: App): string => path.join(app.workspace, '.zen', 'config.json')
+
 // `exact` is load-bearing: without it "Accept" also matches "Accept all".
 export const acceptButton = (scope: Locator | Page): Locator =>
   scope.getByRole('button', { name: 'Accept', exact: true })

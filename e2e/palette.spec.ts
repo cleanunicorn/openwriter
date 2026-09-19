@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
-import path from 'node:path'
 import { expect, test } from './fixtures.ts'
-import { blockWith, mod, openArticle } from './helpers.ts'
+import { blockWith, briefPath, configPath, mod, openArticle } from './helpers.ts'
 
 test('the palette creates a new article and switches between articles', async ({ page, app }) => {
   await openArticle(page)
@@ -19,9 +18,7 @@ test('the palette creates a new article and switches between articles', async ({
     page.getByRole('heading', { name: 'Shipping a Block Editor', level: 1 }),
   ).toBeVisible()
   expect(existsSync(app.articlePath('shipping-a-block-editor'))).toBe(true)
-  expect(
-    existsSync(path.join(app.workspace, '.zen', 'articles', 'shipping-a-block-editor', 'brief.md')),
-  ).toBe(true)
+  expect(existsSync(briefPath(app, 'shipping-a-block-editor'))).toBe(true)
 
   await page.keyboard.press(`${mod}+k`)
   await page.getByRole('combobox', { name: 'Command palette' }).fill('open hello')
@@ -77,9 +74,7 @@ test('zen layout: a centred column of about 680px, no toolbar, no sidebar, switc
   }
   const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
   expect(background).toBe('rgb(25, 25, 25)')
-  expect(
-    JSON.parse(readFileSync(path.join(app.workspace, '.zen', 'config.json'), 'utf8')).theme,
-  ).toBe('dark')
+  expect(JSON.parse(readFileSync(configPath(app), 'utf8')).theme).toBe('dark')
 })
 
 test('diagrams follow a theme switch instead of keeping the old theme', async ({ page }) => {

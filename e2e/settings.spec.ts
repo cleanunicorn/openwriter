@@ -1,9 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './fixtures.ts'
-import { mod, openArticle } from './helpers.ts'
-
-const configPath = (workspace: string) => path.join(workspace, '.zen', 'config.json')
+import { configPath, mod, openArticle } from './helpers.ts'
 
 async function openSettings(page: import('@playwright/test').Page) {
   await page.keyboard.press(`${mod}+k`)
@@ -37,7 +35,7 @@ test('settings are reachable from the palette and stored in .zen/config.json', a
   await expect(form.getByRole('status', { name: 'Settings status' })).toHaveText('Saved.')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 
-  expect(JSON.parse(readFileSync(configPath(app.workspace), 'utf8'))).toMatchObject({
+  expect(JSON.parse(readFileSync(configPath(app), 'utf8'))).toMatchObject({
     version: 1,
     mainAgent: 'codex',
     taskAgents: { image: 'claude' },
@@ -49,18 +47,18 @@ test('settings are reachable from the palette and stored in .zen/config.json', a
   await form.getByLabel('Main agent').selectOption('claude')
   await form.getByRole('button', { name: 'Save' }).click()
   await expect(() =>
-    expect(JSON.parse(readFileSync(configPath(app.workspace), 'utf8')).mainAgent).toBe('claude'),
+    expect(JSON.parse(readFileSync(configPath(app), 'utf8')).mainAgent).toBe('claude'),
   ).toPass()
 })
 
 test('an invalid config file is shown, never overwritten', async ({ page, app }) => {
-  writeFileSync(configPath(app.workspace), '{ "concurrency": "many" }')
+  writeFileSync(configPath(app), '{ "concurrency": "many" }')
   await openArticle(page)
   await openSettings(page)
   const form = page.getByRole('form', { name: 'Settings' })
   await expect(form.getByRole('alert')).toContainText('concurrency')
   await expect(form.getByRole('button', { name: 'Save' })).toBeDisabled()
-  expect(readFileSync(configPath(app.workspace), 'utf8')).toBe('{ "concurrency": "many" }')
+  expect(readFileSync(configPath(app), 'utf8')).toBe('{ "concurrency": "many" }')
 })
 
 test('the content directory can point outside the workspace, and says so', async ({
@@ -137,7 +135,7 @@ test('a settings event from outside does not wipe a half-edited form', async ({ 
   await form.getByLabel('codex model').fill('half-typed-model')
 
   // Something else rewrites the config file: the server announces it, the client reloads it.
-  const current = JSON.parse(readFileSync(configPath(app.workspace), 'utf8'))
+  const current = JSON.parse(readFileSync(configPath(app), 'utf8'))
   const saved = page.waitForResponse(
     (response) => response.url().endsWith('/api/config') && response.request().method() === 'GET',
   )

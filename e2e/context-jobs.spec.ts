@@ -4,6 +4,7 @@ import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
   blockEnd,
+  briefPath,
   editor,
   expectFile,
   expectWaiting,
@@ -13,9 +14,6 @@ import {
   openArticle,
   release,
 } from './helpers.ts'
-
-const briefPath = (workspace: string, slug = 'hello-openwrite') =>
-  path.join(workspace, '.zen', 'articles', slug, 'brief.md')
 
 async function palette(page: import('@playwright/test').Page, query: string) {
   await page.keyboard.press(`${mod}+k`)
@@ -35,7 +33,7 @@ test('strategy and brief open in the same block editor', async ({ page, app }) =
   await page.keyboard.press(blockEnd)
   await page.keyboard.type(' They deploy on Fridays.')
   await page.keyboard.press('Escape')
-  await expectFile(briefPath(app.workspace), (file) =>
+  await expectFile(briefPath(app), (file) =>
     expect(file).toContain('publishes with Hugo. They deploy on Fridays.'),
   )
 
@@ -65,9 +63,7 @@ test('"draft brief from my notes" is an ordinary job whose proposal lands in the
   await expect(ghosts(page).first()).toBeVisible()
   await ghosts(page).first().getByRole('button', { name: 'Accept all' }).click()
   await expect(ghosts(page)).toHaveCount(0)
-  await expectFile(briefPath(app.workspace), (file) =>
-    expect(file).toContain('# BRIEF: HELLO, OPENWRITE'),
-  )
+  await expectFile(briefPath(app), (file) => expect(file).toContain('# BRIEF: HELLO, OPENWRITE'))
   // Nothing reached the article.
   expect(readFileSync(app.articlePath(), 'utf8')).toBe(article)
 })
@@ -85,7 +81,7 @@ test('an empty brief is drafted through the start anchor', async ({ page, app })
   expect(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8')).toContain('"b0"')
   await release(app)
   await acceptButton(ghosts(page).first()).click()
-  await expectFile(briefPath(app.workspace, 'fresh-post'), (file) =>
+  await expectFile(briefPath(app, 'fresh-post'), (file) =>
     expect(file).toContain('# Draft\n\nDrafted by the fake agent'),
   )
 })
