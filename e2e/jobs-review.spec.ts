@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import type { Locator } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
@@ -20,6 +21,12 @@ import {
   selectWord,
   tray,
 } from './helpers.ts'
+
+/** Bottom-left of the margin: clear of the drag handle, whatever the font metrics are. */
+async function clickMargin(block: Locator) {
+  const gutter = await block.getByTestId('gutter').boundingBox()
+  await block.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
+}
 
 test('select → prompt → review → accept, then one undo step reverts it', async ({ page, app }) => {
   await openArticle(page)
@@ -81,9 +88,7 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   const first = blockWith(page, 'Select some text, type an instruction')
   const second = blockWith(page, 'Results arrive as ghost diffs')
   // A margin click selects a block; shift-click extends the selection.
-  // Bottom-left of the margin: clear of the drag handle, whatever the font metrics are.
-  const gutter = await first.getByTestId('gutter').boundingBox()
-  await first.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
+  await clickMargin(first)
   await expect(first).toHaveClass(/is-selected/)
   await second.getByTestId('rendered').click({ modifiers: ['Shift'] })
   await expect(first).toHaveClass(/is-selected/)
@@ -198,8 +203,7 @@ test('accepting a replacement of the block being edited wins over the open draft
 }) => {
   await openArticle(page)
   const first = blockWith(page, 'Select some text, type an instruction')
-  const gutter = await first.getByTestId('gutter').boundingBox()
-  await first.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
+  await clickMargin(first)
   await blockWith(page, 'Results arrive as ghost diffs')
     .getByTestId('rendered')
     .click({ modifiers: ['Shift'] })
