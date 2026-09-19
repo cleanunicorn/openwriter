@@ -36,8 +36,7 @@ export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManag
   app.get('/api/jobs/:id/assets/*', (c) => {
     const id = c.req.param('id')
     const relative = pathTail(c, `/api/jobs/${id}/assets/`)
-    // Resolved from the trusted job directory and read without following links: `assets` itself
-    // is agent-writable and may be a symlink.
+    // `assets` is agent-writable: read it only through job-io (see readJobAsset).
     const data = readJobAsset(jobs.jobDir(id), `assets/${relative}`)
     if (data === null) throw new HttpError(404, 'asset not found')
     return fileResponse(c, data, relative)
