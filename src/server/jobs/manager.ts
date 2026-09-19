@@ -201,35 +201,42 @@ export class JobManager {
     this.entries.set(id, entry)
     this.options.events.emit({ type: 'job.state', job })
 
-    if (skill?.stub) {
-      this.fail(
-        entry,
-        'missing-tool',
-        `The "${skill.name}" skill is a stub and is not built yet. See the README.`,
-      )
-      return entry.file.job
-    }
-    const missing = skill === undefined ? [] : missingTools(skill, this.options.toolLookup)
-    if (missing.length > 0) {
-      // Fail before any agent starts: nothing is spent on a job that cannot succeed.
-      this.fail(
-        entry,
-        'missing-tool',
-        `Missing on PATH: ${missing.join(', ')}. Install ${missing.length > 1 ? 'them' : 'it'} to use the "${skill?.name}" skill.`,
-      )
-      return entry.file.job
-    }
-    if (this.options.registry.get(adapter) === undefined) {
-      this.fail(
-        entry,
-        'missing-cli',
-        `Unknown agent "${adapter}". Known agents: ${this.options.registry.names().join(', ')}.`,
-      )
+    // Fail before any agent starts: nothing is spent on a job that cannot succeed.
+    const problem = this.preflight(skill, adapter)
+    if (problem !== undefined) {
+      this.fail(entry, problem.reason, problem.error)
       return entry.file.job
     }
     this.waiting.push(id)
     this.pump()
     return entry.file.job
+  }
+
+  /** Why a job cannot run at all: a stub skill, a tool missing on PATH, or an unknown agent. */
+  private preflight(
+    skill: Skill | undefined,
+    adapter: string,
+  ): { reason: FailureReason; error: string } | undefined {
+    if (skill?.stub) {
+      return {
+        reason: 'missing-tool',
+        error: `The "${skill.name}" skill is a stub and is not built yet. See the README.`,
+      }
+    }
+    const missing = skill === undefined ? [] : missingTools(skill, this.options.toolLookup)
+    if (missing.length > 0) {
+      return {
+        reason: 'missing-tool',
+        error: `Missing on PATH: ${missing.join(', ')}. Install ${missing.length > 1 ? 'them' : 'it'} to use the "${skill?.name}" skill.`,
+      }
+    }
+    if (this.options.registry.get(adapter) === undefined) {
+      return {
+        reason: 'missing-cli',
+        error: `Unknown agent "${adapter}". Known agents: ${this.options.registry.names().join(', ')}.`,
+      }
+    }
+    return undefined
   }
 
   /**
