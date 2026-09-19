@@ -1,7 +1,7 @@
 :root {
   --bg: #fbfaf8;
   --fg: #22211f;
-  --quiet: #8a8780;
+  --quiet: #66635d;
   --line: #e6e3dd;
   --accent: #3b6ea5;
   --add-bg: #dff3e3;
@@ -15,7 +15,7 @@
   :root:not([data-theme="light"]) {
     --bg: #191919;
     --fg: #dddad4;
-    --quiet: #7d7a74;
+    --quiet: #a5a199;
     --line: #2e2d2b;
     --accent: #7fb0e6;
     --add-bg: #1f3a27;
@@ -28,7 +28,7 @@
 :root[data-theme="dark"] {
   --bg: #191919;
   --fg: #dddad4;
-  --quiet: #7d7a74;
+  --quiet: #a5a199;
   --line: #2e2d2b;
   --accent: #7fb0e6;
   --add-bg: #1f3a27;
