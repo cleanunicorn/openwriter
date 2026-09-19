@@ -112,3 +112,12 @@ export async function jobState(app: App, jobId: string): Promise<string> {
   const response = await fetch(`${app.url}/api/jobs/${jobId}`)
   return ((await response.json()) as { state: string }).state
 }
+
+/** End every open event stream on the server, as a network drop would. */
+export async function dropEventStreams(app: App): Promise<void> {
+  await fetch(`${app.url}/api/__fake/drop-events`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  })
+}

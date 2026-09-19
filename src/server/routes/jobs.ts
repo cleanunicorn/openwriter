@@ -8,6 +8,7 @@ import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
 import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
 import { listSkills } from '../skills.ts'
+import type { EventHub } from '../sse.ts'
 
 export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
   app.get('/api/jobs', (c) => c.json({ jobs: jobs.list() }))
@@ -51,7 +52,9 @@ export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManag
 }
 
 /** Test-only: mounted only with `--fake-control`. Lets e2e tests decide when a fake job finishes. */
-export function mountFakeControl(app: Hono, gate: FakeGate): void {
+export function mountFakeControl(app: Hono, gate: FakeGate, events: EventHub): void {
+  // Ends every open event stream, as a network drop would; EventSource reconnects by itself.
+  app.post('/api/__fake/drop-events', (c) => c.json({ dropped: events.dropStreams() }))
   app.get('/api/__fake/waiting', (c) => c.json({ waiting: gate.waitingIds() }))
   app.post('/api/__fake/release', async (c) => {
     const { jobId } = await parseBody(c, z.object({ jobId: z.string().optional() }))

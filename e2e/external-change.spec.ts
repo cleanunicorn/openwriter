@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
-import { blockEnd, editor, notice, openArticle } from './helpers.ts'
+import { blockEnd, dropEventStreams, editor, notice, openArticle } from './helpers.ts'
 
 test('an outside change reloads the document without losing the focused block’s edits', async ({
   page,
@@ -47,4 +47,25 @@ test('a file deleted from outside is not recreated from memory', async ({ page, 
     await new Promise((resolve) => setTimeout(resolve, 1200))
     expect(existsSync(app.articlePath())).toBe(false)
   }).toPass()
+})
+
+test('a change made while the event stream was down is picked up on reconnect', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  // Nothing is typed: a dirty document would save, get a 409, and reconcile through that path.
+  // The server ends the stream and keeps no replay, so the event for this change is lost for
+  // good; only the client's re-check on reconnect can bring the change in.
+  await dropEventStreams(app)
+  const changed = readFileSync(app.articlePath(), 'utf8').replace(
+    '## Why blocks',
+    '## Why blocks, while disconnected',
+  )
+  writeFileSync(app.articlePath(), changed)
+
+  // EventSource reconnects by itself after a few seconds.
+  await expect(page.getByRole('heading', { name: 'Why blocks, while disconnected' })).toBeVisible({
+    timeout: 15_000,
+  })
 })

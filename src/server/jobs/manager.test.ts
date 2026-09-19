@@ -658,6 +658,7 @@ describe('routes', () => {
     try {
       expect((await plain.get('/api/__fake/waiting')).status).toBe(404)
       expect((await plain.send('POST', '/api/__fake/release', {})).status).toBe(404)
+      expect((await plain.send('POST', '/api/__fake/drop-events', {})).status).toBe(404)
     } finally {
       plain.cleanup()
     }

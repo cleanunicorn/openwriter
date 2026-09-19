@@ -231,10 +231,34 @@ async function onDocChanged(ref: DocRef, hash: string | null): Promise<void> {
   }
 }
 
+/**
+ * The server keeps no event log, so whatever happened while the stream was down is unknown:
+ * on every (re)connect re-check each open document against the disk (through the same
+ * reconcile as a live event, so a focused draft survives), the settings, and the article list.
+ */
+async function resync(): Promise<void> {
+  const open = Object.values(store.get().docs).filter((doc) => doc.status === 'ready')
+  await Promise.all([
+    ...open.map(async (doc) => {
+      const disk = await api.doc(doc.ref)
+      if (disk.hash !== store.get().docs[docKey(doc.ref)]?.baseHash) {
+        dispatchDoc(doc.ref, { type: 'external', ...disk })
+      }
+    }),
+    refreshConfig(),
+    refreshArticles(),
+  ])
+}
+
 export function connectEvents(): () => void {
   const source = new EventSource('/api/events')
   // No replay on the server: every (re)connect refetches what may have been missed.
-  source.addEventListener('hello', () => handlers.onConnect?.())
+  source.addEventListener('hello', () => {
+    handlers.onConnect?.()
+    void resync().catch((error: unknown) =>
+      notifyFailure('Could not check for outside changes', error),
+    )
+  })
   source.onmessage = (message) => {
     const parsed = ServerEventSchema.safeParse(JSON.parse(message.data as string))
     if (!parsed.success) return

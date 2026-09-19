@@ -80,13 +80,25 @@ export function createApp(options: AppOptions): CreatedApp {
         // A client that went away mid-write must not become an unhandled rejection.
         void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})
       })
-      stream.onAbort(unsubscribe)
+      let dropped = false
+      const untrack = events.trackStream(() => {
+        // Immediately: nothing emitted after the drop may still reach this client.
+        dropped = true
+        unsubscribe()
+        void stream.close()
+      })
+      stream.onAbort(() => {
+        unsubscribe()
+        untrack()
+      })
       await stream.writeSSE({ event: 'hello', data: '{}' })
       // Keep the connection open; a comment line every 25 s defeats idle timeouts.
-      while (!stream.aborted) {
+      while (!stream.aborted && !dropped) {
         await stream.sleep(25_000)
-        await stream.write(': keep-alive\n\n')
+        if (!stream.aborted && !dropped) await stream.write(': keep-alive\n\n')
       }
+      unsubscribe()
+      untrack()
     }),
   )
 
@@ -95,7 +107,7 @@ export function createApp(options: AppOptions): CreatedApp {
   mountJobRoutes(app, context, jobs)
   mountExportRoutes(app, context)
   // Never mounted in normal use: the route exists only with --fake-control.
-  if (options.fakeControl) mountFakeControl(app, gate)
+  if (options.fakeControl) mountFakeControl(app, gate, events)
 
   app.all('/api/*', (c) => c.json({ error: 'not found' }, 404))
 
