@@ -74,7 +74,7 @@ registerCommands((state) => {
 export const allCommands = (state: AppState): Command[] =>
   providers.flatMap((provider) => provider(state))
 
-/** Every word of the query must appear in the title, in any order. */
+/** Every word of the query must appear in the title or the hint, in any order. */
 export function filterCommands(commands: Command[], query: string): Command[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   return commands.filter((command) => {
