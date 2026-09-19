@@ -14,7 +14,7 @@ export type Command = { id: string; title: string; hint?: string; run: () => voi
 type Provider = (state: AppState) => Command[]
 const providers: Provider[] = []
 
-/** Later milestones add commands to the same registry; the palette only lists and runs them. */
+/** Feature modules add commands to this registry; the palette only lists and runs them. */
 export const registerCommands = (provider: Provider) => {
   providers.push(provider)
 }
