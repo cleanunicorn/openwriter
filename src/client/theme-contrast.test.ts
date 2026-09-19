@@ -18,9 +18,10 @@ function themeBlocks(): Record<string, Record<string, string>> {
         m[2],
       ]),
     )
-    if (Object.keys(tokens).length > 0)
-      blocks[names[Object.keys(blocks).length] ?? `block ${Object.keys(blocks).length}`] =
-        tokens as Record<string, string>
+    if (Object.keys(tokens).length === 0) continue
+    // The Nth block that carries tokens is the Nth theme.
+    const position = Object.keys(blocks).length
+    blocks[names[position] ?? `block ${position}`] = tokens as Record<string, string>
   }
   return blocks
 }
