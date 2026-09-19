@@ -14,7 +14,6 @@ export type SpawnOptions = {
   stdin: string
   /** Called for every complete stdout line, across chunk boundaries. */
   onLine: (line: string) => void
-  env?: NodeJS.ProcessEnv
 }
 
 export type SpawnOutcome = {
@@ -49,7 +48,7 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
 
   const child = spawn(options.command, options.args, {
     cwd: options.cwd,
-    env: options.env ?? process.env,
+    env: process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: true,
   })
