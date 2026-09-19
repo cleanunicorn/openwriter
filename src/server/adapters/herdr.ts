@@ -64,8 +64,8 @@ const ReplySchema = z.looseObject({
     })
     .optional(),
 })
-const parse = (stdout: string) => parseLine(ReplySchema, stdout) ?? {}
-const statusOf = (stdout: string) => parse(stdout).result?.agent?.agent_status
+const parseReply = (stdout: string) => parseLine(ReplySchema, stdout) ?? {}
+const statusOf = (stdout: string) => parseReply(stdout).result?.agent?.agent_status
 
 /**
  * An optional backend: the job runs as an interactive `claude` inside a herdr pane, so the writer
@@ -92,16 +92,16 @@ export function createHerdrAdapter(
       }
 
       const ensureServer = async () => {
-        const running = async () =>
+        const isServerRunning = async () =>
           (await cli.run(scoped('status', 'server'), 5000).catch(() => '')).includes(
             'status: running',
           )
-        if (await running()) return
+        if (await isServerRunning()) return
         channel.push({ text: `starting the herdr session "${session}"` })
         cli.startServer(scoped('server'))
         for (let attempt = 0; attempt < 40; attempt++) {
           await new Promise((resolve) => setTimeout(resolve, 250))
-          if (await running()) return
+          if (await isServerRunning()) return
         }
         throw new Error(`the herdr session "${session}" did not start`)
       }
@@ -126,7 +126,7 @@ export function createHerdrAdapter(
         stopIfCancelled()
         await ensureServer()
         stopIfCancelled()
-        const created = parse(
+        const created = parseReply(
           await cli.run(
             scoped(
               'workspace',
