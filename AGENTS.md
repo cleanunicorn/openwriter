@@ -297,7 +297,8 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
   routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control), export
   jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
                         job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
-  adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent
+  adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent,
+                        test-helpers (the AdapterOptions fixture and the pid probe the adapter and job tests share)
 src/client/           Vite + React
   index.html main.tsx App.tsx   entry points and the shell (global keys, notices, overlays)
   api.ts                every request, zod-parsed against src/shared/api-types.ts
