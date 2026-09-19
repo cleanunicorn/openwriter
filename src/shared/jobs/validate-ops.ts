@@ -1,6 +1,5 @@
-import type { Snapshot } from './job-types.ts'
-import type { Scope } from './job-types.ts'
 import { referencedAssets } from './asset-refs.ts'
+import type { Scope, Snapshot } from './job-types.ts'
 import type { Result } from './result-schema.ts'
 
 /** Virtual start anchor: lets an ordinary `insert_after` create the first content of a document. */
