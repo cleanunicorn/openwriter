@@ -314,7 +314,8 @@ docs/                 herdr-evaluation.md, screenshots/
 ```
 
 Layering: the client never touches the filesystem; it talks to the server over
-HTTP plus WebSocket or SSE. The server owns the filesystem and spawns agents.
+HTTP plus SSE (`src/server/sse.ts`, `connectEvents` in `src/client/state/app.ts`).
+The server owns the filesystem and spawns agents.
 `src/shared/` has no I/O, so client, server, and tests all import it. An
 adapter only launches a process and relays progress; the file contract does
 the rest.
