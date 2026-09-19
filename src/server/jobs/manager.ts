@@ -1,6 +1,5 @@
 import { rmSync } from 'node:fs'
 import path from 'node:path'
-import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
 import {
   type FailureReason,
@@ -183,7 +182,7 @@ export class JobManager {
       version: 1,
       job,
       effectiveConfig: {
-        adapter: config.adapters[adapter] ?? DEFAULT_CONFIG.adapters[adapter] ?? { extraArgs: [] },
+        adapter: config.adapters[adapter] ?? { extraArgs: [] },
         timeoutSec: config.jobTimeoutSec,
       },
       promoted: {},
