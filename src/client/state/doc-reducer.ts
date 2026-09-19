@@ -93,6 +93,31 @@ function minter(state: DocState): { mint: MintId; next: () => number } {
 
 const indexOf = (doc: Doc, id: string) => doc.blocks.findIndex((block) => block.id === id)
 
+/**
+ * The anchor of an open new-block slot, carried over to `next`: the anchor itself when it
+ * survives, otherwise its nearest surviving predecessor (null = top of the document). Without
+ * this, a slot whose anchor was deleted or reloaded away would land at index 0 and autosave
+ * would write the paragraph the writer typed at the end of the article to the top of the file.
+ */
+function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): PendingNew | null {
+  if (pending === null || pending.afterId === null) return pending
+  if (indexOf(next, pending.afterId) !== -1) return pending
+  const oldIndex = indexOf(previous, pending.afterId)
+  const survivor = previous.blocks
+    .slice(0, Math.max(oldIndex, 0))
+    .reverse()
+    .find((block) => indexOf(next, block.id) !== -1)
+  return { afterId: survivor?.id ?? null }
+}
+
+/** Index at which the open slot's text goes. A missing anchor means the end, never the top. */
+function slotIndex(doc: Doc, pending: PendingNew | null): number {
+  const after = pending?.afterId ?? null
+  if (after === null) return pending === null ? doc.blocks.length : 0
+  const index = indexOf(doc, after)
+  return index === -1 ? doc.blocks.length : index + 1
+}
+
 /** Apply a structural change as one undoable step. */
 function change(
   state: DocState,
@@ -103,6 +128,7 @@ function change(
   if (doc === state.doc) return { ...state, ...extra }
   return {
     ...state,
+    pendingNew: reanchor(state.doc, doc, state.pendingNew),
     ...extra,
     doc,
     nextId,
@@ -117,8 +143,7 @@ function withDraft(state: DocState, id: string, text: string): { doc: Doc; nextI
   if (id === NEW_BLOCK_ID) {
     if (text.trim() === '' || state.pendingNew === null)
       return { doc: state.doc, nextId: state.nextId }
-    const after = state.pendingNew.afterId
-    const index = after === null ? 0 : indexOf(state.doc, after) + 1
+    const index = slotIndex(state.doc, state.pendingNew)
     return { doc: insertMarkdown(state.doc, index, text, mint), nextId: next() }
   }
   const index = indexOf(state.doc, id)
@@ -140,8 +165,7 @@ export const isDirty = (state: DocState): boolean =>
 function position(state: DocState, id: string): { before: number; tail: number } {
   const length = state.doc.blocks.length
   if (id === NEW_BLOCK_ID) {
-    const after = state.pendingNew?.afterId ?? null
-    const before = after === null ? 0 : indexOf(state.doc, after) + 1
+    const before = slotIndex(state.doc, state.pendingNew)
     return { before, tail: length - before }
   }
   const index = indexOf(state.doc, id)

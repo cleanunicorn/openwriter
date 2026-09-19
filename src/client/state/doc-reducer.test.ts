@@ -146,6 +146,61 @@ describe('new blocks', () => {
   })
 })
 
+describe('an open new-block slot whose anchor disappears', () => {
+  const slotAfter = (state: DocState, id: string, raw: string) =>
+    run(
+      state,
+      { type: 'focus', id, cursor: 'end' },
+      { type: 'new-block', currentId: id, currentText: raw },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'my new paragraph' },
+    )
+
+  it('stays after the nearest surviving block when an outside reload drops the anchor', () => {
+    const state = run(slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b3', 'Three'), {
+      type: 'external',
+      text: 'One\n\nTwo\n',
+      hash: 'h1',
+      exists: true,
+    })
+    expect(state.pendingNew).toEqual({ afterId: 'b2' })
+    expect(liveText(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+  })
+
+  it('stays in place when an accepted delete removes the anchor (replace-doc)', () => {
+    const open = slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b3', 'Three')
+    const without = { blocks: open.doc.blocks.slice(0, 2), gaps: ['', '\n\n', '\n'] }
+    const state = run(open, { type: 'replace-doc', doc: without, nextId: open.nextId })
+    expect(state.focusedId).toBe(NEW_BLOCK_ID)
+    expect(liveText(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+  })
+
+  it('never jumps above the front matter or to the top of the file', () => {
+    const open = slotAfter(loaded('---\ntitle: Post\n---\n\nOne\n\nTwo\n'), 'b3', 'Two')
+    const state = run(open, {
+      type: 'external',
+      text: '---\ntitle: Post\n---\n\nOne\n',
+      hash: 'h1',
+      exists: true,
+    })
+    expect(liveText(state)).toBe('---\ntitle: Post\n---\n\nOne\n\nmy new paragraph\n')
+  })
+
+  it('falls back to the end, never to index 0, if an anchor is missing anyway', () => {
+    const open = slotAfter(loaded('One\n\nTwo\n'), 'b2', 'Two')
+    const broken = { ...open, pendingNew: { afterId: 'b999' } }
+    expect(liveText(broken)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+  })
+
+  it('commits where it was shown', () => {
+    const state = run(
+      slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b3', 'Three'),
+      { type: 'external', text: 'One\n\nTwo\n', hash: 'h1', exists: true },
+      { type: 'commit', id: NEW_BLOCK_ID, text: 'my new paragraph' },
+    )
+    expect(text(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+  })
+})
+
 describe('navigation and merge', () => {
   it('moves focus to the neighbour and commits on the way', () => {
     const state = run(
