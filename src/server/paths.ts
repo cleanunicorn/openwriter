@@ -46,7 +46,8 @@ function realpathOfNearestExisting(target: string): string {
  * Call it at use time, right before the filesystem operation.
  */
 export function resolveWithin(root: string, ...segments: string[]): string {
-  const realRoot = realpathSync(root)
+  // The root itself may not exist yet (a freshly configured content directory).
+  const realRoot = realpathOfNearestExisting(path.resolve(root))
   for (const segment of segments) {
     if (segment.includes('\0')) throw new PathEscapeError('NUL byte in path')
     if (path.isAbsolute(segment) || /^[a-zA-Z]:[\\/]/.test(segment)) {

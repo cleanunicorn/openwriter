@@ -41,7 +41,7 @@ function listen(
 
 export async function startServer(options: StartOptions): Promise<RunningServer> {
   let port = 0
-  const app = createApp({
+  const { app, dispose } = createApp({
     workspace: options.workspace,
     clientDir: options.dev ? undefined : path.join(REPO_ROOT, 'dist', 'client'),
     adapterOverride: options.adapterOverride,
@@ -70,7 +70,13 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     url: `http://127.0.0.1:${port}`,
     port,
     address: bound.address,
-    close: () => new Promise((resolve) => running.close(() => resolve())),
+    close: () =>
+      new Promise((resolve) => {
+        dispose()
+        running.close(() => resolve())
+        // Open SSE streams would keep close() waiting forever.
+        if ('closeAllConnections' in running) running.closeAllConnections()
+      }),
   }
 }
 
