@@ -1,0 +1,60 @@
+import { readFileSync } from 'node:fs'
+import { expect, test } from './fixtures.ts'
+import {
+  acceptButton,
+  answer,
+  ask,
+  blockWith,
+  expectFile,
+  expectOneWaiting,
+  ghosts,
+  jobFile,
+  openArticle,
+  release,
+  runCommand,
+  selectWord,
+  tray,
+} from './helpers.ts'
+
+test('a skill from the palette runs as an ordinary job; the diagram renders in the ghost and after accept', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await runCommand(page, 'run skill diagram')
+  await answer(page, 'Instruction for the diagram skill', 'fake:diagram from idea to post')
+
+  const jobId = await expectOneWaiting(app)
+  const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
+  expect(instruction).toContain('## Skill: diagram')
+  await release(app)
+
+  // The editor has no diagram feature: the job returned a block, and blocks with mermaid render.
+  await expect(ghosts(page).getByTestId('diagram').locator('svg')).toContainText('Draft')
+  await acceptButton(ghosts(page)).click()
+  await expectFile(app.articlePath(), (file) =>
+    expect(file).toContain('```mermaid\ngraph TD\n  Idea --> Draft'),
+  )
+  await expect(page.getByTestId('diagram').locator('svg')).toHaveCount(2)
+})
+
+test('/name in the prompt pill runs a skill; the recording skill names the missing tools', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
+  await ask(page, '/terminal-recording show npm test running')
+  await tray(page).getByRole('button').first().click()
+  // scripts/e2e-server.ts makes every `requires:` tool count as missing, on any machine: the job
+  // says so at once.
+  await expect(tray(page)).toContainText('failed · missing tool')
+  await expect(tray(page)).toContainText('Missing on PATH: asciinema, agg')
+})
+
+test('the video skill is a stub and says so', async ({ page }) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
+  await ask(page, '/video a ten second intro')
+  await tray(page).getByRole('button').first().click()
+  await expect(tray(page)).toContainText('stub')
+})

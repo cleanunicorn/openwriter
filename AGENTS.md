@@ -10,9 +10,9 @@ agent jobs run in the background while the writer keeps writing. The project
 follows GitHub flow: `main` is always runnable, work happens on short-lived
 branches, and every change lands through a pull request.
 
-**Status (2026-09-19): no code exists yet.** Everything below marked *planned*
-is the contract the first scaffold must create. When the scaffold lands, replace
-*planned* with what was built, in the same PR.
+**Status:** the first version is built: the editor, the job system, the
+`claude`, `codex`, `herdr` and `fake` adapters, skills, and export. This file
+describes what exists; update it in the same PR as the code it describes.
 
 Use [README.md](README.md) for setup, the workspace layout, the job file
 contract, and how to add an adapter or a skill. Record every non-obvious
@@ -24,28 +24,31 @@ any place the build spec turned out to be a bad idea and what replaced it.
 Versions are what is installed on the dev machine as of 2026-09-19.
 
 - **Node.js ≥ 24 + npm** (v24.14.1 / 11.11.0). TypeScript everywhere.
-- **Playwright browser binaries** — `npx playwright install --with-deps`, once
-  per machine or container.
+- **Playwright browser binaries** — `npx playwright install --with-deps chromium`,
+  once per machine or container.
 - **`gh` CLI** for PRs (2.92.0).
 - **Agent CLIs, only for the real adapters:** `claude` (2.1.278), `codex`
   (codex-cli 0.155.1). They use the user's own logins; the app stores no keys.
 - **Hugo** (v0.154.5 extended) — the user's true preview. No test depends on it.
 - **`asciinema` and `agg`** — not installed. Only the terminal-recording skill
-  needs them; it must detect that they are missing and say so clearly.
-- **`herdr`** (0.9.1) — optional adapter backend, evaluated in milestone 5.
+  needs them; the server checks the skill's `requires:` header on `PATH` and
+  fails the job at once, naming what is missing.
+- **`herdr`** (0.9.1) — optional adapter backend; see
+  [docs/herdr-evaluation.md](docs/herdr-evaluation.md).
 
 ## Commands
 
-npm scripts are the single source of the dev flow. `npm run dev` and
-`npm start` are fixed by the spec; the other names are *planned* and the
-scaffold must create them exactly.
+npm scripts are the single source of the dev flow (`package.json`).
 
 - **Install / bootstrap:** `npm install`
-- **Run locally (dev):** `npm run dev`
-- **Run locally (production):** `npm start` — opens the editor on the sample
-  workspace
-- **Lint:** `npm run lint`
-- **Format:** `npm run format`
+- **Run locally (dev):** `npm run dev` — Node server with `--watch` on
+  `127.0.0.1:4317` plus Vite on `127.0.0.1:5173`
+- **Run locally (production):** `npm start` — builds the client when it is
+  missing or stale (`scripts/ensure-build.ts`), then opens the editor on a
+  gitignored copy of the sample workspace (`.openwrite/sample-workspace/`);
+  `npm start -- --workspace <dir>` opens another one
+- **Lint:** `npm run lint` — Biome, warnings fail
+- **Format:** `npm run format` writes; `npm run format:check` verifies (CI)
 - **Type-check:** `npm run typecheck`
 - **Test (unit, all):** `npm test`
 - **Test (single file):** `npm test -- <path>`
@@ -223,10 +226,13 @@ least once per milestone; never commit a red tree.
 
 ### 5. Run the checks locally
 
-These mirror what CI runs:
+The same checks CI runs. Two differences: CI runs `npm run format:check` (it
+must not rewrite files; run `npm run format` before you commit so it passes),
+and CI builds before the e2e suite (locally `test:e2e` builds the client itself
+when it is missing or stale):
 
 ```bash
-npm run format
+npm run format        # CI: npm run format:check
 npm run lint
 npm run typecheck
 npm test
@@ -276,38 +282,52 @@ Keep it short and useful:
 
 ## Project map (where things live)
 
-*Planned* — the scaffold settles the repo layout; update this in the same PR.
-
 ```
-src/shared/         block model (split, serialise), result.json zod schema, job types
-src/server/         Node server (Hono or Fastify): filesystem, jobs, agent adapters, event stream
-  adapters/           fake, claude, codex (, herdr)
-src/client/         Vite + React: blocks, CodeMirror 6 editing, palette, job tray, ghost diffs
-skills/             prompt templates any adapter can run: diagram, terminal recording, image, video (stub)
-sample-workspace/   sample article, strategy.md, brief.md — what `npm start` opens
-e2e/                Playwright specs
-docs/               herdr-evaluation.md and other notes
+src/shared/           no I/O; imported by client, server, and tests
+  blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), test-helpers, corpus/
+  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, scope, herdr-hint
+  config-schema.ts  api-types.ts  events.ts  key-values.ts  names.ts  contrast.ts  ports.ts
+src/server/           Hono on Node (TypeScript run natively, no build step)
+  main.ts               CLI flags, binds 127.0.0.1, opens the browser
+  app.ts                createApp(options): wires workspace, watcher, jobs, adapters, routes
+  paths.ts security.ts  the path guard; Host/Origin/content-type hardening
+  context.ts            AppOptions and the ServerContext every route module receives
+  workspace.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
+  test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
+  routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control), export
+  jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
+                        job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
+  adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent,
+                        test-helpers (the AdapterOptions fixture and the pid probe the adapter and job tests share)
+src/client/           Vite + React
+  index.html main.tsx App.tsx   entry points and the shell (global keys, notices, overlays)
+  api.ts                every request, zod-parsed against src/shared/api-types.ts
+  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions)
+  blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
+  render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
+  palette/              Palette, commands (the command registry)
+  jobs/                 PromptPill, selection, GhostDiff, Tray, ResearchPanel, commands
+  settings/             Settings, commands
+  export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
+skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
+sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
+scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
+.github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)
+e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts,
+                      start-server.ts (spawns scripts/e2e-server.ts; also used by scripts/screenshots.ts)
+docs/                 herdr-evaluation.md, screenshots/
 ```
 
 Layering: the client never touches the filesystem; it talks to the server over
-HTTP plus WebSocket or SSE. The server owns the filesystem and spawns agents.
+HTTP plus SSE (`src/server/sse.ts`, `connectEvents` in `src/client/state/app.ts`).
+The server owns the filesystem and spawns agents.
 `src/shared/` has no I/O, so client, server, and tests all import it. An
 adapter only launches a process and relays progress; the file contract does
 the rest.
 
-The user's **workspace** (separate from this repo; `content/` is configurable
-so it can point into a Hugo site):
-
-```
-<workspace>/
-  strategy.md                 global voice, audience, structure rules
-  sources/                    reference files agents may read
-  content/posts/<slug>/       Hugo leaf bundle: index.md + assets
-  .zen/
-    config.json               settings
-    articles/<slug>/brief.md  per-article outline, angle, target reader
-    jobs/<job-id>/            one directory per agent job
-```
+The user's **workspace** is separate from this repo; its layout is in
+[README.md](README.md#workspace-layout). `content/` is configurable so it can
+point into a Hugo site.
 
 ## Conventions
 
@@ -316,12 +336,10 @@ so it can point into a Hugo site):
 - **Configuration:** user settings live in `<workspace>/.zen/config.json`,
   validated with zod on read. Each adapter's command line, model, and extra
   args are overridable there. No secrets are stored.
-- **The job file contract:** the server writes `instruction.md`, `article.md`
-  (snapshot with ID marker comments), `targets.json`, and `strategy.md` /
-  `brief.md` copies or paths into `.zen/jobs/<id>/`. The agent runs with the
-  workspace as its working directory, writes `result.json` and `assets/` into
-  the job directory, and modifies nothing else. For `blocks` scope, ops may only
-  touch the target blocks or insert next to them.
+- **The job file contract** — the files the server writes into
+  `.zen/jobs/<id>/`, what the agent writes back, and `codex`'s different
+  working root — is in [README.md](README.md#the-job-file-contract). For
+  `blocks` scope, ops may only touch the target blocks or insert next to them.
 - **Job scopes:** `blocks`, `article` (exclusive: waits for running jobs, new
   block jobs queue behind it), `research` (no edits; answer goes to notes).
 - **Media are agent skills, not editor features.** The editor only knows that a
@@ -342,7 +360,8 @@ so it can point into a Hugo site):
 
 ## Testing
 
-- **Framework / runner:** Vitest for unit tests (*planned*), Playwright for e2e.
+- **Framework / runner:** Vitest for unit tests (`vitest.config.ts`, node
+  environment, fails on an empty suite), Playwright for e2e.
 - **Location & naming:** `*.test.ts` next to the code; `e2e/*.spec.ts`.
 - **What to cover:** a property-style round-trip test (parse then serialise
   equals the input) over a corpus with front matter, shortcodes, nested lists,
@@ -355,11 +374,15 @@ so it can point into a Hugo site):
 ## End-to-end tests (Playwright)
 
 - **Specs live in:** `e2e/`, named `*.spec.ts`
-- **Config:** `playwright.config.ts` (*planned*) — the `webServer` block starts
-  the app against a temp copy of the sample workspace with the `fake` adapter,
-  so the run starts the app itself.
-- **Browser binaries:** `npx playwright install --with-deps`. A "browser not
-  found" / "executable doesn't exist" error means this hasn't been run.
+- **Config:** `playwright.config.ts` — the `webServer` block runs
+  `scripts/e2e-server.ts`, which starts the app against a temp copy of the
+  sample workspace with the `fake` adapter, so the run starts the app itself.
+  Tests that write use the `app` fixture in `e2e/fixtures.ts`: one server
+  process on a free port and one workspace copy per test. Chromium only.
+  `npm run test:e2e` builds the client first when it is missing or stale.
+- **Browser binaries:** `npx playwright install --with-deps chromium`. A
+  "browser not found" / "executable doesn't exist" error means this hasn't been
+  run.
 
 Prefer `npm run test:e2e`; the raw forms:
 
@@ -387,7 +410,11 @@ adapter, including two overlapping jobs.
 
 - **Selectors:** `getByRole` / `getByLabel` first; `data-testid` only when
   there is no accessible handle (rendered blocks, drag handles); never CSS or
-  XPath tied to styling.
+  XPath tied to styling. Test ids in use: `block`, `block-body`, `rendered`,
+  `gutter`, `drag-handle`, `front-matter`, `diagram`, `ghost`, `ghost-struck`.
+  Two class selectors remain on purpose, each with a comment: highlight.js's
+  own `.hljs-keyword`, and `.diagram` in the exported file, which carries no
+  test ids by contract.
 - **Waiting:** use web-first assertions — `await expect(locator).toBeVisible()`
   auto-retries until the timeout. Never `waitForTimeout`. The fake adapter's
   timing is controlled by the test, not by sleeps.
@@ -413,14 +440,47 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 
 ## Hazards
 
-None recorded yet. When an incident produces a rule, add it here in the same PR
-that fixes the incident, as its own subsection: the rule, the mechanism, the
-evidence it is real, the safe recipe, and the near-misses.
+### An allow list does not confine a real agent; prove confinement with sentinels
+
+- **Rule:** never change an adapter's permission flags without re-running
+  `node scripts/verify-adapter.ts <adapter>` and recording the result in
+  `DECISIONS.md`. A flag that exists in `--help` is not evidence that it confines.
+- **Mechanism:** `claude` with only `--allowedTools` and `--permission-prompts
+  none` still honours the user's own settings and permission mode, so writes and
+  reads outside the allow list can succeed. `--permission-mode dontAsk` plus
+  `--restricted` is what denies them.
+- **Evidence:** the first verification run (2026-09-19) created `probe.txt` in the
+  workspace root and read a secret file outside the workspace; with the two
+  flags added, all four sentinel checks pass (`DECISIONS.md`, "Real agents").
+- **Safe recipe:** run the script in its throwaway workspace; ship only a command
+  line that passes checks 1–3, and say so plainly if check 4 cannot pass.
+- **Near-misses:** `codex -s read-only --add-dir <jobDir>` looks like the
+  narrowest setting but cannot write `result.json` at all; and `codex` cannot
+  confine reads with any documented flag.
+
+### Inside a herdr pane, an unscoped `herdr` command acts on the live session
+
+- **Rule:** every `herdr` call from this project removes the `HERDR_*`
+  environment variables and passes `--session <name>`. Never run
+  `herdr server stop`; never close panes, tabs, or workspaces you did not create.
+- **Mechanism:** panes inherit `HERDR_SOCKET_PATH` and `HERDR_SESSION`, and the
+  CLI uses them when no session is named.
+- **Evidence:** inside a live pane, `herdr status` reported the live socket, while
+  `herdr --session openwrite-eval status` reported a separate, not-running one
+  (`docs/herdr-evaluation.md`).
+- **Safe recipe:** prove the scoping with a read-only `status` before any
+  mutating command; stop a test session by name with `herdr session stop <name>`
+  after `herdr session list` confirms it.
+- **Near-misses:** `pkill -f <pattern>` matched the shell that ran it when the
+  pattern appeared in the same command line; use pid files.
 
 ## Where to look
 
 - `README.md` — setup, workspace layout, job file contract, adding an adapter
   or a skill
 - `DECISIONS.md` — why a non-obvious choice was made, and verified CLI flags
-- `src/shared/` — the block splitter and the `result.json` schema (*planned*)
-- `docs/herdr-evaluation.md` — what was tried with herdr, if it was not adopted
+- `src/shared/blocks/split.ts` — the block splitter; `src/shared/jobs/result-schema.ts`
+  and `validate-ops.ts` — the `result.json` contract; `scheduler.ts` — the queue rules
+- `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
+- `scripts/verify-adapter.ts` — the sentinel check for a real adapter's confinement
+- `docs/herdr-evaluation.md` — what was tried with herdr, and why it was adopted
