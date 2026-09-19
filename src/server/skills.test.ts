@@ -6,6 +6,7 @@ import { createDoc, createIdMinter } from '../shared/blocks/index.ts'
 import type { JobRequest } from '../shared/jobs/job-types.ts'
 import { buildClaudeArgs } from './adapters/claude.ts'
 import {
+  ALLOW_ENTRY,
   findSkill,
   listSkills,
   missingTools,
@@ -102,6 +103,25 @@ describe('the shipped skills', () => {
       expect(section, `README "Adding a skill" does not mention "${key}:"`).toMatch(
         new RegExp(`^${key}:`, 'm'),
       )
+    }
+  })
+
+  it.each(['--add-dir /', '-p', '--dangerously-skip-permissions', 'Bash(rm *) --add-dir /'])(
+    'rejects the flag-shaped allow entry %j',
+    (entry) => {
+      const text = `---\nname: bad\ndescription: d\nallow: ["${entry}"]\n---\nbody that is long enough to count`
+      expect(() => parseSkill(text)).toThrow()
+    },
+  )
+
+  it('accepts the entries the shipped skills use', () => {
+    for (const entry of [
+      'Bash(asciinema *)',
+      'Bash(command -v *)',
+      'Read',
+      'WebFetch(domain:example.com)',
+    ]) {
+      expect(ALLOW_ENTRY.test(entry), entry).toBe(true)
     }
   })
 

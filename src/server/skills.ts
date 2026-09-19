@@ -5,6 +5,16 @@ import { splitHeader } from '../shared/key-values.ts'
 import { SkillNameSchema } from '../shared/names.ts'
 
 const list = z.union([z.array(z.string()), z.string().transform((value) => [value])]).default([])
+/**
+ * An `allow:` entry is a tool name with an optional rule — `Bash(asciinema *)`. It is spliced
+ * into the agent's command line after a variadic flag, so anything that starts with `-` would be
+ * read as a flag of its own (`--add-dir /` would undo the directory confinement).
+ */
+export const ALLOW_ENTRY = /^[A-Za-z][A-Za-z0-9_]*(\([^()]*\))?$/
+const allowList = list.pipe(
+  z.array(z.string().regex(ALLOW_ENTRY, 'must look like Tool or Tool(rule)')),
+)
+
 const flag = z
   .union([z.boolean(), z.enum(['true', 'false']).transform((value) => value === 'true')])
   .default(false)
@@ -17,7 +27,7 @@ export const SkillHeaderSchema = z.object({
   /** Task kind; selects a per-task agent override from settings (for example `image`). */
   task: z.string().optional(),
   /** Extra tool allowances the adapter may grant, e.g. `Bash(asciinema *)`. */
-  allow: list,
+  allow: allowList,
   network: flag,
   /** Command-line tools that must be on PATH; checked before an agent is started. */
   requires: list,

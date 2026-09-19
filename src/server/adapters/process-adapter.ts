@@ -57,6 +57,13 @@ export const BYPASS_FLAGS = [
   'danger-full-access',
 ]
 
+/** Throws when a command line openwrite built itself contains a bypass flag or a stray flag-shaped value. */
+export function assertNoBypass(args: string[]): void {
+  const offending = args.find((arg) => BYPASS_FLAGS.some((flag) => arg.includes(flag)))
+  if (offending !== undefined)
+    throw new Error(`refusing to build a command line with "${offending}"`)
+}
+
 /** `{jobDir}`, `{jobRel}` and `{workspace}` may be used in a `baseArgs` override. */
 export function substitute(args: string[], jobDir: string, workspace: string): string[] {
   const jobRel = path.relative(workspace, jobDir)

@@ -104,6 +104,22 @@ describe('no default command line bypasses permissions', () => {
   })
 })
 
+describe('a bypass flag cannot arrive through a skill', () => {
+  it('refuses to build the command line', () => {
+    expect(() =>
+      buildClaudeArgs(jobDir, options({ allow: ['--dangerously-skip-permissions'] })),
+    ).toThrow(/refusing/)
+  })
+
+  it('leaves the writer’s own extraArgs alone: the spec forbids a bypass default, not their choice', () => {
+    const args = buildClaudeArgs(
+      jobDir,
+      options({ config: { extraArgs: ['--dangerously-skip-permissions'] } }),
+    )
+    expect(args.at(-1)).toBe('--dangerously-skip-permissions')
+  })
+})
+
 describe('stream → progress', () => {
   it('reads claude stream-json lines', () => {
     expect(readClaudeLine('{"type":"system","subtype":"init","model":"claude-opus-5"}')).toEqual({

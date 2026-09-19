@@ -2,6 +2,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import {
   type CliSpec,
+  assertNoBypass,
   clipProgress,
   createProcessAdapter,
   parseLine,
@@ -59,6 +60,9 @@ export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string
         ...claudeConfinement(jobRel, options.allow),
         '--no-session-persistence',
       ]
+  // What openwrite builds by itself (defaults + a skill's allowances) never bypasses permissions.
+  // The writer's own baseArgs/extraArgs are theirs to set and are not checked here.
+  if (options.config.baseArgs === undefined) assertNoBypass(base)
   const model = options.config.model ? ['--model', options.config.model] : []
   return [...base, ...model, ...options.config.extraArgs]
 }
