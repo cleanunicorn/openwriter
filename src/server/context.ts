@@ -12,6 +12,10 @@ export type AppOptions = {
   /** Mounts the test-only fake control route. */
   fakeControl: boolean
   allowedHosts: () => string[]
+  /** PATH lookup for skill prerequisites; injected in tests. */
+  toolLookup?: (tool: string) => boolean
+  /** Where skill templates live; defaults to the repository's `skills/`. */
+  skillsDir?: string
 }
 
 /** What every route module receives. */

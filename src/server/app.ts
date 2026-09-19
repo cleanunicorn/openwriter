@@ -3,11 +3,15 @@ import path from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { createFakeAdapter, FakeGate } from './adapters/fake.ts'
+import { AdapterRegistry } from './adapters/registry.ts'
 import type { AppOptions, ServerContext } from './context.ts'
 import { HttpError } from './http.ts'
 import { PathEscapeError } from './paths.ts'
 import { mountConfigRoutes } from './routes/config.ts'
 import { mountDocRoutes } from './routes/docs.ts'
+import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
+import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
 import { EventHub } from './sse.ts'
 import { DocWatcher } from './watcher.ts'
@@ -15,13 +19,35 @@ import { ConflictError, UndecodableError, Workspace } from './workspace.ts'
 
 export type { AppOptions } from './context.ts'
 
-export type CreatedApp = { app: Hono; context: ServerContext; dispose: () => void }
+export type CreatedApp = {
+  app: Hono
+  context: ServerContext
+  jobs: JobManager
+  gate: FakeGate
+  dispose: () => void
+}
 
 export function createApp(options: AppOptions): CreatedApp {
   const workspace = new Workspace(options.workspace)
   const events = new EventHub()
   const watcher = new DocWatcher(workspace, events)
-  const context: ServerContext = { options, workspace, events, watcher, adapterNames: () => [] }
+  const gate = new FakeGate(options.fakeControl)
+  const registry = new AdapterRegistry().register(createFakeAdapter(gate))
+  const context: ServerContext = {
+    options,
+    workspace,
+    events,
+    watcher,
+    adapterNames: () => registry.names(),
+  }
+  const jobs = new JobManager({
+    workspace,
+    events,
+    registry,
+    adapterOverride: options.adapterOverride,
+    toolLookup: options.toolLookup,
+    skillsDir: options.skillsDir,
+  })
 
   const app = new Hono()
   app.use('*', localOnly(options.allowedHosts))
@@ -56,6 +82,9 @@ export function createApp(options: AppOptions): CreatedApp {
 
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
+  mountJobRoutes(app, context, jobs)
+  // Never mounted in normal use: the route exists only with --fake-control.
+  if (options.fakeControl) mountFakeControl(app, gate)
 
   app.all('/api/*', (c) => c.json({ error: 'not found' }, 404))
 
@@ -66,5 +95,14 @@ export function createApp(options: AppOptions): CreatedApp {
     // Single-page app: every other GET gets the shell.
     app.get('*', (c) => c.html(readFileSync(path.join(clientDir, 'index.html'), 'utf8')))
   }
-  return { app, context, dispose: () => watcher.close() }
+  return {
+    app,
+    context,
+    jobs,
+    gate,
+    dispose: () => {
+      watcher.close()
+      void jobs.shutdown()
+    },
+  }
 }

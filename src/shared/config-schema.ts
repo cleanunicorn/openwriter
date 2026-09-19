@@ -22,7 +22,7 @@ export const ConfigSchema = z.object({
   contentDir: z.string().min(1).default('content'),
   theme: z.enum(['system', 'light', 'dark']).default('system'),
   concurrency: z.number().int().min(1).max(16).default(3),
-  jobTimeoutSec: z.number().int().min(5).max(7200).default(600),
+  jobTimeoutSec: z.number().int().min(1).max(7200).default(600),
   adapters: z.record(z.string(), AdapterConfigSchema).default({}),
 })
 export type Config = z.infer<typeof ConfigSchema>
