@@ -216,6 +216,9 @@ describe('skills in jobs', () => {
     )
     const custom = createTestApp({ fakeControl: true, skillsDir: dir })
     try {
+      // The palette lists exactly what the job manager can run.
+      const { skills } = await json(custom.get('/api/skills'))
+      expect(skills.map((skill: { name: string }) => skill.name)).toEqual(['haiku'])
       const job = await json(custom.send('POST', '/api/jobs', request('haiku')))
       expect(job.skill).toBe('haiku')
       expect(

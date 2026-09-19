@@ -9,7 +9,7 @@ import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
 import { listSkills } from '../skills.ts'
 
-export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobManager): void {
+export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
   app.get('/api/jobs', (c) => c.json({ jobs: jobs.list() }))
   app.post('/api/jobs', async (c) => c.json(jobs.create(await parseBody(c, JobRequestSchema)), 201))
   app.get('/api/jobs/:id', (c) => c.json(jobs.get(c.req.param('id'))))
@@ -44,7 +44,9 @@ export function mountJobRoutes(app: Hono, _context: ServerContext, jobs: JobMana
 
   // Only what the palette needs: the prompt body and the permission headers stay on the server.
   app.get('/api/skills', (c) =>
-    c.json({ skills: listSkills().map((skill) => SkillInfoSchema.parse(skill)) }),
+    c.json({
+      skills: listSkills(context.options.skillsDir).map((skill) => SkillInfoSchema.parse(skill)),
+    }),
   )
 }
 
