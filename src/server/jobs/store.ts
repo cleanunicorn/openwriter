@@ -48,7 +48,8 @@ export function recoverJobs(jobsDir: string): JobFile[] {
     const file = readJobFile(jobDir)
     if (file === undefined || file.dismissed) continue
     try {
-      recoverOne(jobDir, file, recovered)
+      const stale = recoverOne(jobDir, file)
+      if (stale !== undefined) recovered.push(stale)
     } catch (error) {
       // One unreadable job directory must not stop the server from starting.
       console.error(`could not recover job ${entry.name}`, error)
@@ -57,7 +58,8 @@ export function recoverJobs(jobsDir: string): JobFile[] {
   return recovered
 }
 
-function recoverOne(jobDir: string, file: JobFile, recovered: JobFile[]): void {
+/** Marks an unsettled job stale on disk. Returns the file when its job is stale, else undefined. */
+function recoverOne(jobDir: string, file: JobFile): JobFile | undefined {
   const job: Job = file.job
   if (isUnsettled(job.state)) {
     file.job = {
@@ -70,5 +72,5 @@ function recoverOne(jobDir: string, file: JobFile, recovered: JobFile[]): void {
     }
     saveJobFile(jobDir, file)
   }
-  if (file.job.state === 'stale') recovered.push(file)
+  return file.job.state === 'stale' ? file : undefined
 }
