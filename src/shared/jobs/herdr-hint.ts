@@ -7,7 +7,7 @@ import { HERDR_SESSION_SOURCE } from '../names.ts'
  */
 const ATTACH_HINT = new RegExp(`attach with: (herdr session attach ${HERDR_SESSION_SOURCE})`)
 
-export const herdrAttachCommand = (session: string): string => `herdr session attach ${session}`
+const herdrAttachCommand = (session: string): string => `herdr session attach ${session}`
 
 export const herdrAttachHint = (session: string): string =>
   `attach with: ${herdrAttachCommand(session)}`

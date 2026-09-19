@@ -4,7 +4,7 @@ import { splitText } from './split.ts'
 import type { Block, Doc, MintId } from './types.ts'
 
 /** The document's dominant line ending, used only for whitespace an op has to create. */
-export function dominantEol(doc: Doc): '\n' | '\r\n' {
+function dominantEol(doc: Doc): '\n' | '\r\n' {
   const text = serialise(doc)
   const crlf = text.split('\r\n').length - 1
   const lf = text.split('\n').length - 1 - crlf

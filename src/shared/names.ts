@@ -7,7 +7,7 @@ import { z } from 'zod'
 const KEBAB = '[a-z0-9][a-z0-9-]*'
 
 /** An article slug: the directory name of a Hugo leaf bundle, and part of URLs and job paths. */
-export const SLUG_MAX_LENGTH = 120
+const SLUG_MAX_LENGTH = 120
 export const SlugSchema = z
   .string()
   .regex(new RegExp(`^${KEBAB}$`))
