@@ -103,6 +103,16 @@ node scripts/verify-adapter.ts claude --extra="--max-budget-usd 0.50"
 node scripts/verify-adapter.ts codex
 ```
 
+### herdr (optional)
+
+[herdr](https://herdr.dev) is a terminal multiplexer for coding agents. With `mainAgent: "herdr"`
+a job runs as an interactive `claude` in a pane of the named herdr session `openwrite-jobs`
+(`adapters.herdr.session` changes the name), confined exactly like the direct adapter. You can
+attach while it runs — the tray shows `herdr session attach openwrite-jobs` — watch sub-agents,
+and step in when the agent blocks; the job still completes through the file contract. It needs
+`herdr` on `PATH`, has no spend cap, and supports claude only. What was tried and why it was
+adopted: [docs/herdr-evaluation.md](docs/herdr-evaluation.md).
+
 ## Adding an adapter
 
 An adapter only launches a process and relays progress; the file contract does the rest.

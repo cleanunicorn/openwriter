@@ -6,6 +6,11 @@ export const AdapterConfigSchema = z.object({
   model: z.string().min(1).optional(),
   baseArgs: z.array(z.string()).optional(),
   extraArgs: z.array(z.string()).default([]),
+  /** herdr only: the named herdr session jobs run in (default `openwrite-jobs`). */
+  session: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]*$/)
+    .optional(),
 })
 export type AdapterConfig = z.infer<typeof AdapterConfigSchema>
 

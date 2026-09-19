@@ -10,9 +10,9 @@ agent jobs run in the background while the writer keeps writing. The project
 follows GitHub flow: `main` is always runnable, work happens on short-lived
 branches, and every change lands through a pull request.
 
-**Status:** the initial build is in progress on `feat/openwrite-build`. This file
-describes what exists; sections are updated in the same PR as the code they
-describe.
+**Status:** the first version is built: the editor, the job system, the
+`claude`, `codex`, `herdr` and `fake` adapters, skills, and export. This file
+describes what exists; update it in the same PR as the code it describes.
 
 Use [README.md](README.md) for setup, the workspace layout, the job file
 contract, and how to add an adapter or a skill. Record every non-obvious
@@ -31,8 +31,10 @@ Versions are what is installed on the dev machine as of 2026-09-19.
   (codex-cli 0.155.1). They use the user's own logins; the app stores no keys.
 - **Hugo** (v0.154.5 extended) — the user's true preview. No test depends on it.
 - **`asciinema` and `agg`** — not installed. Only the terminal-recording skill
-  needs them; it must detect that they are missing and say so clearly.
-- **`herdr`** (0.9.1) — optional adapter backend, evaluated in milestone 5.
+  needs them; the server checks the skill's `requires:` header on `PATH` and
+  fails the job at once, naming what is missing.
+- **`herdr`** (0.9.1) — optional adapter backend; see
+  [docs/herdr-evaluation.md](docs/herdr-evaluation.md).
 
 ## Commands
 
@@ -277,17 +279,31 @@ Keep it short and useful:
 
 ## Project map (where things live)
 
-*Planned* — the scaffold settles the repo layout; update this in the same PR.
-
 ```
-src/shared/         block model (split, serialise), result.json zod schema, job types
-src/server/         Node server (Hono or Fastify): filesystem, jobs, agent adapters, event stream
-  adapters/           fake, claude, codex (, herdr)
-src/client/         Vite + React: blocks, CodeMirror 6 editing, palette, job tray, ghost diffs
-skills/             prompt templates any adapter can run: diagram, terminal recording, image, video (stub)
-sample-workspace/   sample article, strategy.md, brief.md — what `npm start` opens
-e2e/                Playwright specs
-docs/               herdr-evaluation.md and other notes
+src/shared/           no I/O; imported by client, server, and tests
+  blocks/               split, serialise, reconcile, doc-ops, shortcodes, front-matter, corpus/
+  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types
+  config-schema.ts  api-types.ts  events.ts  key-values.ts  ports.ts
+src/server/           Hono on Node (TypeScript run natively, no build step)
+  main.ts               CLI flags, binds 127.0.0.1, opens the browser
+  app.ts                createApp(options): wires workspace, watcher, jobs, adapters, routes
+  paths.ts security.ts  the path guard; Host/Origin/content-type hardening
+  workspace.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
+  routes/               docs (documents, articles, assets), config, jobs (+ fake control), export
+  jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery)
+  adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent
+src/client/           Vite + React
+  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions)
+  blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
+  render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
+  palette/              Palette, commands (the command registry)
+  jobs/                 PromptPill, selection, GhostDiff, Tray, ResearchPanel, commands
+  settings/             Settings, commands        export.ts   theme.css
+skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
+sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
+scripts/              ensure-build, e2e-server, verify-adapter (manual, real agents)
+e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts
+docs/                 herdr-evaluation.md, screenshots/
 ```
 
 Layering: the client never touches the filesystem; it talks to the server over
@@ -418,14 +434,47 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 
 ## Hazards
 
-None recorded yet. When an incident produces a rule, add it here in the same PR
-that fixes the incident, as its own subsection: the rule, the mechanism, the
-evidence it is real, the safe recipe, and the near-misses.
+### An allow list does not confine a real agent; prove confinement with sentinels
+
+- **Rule:** never change an adapter's permission flags without re-running
+  `node scripts/verify-adapter.ts <adapter>` and recording the result in
+  `DECISIONS.md`. A flag that exists in `--help` is not evidence that it confines.
+- **Mechanism:** `claude` with only `--allowedTools` and `--permission-prompts
+  none` still honours the user's own settings and permission mode, so writes and
+  reads outside the allow list can succeed. `--permission-mode dontAsk` plus
+  `--restricted` is what denies them.
+- **Evidence:** the first verification run (2026-09-19) created `probe.txt` in the
+  workspace root and read a secret file outside the workspace; with the two
+  flags added, all four sentinel checks pass (`DECISIONS.md`, "Real agents").
+- **Safe recipe:** run the script in its throwaway workspace; ship only a command
+  line that passes checks 1–3, and say so plainly if check 4 cannot pass.
+- **Near-misses:** `codex -s read-only --add-dir <jobDir>` looks like the
+  narrowest setting but cannot write `result.json` at all; and `codex` cannot
+  confine reads with any documented flag.
+
+### Inside a herdr pane, an unscoped `herdr` command acts on the live session
+
+- **Rule:** every `herdr` call from this project removes the `HERDR_*`
+  environment variables and passes `--session <name>`. Never run
+  `herdr server stop`; never close panes, tabs, or workspaces you did not create.
+- **Mechanism:** panes inherit `HERDR_SOCKET_PATH` and `HERDR_SESSION`, and the
+  CLI uses them when no session is named.
+- **Evidence:** inside a live pane, `herdr status` reported the live socket, while
+  `herdr --session openwrite-eval status` reported a separate, not-running one
+  (`docs/herdr-evaluation.md`).
+- **Safe recipe:** prove the scoping with a read-only `status` before any
+  mutating command; stop a test session by name with `herdr session stop <name>`
+  after `herdr session list` confirms it.
+- **Near-misses:** `pkill -f <pattern>` matched the shell that ran it when the
+  pattern appeared in the same command line; use pid files.
 
 ## Where to look
 
 - `README.md` — setup, workspace layout, job file contract, adding an adapter
   or a skill
 - `DECISIONS.md` — why a non-obvious choice was made, and verified CLI flags
-- `src/shared/` — the block splitter and the `result.json` schema (*planned*)
-- `docs/herdr-evaluation.md` — what was tried with herdr, if it was not adopted
+- `src/shared/blocks/split.ts` — the block splitter; `src/shared/jobs/result-schema.ts`
+  and `validate-ops.ts` — the `result.json` contract; `scheduler.ts` — the queue rules
+- `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
+- `scripts/verify-adapter.ts` — the sentinel check for a real adapter's confinement
+- `docs/herdr-evaluation.md` — what was tried with herdr, and why it was adopted

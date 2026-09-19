@@ -7,18 +7,40 @@ const clip = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200)
 /**
  * `claude` in headless print mode with streamed JSON. Flags verified against
  * `claude --help` 2.1.278 — see DECISIONS.md, "Real agents".
- *
- * Permissions are an allow list, not a bypass: `--permission-prompts none` denies anything that
- * would prompt, `--tools` limits the built-in tools, and the only write rule is the job directory.
  */
-export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string[] {
-  const jobRel = path.relative(options.workspace, jobDir)
-  // A skill may need to run a tool (`allow: Bash(asciinema *)`); then Bash joins the tool list.
+/** Built-in tools plus whatever a skill's `allow:` rules name (`Bash(asciinema *)` → `Bash`). */
+function toolsFor(allow: string[]): string[] {
   const tools = ['Read', 'Glob', 'Grep', 'Edit', 'Write']
-  for (const rule of options.allow) {
+  for (const rule of allow) {
     const tool = rule.split('(')[0]?.trim()
     if (tool && !tools.includes(tool)) tools.push(tool)
   }
+  return tools
+}
+
+/**
+ * The permission part of the command line, shared by print mode and by an interactive claude
+ * inside herdr. It is an allow list, not a bypass: `dontAsk` denies whatever the list does not
+ * cover, `--restricted` ignores user/project settings (a broad allow rule there would defeat the
+ * list) and confines the file tools to the working directory, and the only write rule is the job
+ * directory. `Edit(path)` rules cover every file-editing tool; claude ignores `Write(path)`.
+ */
+export function claudeConfinement(jobRel: string, allow: string[]): string[] {
+  return [
+    '--permission-mode',
+    'dontAsk',
+    '--restricted',
+    '--tools',
+    toolsFor(allow).join(','),
+    '--allowedTools',
+    `Edit(${jobRel}/**)`,
+    ...allow,
+    '--safe-mode',
+  ]
+}
+
+export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string[] {
+  const jobRel = path.relative(options.workspace, jobDir)
   const base = options.config.baseArgs
     ? substitute(options.config.baseArgs, jobDir, options.workspace)
     : [
@@ -26,22 +48,10 @@ export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string
         '--output-format',
         'stream-json',
         '--verbose',
-        // Deny, never ask: whatever the allow list below does not cover is refused.
-        '--permission-mode',
-        'dontAsk',
+        // With --print nobody can answer a prompt: anything that would ask is denied.
         '--permission-prompts',
         'none',
-        // Ignores user/project settings (a broad allow rule there would defeat the list) and
-        // confines the file tools to the working directory, so nothing outside the workspace
-        // can be read.
-        '--restricted',
-        '--tools',
-        tools.join(','),
-        '--allowedTools',
-        `Edit(${jobRel}/**)`,
-        `Write(${jobRel}/**)`,
-        ...options.allow,
-        '--safe-mode',
+        ...claudeConfinement(jobRel, options.allow),
         '--no-session-persistence',
       ]
   const model = options.config.model ? ['--model', options.config.model] : []

@@ -6,6 +6,7 @@ import { streamSSE } from 'hono/streaming'
 import { createClaudeAdapter } from './adapters/claude.ts'
 import { createCodexAdapter } from './adapters/codex.ts'
 import { createFakeAdapter, FakeGate } from './adapters/fake.ts'
+import { createHerdrAdapter } from './adapters/herdr.ts'
 import { AdapterRegistry } from './adapters/registry.ts'
 import type { AppOptions, ServerContext } from './context.ts'
 import { HttpError } from './http.ts'
@@ -38,6 +39,7 @@ export function createApp(options: AppOptions): CreatedApp {
   const registry = new AdapterRegistry()
     .register(createClaudeAdapter())
     .register(createCodexAdapter())
+    .register(createHerdrAdapter())
     .register(createFakeAdapter(gate))
   const context: ServerContext = {
     options,

@@ -257,6 +257,21 @@ codex exec --json --skip-git-repo-check --ephemeral -o <jobDir>/last-message.txt
 - **Exports commit the open editor and save first,** so the zip equals what is on disk.
 - **Symlinks in a bundle are never followed or exported.**
 
+## herdr (milestone 5)
+
+- **Adopted as an optional adapter.** In an isolated test session all five criteria held:
+  headless start without a TTY, reliable agent state, completion through the file contract,
+  cancel by closing the pane, and the live session untouched. Details and limits:
+  `docs/herdr-evaluation.md`.
+- **Every herdr call removes the inherited `HERDR_*` variables and names its session.** openwrite
+  may run inside a herdr pane; an unscoped command would act on the writer's own session.
+- **Interactive claude inside herdr reuses the direct adapter's confinement flags.** Print-only
+  flags (`--permission-prompts`, `--max-budget-usd`, `--no-session-persistence`) are left out.
+- **"Open this job in herdr" shows the attach command** instead of opening a terminal: a local
+  web server cannot do that for the writer.
+- **claude's `Write(path)` allow rule was dropped.** claude says it is never matched; `Edit(path)`
+  rules cover every file-editing tool. The sentinel runs had passed with both rules present.
+
 ## Manager decisions (OD1–OD7, all defaults accepted 2026-09-19)
 
 - **OD1 — `contentDir` may be absolute (outside the workspace).** The spec wants it to "point

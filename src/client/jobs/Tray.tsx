@@ -31,6 +31,26 @@ const REASONS: Record<NonNullable<Job['reason']>, string> = {
   exit: 'agent error',
 }
 
+/** "Open this job in herdr": the server cannot attach a terminal for the writer, so show how. */
+function OpenInHerdr({ progress }: { progress: string[] }) {
+  const command = progress
+    .map((line) => line.match(/attach with: (herdr session attach \S+)/)?.[1])
+    .find(Boolean)
+  if (command === undefined) return null
+  return (
+    <div className="tray-progress">
+      Open this job in herdr: <code>{command}</code>{' '}
+      <button
+        type="button"
+        className="link"
+        onClick={() => void navigator.clipboard?.writeText(command)}
+      >
+        Copy
+      </button>
+    </div>
+  )
+}
+
 function JobRow({ job }: { job: Job }) {
   const active = isActive(job.state)
   const last = job.progress[job.progress.length - 1]
@@ -47,6 +67,7 @@ function JobRow({ job }: { job: Job }) {
       {job.state === 'ready' && job.result !== null && (
         <div className="tray-progress">{job.result.summary}</div>
       )}
+      {active && job.adapter === 'herdr' && <OpenInHerdr progress={job.progress} />}
       {job.error !== null && <div className="tray-error">{job.error}</div>}
       {(job.rawOutput !== null || (job.state === 'stale' && job.result !== null)) && (
         <details className="tray-output">

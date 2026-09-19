@@ -27,12 +27,10 @@ describe('claude command line', () => {
     expect(args[args.indexOf('--permission-mode') + 1]).toBe('dontAsk')
     expect(args[args.indexOf('--permission-prompts') + 1]).toBe('none')
     expect(args[args.indexOf('--tools') + 1]).toBe('Read,Glob,Grep,Edit,Write')
-    // The only write rules are the job directory, relative to the workspace (the cwd).
+    // The only write rule is the job directory, relative to the workspace (the cwd). claude
+    // matches file writes against Edit(path) rules only, so there is no Write(path) rule.
     const allowed = args.slice(args.indexOf('--allowedTools') + 1, args.indexOf('--safe-mode'))
-    expect(allowed).toEqual([
-      'Edit(.zen/jobs/20260919-101500-ab12/**)',
-      'Write(.zen/jobs/20260919-101500-ab12/**)',
-    ])
+    expect(allowed).toEqual(['Edit(.zen/jobs/20260919-101500-ab12/**)'])
   })
 
   it('applies model and extra args from settings', () => {
