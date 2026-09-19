@@ -47,9 +47,13 @@ const CONTENT_TYPES: Record<string, string> = {
 export const contentTypeFor = (file: string): string =>
   CONTENT_TYPES[file.slice(file.lastIndexOf('.')).toLowerCase()] ?? 'application/octet-stream'
 
-/** The part of the request path after `prefix`, decoded. */
+/** The part of the request path after `prefix`, decoded. A malformed escape is the client's error (400), not ours (500). */
 export function pathTail(c: Context, prefix: string): string {
-  return decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
+  try {
+    return decodeURIComponent(new URL(c.req.url).pathname.slice(prefix.length))
+  } catch {
+    throw new HttpError(400, 'malformed percent-escape in the path')
+  }
 }
 
 /**

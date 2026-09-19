@@ -177,6 +177,11 @@ describe('assets', () => {
     expect(escaping.status).toBe(400)
   })
 
+  it('answers 400, not 500, for a malformed percent-escape', async () => {
+    expect((await t.get('/api/docs/article/hello-openwrite/assets/100%.png')).status).toBe(400)
+    expect((await t.get('/api/jobs/20260101-000000-abcd/assets/100%.png')).status).toBe(400)
+  })
+
   it('refuses a symlink that points out of the bundle', async () => {
     const outside = path.join(t.workspace, '..', `outside-${path.basename(t.workspace)}`)
     mkdirSync(outside)
