@@ -35,6 +35,14 @@ export type CliSpec = {
   loginHint: string
 }
 
+/** The last non-empty line, or undefined — `''.split('\n').pop()` is `''`, which would hide the fallback text. */
+const lastLine = (text: string): string | undefined =>
+  text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .pop()
+
 /** One progress line in the tray: whitespace collapsed, at most this many characters. */
 export const PROGRESS_LINE_MAX = 200
 export const clipProgress = (text: string): string =>
@@ -108,8 +116,7 @@ export function createProcessAdapter(spec: CliSpec): AgentAdapter {
           }
           if (outcome.status === 'cancelled') return fail('exit', 'cancelled', output)
           const problem =
-            streamError ??
-            (outcome.code === 0 ? undefined : outcome.stderrTail.trim().split('\n').pop())
+            streamError ?? (outcome.code === 0 ? undefined : lastLine(outcome.stderrTail))
           if (problem === undefined && outcome.code === 0) return { ok: true }
           if (spec.authPattern.test(`${problem ?? ''}\n${outcome.stderrTail}`)) {
             return fail('auth', `${spec.name} is not signed in. ${spec.loginHint}`, output)

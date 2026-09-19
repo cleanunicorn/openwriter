@@ -24,6 +24,9 @@ if (mode === 'exit') {
   process.stderr.write('fatal: something went wrong\n')
   process.exit(3)
 }
+if (mode === 'silent-exit') {
+  process.exit(2)
+}
 if (mode === 'flood') {
   const line = `${'x'.repeat(1023)}\n`
   for (let i = 0; i < 4096; i++) process.stdout.write(line)

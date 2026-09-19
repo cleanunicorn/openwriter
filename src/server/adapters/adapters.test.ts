@@ -241,6 +241,14 @@ describe('process adapter: failures become reasons', () => {
     expect(completion.ok === false && completion.output).toContain('something went wrong')
   })
 
+  it('says so when a failing agent wrote nothing to stderr', async () => {
+    const { completion } = await run({ ...spec('silent-exit'), authPattern: /never matches/ })
+    expect(completion).toMatchObject({ ok: false, reason: 'exit' })
+    expect(completion.ok === false && completion.message).toBe(
+      'echo exited with code 2: no error output',
+    )
+  })
+
   it('cancel ends the run', async () => {
     const handle = createProcessAdapter(spec('hang')).start(temp, options({ workspace: temp }))
     await handle.cancel()
