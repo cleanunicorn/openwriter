@@ -21,11 +21,9 @@ import {
 } from 'react'
 import { dispatchDoc } from '../state/app.ts'
 import { type DocState, NEW_BLOCK_ID } from '../state/doc-reducer.ts'
-import { Block } from './Block.tsx'
+import { Block, type Decoration } from './Block.tsx'
 import { BlockEditor } from './BlockEditor.tsx'
 import { clickToOffset } from './click-to-offset.ts'
-
-type Decoration = { className?: string; overlay?: ReactNode; replaceBody?: ReactNode }
 
 type Props = {
   state: DocState

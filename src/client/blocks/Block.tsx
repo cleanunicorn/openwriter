@@ -8,6 +8,9 @@ import { BlockEditor } from './BlockEditor.tsx'
 import { FrontMatterLine } from './FrontMatterLine.tsx'
 import { RenderedBlock } from './RenderedBlock.tsx'
 
+/** Pending marks, ghost diffs — supplied by the job layer; the editor knows nothing about it. */
+export type Decoration = { className?: string; overlay?: ReactNode; replaceBody?: ReactNode }
+
 type Props = {
   docRef: DocRef
   block: BlockData
@@ -15,8 +18,7 @@ type Props = {
   cursor: FocusCursor
   selected: boolean
   assetBase: string | null
-  /** Pending marks, ghost diffs — supplied by the job layer; the editor knows nothing about it. */
-  decoration?: { className?: string; overlay?: ReactNode; replaceBody?: ReactNode }
+  decoration?: Decoration
 }
 
 export function Block({ docRef, block, focused, cursor, selected, assetBase, decoration }: Props) {

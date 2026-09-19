@@ -5,11 +5,10 @@ import type { Job } from '../../shared/jobs/job-types.ts'
 import type { Op } from '../../shared/jobs/result-schema.ts'
 import { changedSinceRequest } from '../../shared/jobs/scheduler.ts'
 import { START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
+import type { Decoration } from '../blocks/Block.tsx'
 import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
 import type { DocState } from '../state/doc-reducer.ts'
 import { acceptAll, claimsOn, decide, rejectAll, undecided, useJobs } from '../state/jobs.ts'
-
-type Decoration = { className?: string; overlay?: ReactNode; replaceBody?: ReactNode }
 
 const focusNextGhost = () =>
   requestAnimationFrame(() => document.querySelector<HTMLElement>('.ghost')?.focus())
