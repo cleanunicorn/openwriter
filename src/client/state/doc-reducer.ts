@@ -110,11 +110,14 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
   return { afterId: survivor?.id ?? null }
 }
 
-/** Index at which the open slot's text goes. A missing anchor means the end, never the top. */
+/**
+ * Index at which the open slot's text goes. A null anchor is the top of the document; an anchor
+ * that is no longer in the document means the end, never index 0.
+ */
 function slotIndex(doc: Doc, pending: PendingNew | null): number {
-  const after = pending?.afterId ?? null
-  if (after === null) return pending === null ? doc.blocks.length : 0
-  const index = indexOf(doc, after)
+  if (pending === null) return doc.blocks.length
+  if (pending.afterId === null) return 0
+  const index = indexOf(doc, pending.afterId)
   return index === -1 ? doc.blocks.length : index + 1
 }
 
