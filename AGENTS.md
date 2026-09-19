@@ -324,19 +324,9 @@ The server owns the filesystem and spawns agents.
 adapter only launches a process and relays progress; the file contract does
 the rest.
 
-The user's **workspace** (separate from this repo; `content/` is configurable
-so it can point into a Hugo site):
-
-```
-<workspace>/
-  strategy.md                 global voice, audience, structure rules
-  sources/                    reference files agents may read
-  content/posts/<slug>/       Hugo leaf bundle: index.md + assets
-  .zen/
-    config.json               settings
-    articles/<slug>/brief.md  per-article outline, angle, target reader
-    jobs/<job-id>/            one directory per agent job
-```
+The user's **workspace** is separate from this repo; its layout is in
+[README.md](README.md#workspace-layout). `content/` is configurable so it can
+point into a Hugo site.
 
 ## Conventions
 
