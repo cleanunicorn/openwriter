@@ -183,8 +183,9 @@ claude -p --output-format stream-json --verbose
 | 3 | the shipped default above | pass | pass | pass | pass |
 
 Runs 2 and 3 also passed a `"Write(.zen/jobs/<id>/**)"` rule. claude reports that rule as never
-matched ("only Edit(path) rules are"), so it was removed afterwards without changing what is
-allowed; see "herdr (milestone 5)" below. The block above is the command line the code builds
+matched ("only Edit(path) rules are") and `Edit(path)` rules cover every file-editing tool, so it
+was removed afterwards without changing what is allowed; the warning showed up during the herdr
+evaluation (`docs/herdr-evaluation.md`). The block above is the command line the code builds
 (`claudeConfinement` in `src/server/adapters/claude.ts`, pinned by `adapters.test.ts`).
 
 - **An allow list alone confines nothing.** In run 1 the agent created `probe.txt` in the
@@ -310,8 +311,6 @@ codex exec --json --skip-git-repo-check --ephemeral
   flags (`--permission-prompts`, `--max-budget-usd`, `--no-session-persistence`) are left out.
 - **"Open this job in herdr" shows the attach command** instead of opening a terminal: a local
   web server cannot do that for the writer.
-- **claude's `Write(path)` allow rule was dropped.** claude says it is never matched; `Edit(path)`
-  rules cover every file-editing tool. The sentinel runs had passed with both rules present.
 
 ## The job directory is untrusted
 
