@@ -8,6 +8,7 @@ import { SERVER_PORT, VITE_PORT } from '../shared/ports.ts'
 import { createApp } from './app.ts'
 import { hostsFor } from './security.ts'
 
+const SHUTDOWN_BUDGET_MS = 2000
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 export type StartOptions = {
@@ -73,13 +74,19 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     url: `http://127.0.0.1:${port}`,
     port,
     address: bound.address,
-    close: () =>
-      new Promise((resolve) => {
-        dispose()
+    close: async () => {
+      // Agents first, and wait for it (bounded): they run in their own process groups, so they
+      // would survive this process — still writing, still spending — if it exited before them.
+      await Promise.race([
+        dispose(),
+        new Promise((resolve) => setTimeout(resolve, SHUTDOWN_BUDGET_MS)),
+      ])
+      await new Promise<void>((resolve) => {
         running.close(() => resolve())
         // Open SSE streams would keep close() waiting forever.
         if ('closeAllConnections' in running) running.closeAllConnections()
-      }),
+      })
+    },
   }
 }
 
@@ -133,7 +140,7 @@ async function main(): Promise<void> {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
       void server.close().then(() => process.exit(0))
-      setTimeout(() => process.exit(0), 1000).unref()
+      setTimeout(() => process.exit(0), SHUTDOWN_BUDGET_MS + 1000).unref()
     })
   }
 }

@@ -145,6 +145,6 @@ const report = {
   progress: final.progress.slice(-12),
 }
 console.log(scrub(JSON.stringify(report, null, 2)))
-dispose()
+await dispose()
 rmSync(root, { recursive: true, force: true })
 process.exit(Object.values(report.checks).every(Boolean) ? 0 : 1)

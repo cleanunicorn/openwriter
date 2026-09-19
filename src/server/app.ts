@@ -28,7 +28,8 @@ export type CreatedApp = {
   context: ServerContext
   jobs: JobManager
   gate: FakeGate
-  dispose: () => void
+  /** Closes watchers and stops every running agent; resolves when the agents are gone. */
+  dispose: () => Promise<void>
 }
 
 export function createApp(options: AppOptions): CreatedApp {
@@ -110,9 +111,9 @@ export function createApp(options: AppOptions): CreatedApp {
     context,
     jobs,
     gate,
-    dispose: () => {
+    dispose: async () => {
       watcher.close()
-      void jobs.shutdown()
+      await jobs.shutdown()
     },
   }
 }

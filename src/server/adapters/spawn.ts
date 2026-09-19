@@ -23,7 +23,11 @@ export type SpawnOutcome = {
   stderrTail: string
 }
 
-export type SpawnedAgent = { done: Promise<SpawnOutcome>; cancel: () => Promise<void> }
+export type SpawnedAgent = {
+  done: Promise<SpawnOutcome>
+  /** SIGTERM, then SIGKILL after a grace period. `force` kills at once — for shutdown, when nobody will be around for the grace period. */
+  cancel: (options?: { force?: boolean }) => Promise<void>
+}
 
 const tail = (text: string, limit: number) => (text.length > limit ? text.slice(-limit) : text)
 
@@ -90,8 +94,12 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
 
   return {
     done,
-    cancel: async () => {
-      if (!cancelled) {
+    cancel: async (options) => {
+      if (options?.force) {
+        cancelled = true
+        clearTimeout(killTimer)
+        signalGroup('SIGKILL')
+      } else if (!cancelled) {
         cancelled = true
         signalGroup('SIGTERM')
         killTimer = setTimeout(() => signalGroup('SIGKILL'), KILL_GRACE_MS)

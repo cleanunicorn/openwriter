@@ -37,7 +37,7 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
         body: JSON.stringify(body),
       }),
     cleanup: () => {
-      created.dispose()
+      void created.dispose()
       rmSync(workspace, { recursive: true, force: true })
     },
   }

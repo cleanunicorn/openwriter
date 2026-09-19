@@ -32,7 +32,7 @@ let closing = false
 async function shutdown(): Promise<void> {
   if (closing) return
   closing = true
-  setTimeout(() => process.exit(0), 1000).unref()
+  setTimeout(() => process.exit(0), 3500).unref()
   await server.close()
   rmSync(workspace, { recursive: true, force: true })
   process.exit(0)

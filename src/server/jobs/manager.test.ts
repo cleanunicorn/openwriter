@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
 import type { ServerEvent } from '../../shared/events.ts'
 import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
+import { createProcessAdapter } from '../adapters/process-adapter.ts'
 import { AdapterRegistry } from '../adapters/registry.ts'
 import type { AdapterHandle, AgentAdapter, Completion } from '../adapters/types.ts'
 import { createApp } from '../app.ts'
@@ -325,7 +326,47 @@ describe('nothing inside a job run can take the server down', () => {
       allowedHosts: () => [],
     })
     expect(restarted.jobs.list()).toEqual([])
-    restarted.dispose()
+    void restarted.dispose()
+  })
+})
+
+describe('shutdown', () => {
+  it('kills an agent that ignores SIGTERM before the server exits', async () => {
+    const pidFile = path.join(t.workspace, 'stubborn.pid')
+    const stubborn = createProcessAdapter({
+      name: 'fake',
+      command: process.execPath,
+      buildArgs: () => [
+        path.join(import.meta.dirname, '..', 'adapters', 'fixtures', 'echo-agent.ts'),
+        'stubborn',
+        pidFile,
+      ],
+      readLine: () => ({}),
+      authPattern: /never/,
+      loginHint: '',
+    })
+    const manager = new JobManager({
+      workspace: t.context.workspace,
+      events: t.context.events,
+      registry: new AdapterRegistry().register(stubborn),
+    })
+    manager.create(request('x', byText('## Why blocks')))
+    await expect.poll(() => existsSync(pidFile), { timeout: 5000 }).toBe(true)
+    const pid = Number(readFileSync(pidFile, 'utf8'))
+    const alive = () => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    expect(alive()).toBe(true)
+    const started = Date.now()
+    await manager.shutdown()
+    // No three-second grace period on shutdown: nobody would be left to send the SIGKILL.
+    expect(Date.now() - started).toBeLessThan(1500)
+    await expect.poll(alive, { timeout: 2000 }).toBe(false)
   })
 })
 
@@ -475,13 +516,13 @@ describe('staleness and restart', () => {
       expect(jobs.find((job) => job.id === reviewed.id)?.rawOutput).toContain('WHY BLOCKS')
       restarted.jobs.dismiss(reviewed.id)
     } finally {
-      restarted.dispose()
+      void restarted.dispose()
     }
     const again = createApp({ workspace: t.workspace, fakeControl: false, allowedHosts: () => [] })
     try {
       expect(again.jobs.list().map((job) => job.id)).toEqual([running.id])
     } finally {
-      again.dispose()
+      void again.dispose()
     }
   })
 })

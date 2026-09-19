@@ -473,6 +473,10 @@ export class JobManager {
 
   /** Stop every running agent; used when the server shuts down. */
   async shutdown(): Promise<void> {
-    await Promise.all([...this.entries.values()].map((entry) => entry.handle?.cancel()))
+    await Promise.all(
+      [...this.entries.values()].map((entry) =>
+        entry.handle?.cancel({ force: true }).catch(() => {}),
+      ),
+    )
   }
 }

@@ -23,8 +23,11 @@ export type AdapterOptions = {
 export type AdapterHandle = {
   progress: AsyncIterable<ProgressEvent>
   done: Promise<Completion>
-  /** Idempotent. Stops the whole process tree; never erases output already written. */
-  cancel: () => Promise<void>
+  /**
+   * Idempotent. Stops the whole process tree; never erases output already written. `force` skips
+   * any grace period: the server is shutting down and must not leave a paid agent running.
+   */
+  cancel: (options?: { force?: boolean }) => Promise<void>
 }
 
 /**

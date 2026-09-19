@@ -40,3 +40,10 @@ if (mode === 'hang') {
   emit({ type: 'started' })
   setInterval(() => {}, 1000)
 }
+if (mode === 'stubborn') {
+  // Ignores SIGTERM, like an agent busy in a tool call: only SIGKILL stops it.
+  process.on('SIGTERM', () => {})
+  if (pidFile !== undefined) writeFileSync(pidFile, String(process.pid))
+  emit({ type: 'started' })
+  setInterval(() => {}, 1000)
+}
