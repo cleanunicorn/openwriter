@@ -8,7 +8,7 @@ const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mNk+M9Qz0AEYBxVSF8FAFi2A/0tT9i7AAAAAElFTkSuQmCC'
 
 /** Headless Chromium cannot put an image on the real clipboard, so the paste event is synthetic. */
-async function pasteImage(page: Page, name: string, type: string) {
+async function pasteImage(page: Page, fileName: string, mimeType: string) {
   await editor(page).evaluate(
     (element, { base64, fileName, mime }) => {
       const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
@@ -18,7 +18,7 @@ async function pasteImage(page: Page, name: string, type: string) {
         new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
       )
     },
-    { base64: PNG, fileName: name, mime: type },
+    { base64: PNG, fileName, mime: mimeType },
   )
 }
 
