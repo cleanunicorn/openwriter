@@ -6,7 +6,7 @@ export type Store<S> = {
   subscribe: (listener: () => void) => () => void
 }
 
-/** A ~30-line external store. Reducers stay pure; React reads slices with `useStore`. */
+/** A ~30-line external store. Reducers stay pure; React reads slices with `useStoreSlice`. */
 export function createStore<S>(initial: S): Store<S> {
   let state = initial
   const listeners = new Set<() => void>()
