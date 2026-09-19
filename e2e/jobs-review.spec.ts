@@ -257,3 +257,47 @@ test('accepting the same insertion twice in a row inserts it once', async ({ pag
     expect(file.split('Second insert.').length - 1).toBe(1)
   })
 })
+
+test('from inside an editor, Ctrl/Cmd+I reaches the pill by keyboard and the draft is left alone', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByRole('heading', { name: 'Why blocks' }).click()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' now')
+  // The pill appears after the first Shift+Arrow; the next two must still extend the selection.
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft')
+  await expect(pill(page)).toBeVisible()
+  await expect(pill(page)).toHaveAttribute('placeholder', /Ctrl\/Cmd\+I/)
+  await expect(editor(page)).toBeFocused()
+
+  // No pointer, no fill(): the writer's own path.
+  await page.keyboard.press(`${mod}+i`)
+  await expect(pill(page)).toBeFocused()
+  await page.keyboard.type('fake:upper')
+  await expect(pill(page)).toHaveValue('fake:upper')
+  await expect(page.getByRole('heading', { name: 'Why blocks now', exact: true })).toBeVisible()
+  await page.keyboard.press('Enter')
+
+  const jobId = await expectOneWaiting(app)
+  const targets = JSON.parse(readFileSync(jobFile(app, jobId, 'targets.json'), 'utf8'))
+  expect(targets.selection).toMatchObject({ text: 'now', from: 14, to: 17 })
+  expect(app.readArticle()).not.toContain('fake:upper')
+})
+
+test('typing over a selection in an editor edits the text, not the pill', async ({ page }) => {
+  await openArticle(page)
+  await page.getByRole('heading', { name: 'Why blocks' }).click()
+  await page.keyboard.press('End')
+  for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+ArrowLeft')
+  await expect(pill(page)).toBeVisible()
+
+  // The most common edit there is: select, then type the replacement.
+  await page.keyboard.type('paragraphs')
+  await expect(editor(page)).toContainText('## Why paragraphs')
+  await expect(editor(page)).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('heading', { name: 'Why paragraphs', exact: true })).toBeVisible()
+  await expect(tray(page)).toHaveCount(0)
+})

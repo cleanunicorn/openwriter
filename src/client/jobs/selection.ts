@@ -69,6 +69,9 @@ function targetFromSelection(): PillTarget | null {
       ? { blockId, text: fromEditor.text, from: fromEditor.from, to: fromEditor.to }
       : { blockId, text },
     anchor: anchorFor(block, range.getBoundingClientRect()),
+    // Inside an editor the keyboard belongs to the text: typing replaces the selection, Shift+Arrow
+    // extends it, Ctrl/Cmd+C copies it. The pill says how to reach it instead of taking focus.
+    placeholder: exact ? 'Press Ctrl/Cmd+I, then tell the agent what to do' : undefined,
   }
 }
 

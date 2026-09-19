@@ -148,7 +148,12 @@ directory keeps the name `.zen/`.
   only with that flag (404 otherwise, unit-tested). Tests never sleep.
 - **The prompt pill never takes focus by appearing.** A selection stays a selection (copy,
   extend, type over). Outside an editor, typing goes into the pill; `Ctrl/Cmd+I` enters it from
-  anywhere. It is anchored to its block and repositions when the layout changes.
+  anywhere, and for a selection made inside an editor the pill's placeholder says so. Taking
+  focus there was tried again after the final review and rejected with a test run: the editor
+  closes, "select a word and type its replacement" lands in the pill as an instruction (Enter
+  would start an agent job), and Shift+Arrow stops extending the selection after its first step.
+  Two e2e tests in `e2e/jobs-review.spec.ts` pin both the keyboard path and type-over. The pill
+  is anchored to its block and repositions when the layout changes.
 - **Review buttons keep the keyboard focus where it is** (`mousedown` is prevented). Otherwise
   pressing "Accept" blurs an open editor, the block re-renders, the layout shifts, and the click
   misses the button.
