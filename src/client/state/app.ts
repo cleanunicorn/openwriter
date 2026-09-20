@@ -105,8 +105,9 @@ async function save(ref: DocRef): Promise<void> {
   if (state === undefined || !isDirty(state)) return
   const text = liveText(state)
   try {
-    const { hash } = await api.save(ref, text, state.baseHash)
-    dispatchDoc(ref, { type: 'saved', text, hash })
+    const base = state.baseHash
+    const { hash } = await api.save(ref, text, base)
+    dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       // Someone else changed (or deleted) the file: reconcile instead of overwriting.

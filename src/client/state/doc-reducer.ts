@@ -60,7 +60,7 @@ export type DocAction =
   | { type: 'select'; ids: string[] }
   | { type: 'undo' }
   | { type: 'redo' }
-  | { type: 'saved'; text: string; hash: string }
+  | { type: 'saved'; text: string; hash: string; baseHash: string | null }
   | { type: 'external'; text: string; hash: string | null; exists: boolean }
   | { type: 'notice'; notice: string | null }
 
@@ -388,6 +388,9 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       return { ...state, ...blurred, doc: next, past: [...state.past, state.doc], future: rest }
     }
     case 'saved':
+      // A save that resolves after a reload moved the document on is one revision behind: its
+      // hash would roll `baseHash` back, and the next PUT would be a guaranteed 409.
+      if (action.baseHash !== state.baseHash) return state
       return { ...state, baseHash: action.hash, savedText: action.text }
     case 'external': {
       if (!action.exists) {

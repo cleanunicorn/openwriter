@@ -405,6 +405,37 @@ describe('outside changes', () => {
     expect(run(state, { type: 'external', text: TEXT, hash: 'h0', exists: true })).toBe(state)
   })
 
+  it('ignores a save that lands after a reload moved the document on', () => {
+    // The PUT left while the document was based on h0; the reload landed before it came back.
+    const reloaded = run(loaded('One\n\nTwo\n'), {
+      type: 'external',
+      text: 'One\n\nTwo CHANGED\n',
+      hash: 'h1',
+      exists: true,
+    })
+    const late = run(reloaded, {
+      type: 'saved',
+      text: 'One\n\nTwo\n',
+      hash: 'h-of-the-older-text',
+      baseHash: 'h0',
+    })
+    expect(late).toBe(reloaded)
+    expect(late.baseHash).toBe('h1')
+    expect(late.savedText).toBe('One\n\nTwo CHANGED\n')
+  })
+
+  it('accepts a save the document is still waiting for', () => {
+    const state = run(loaded('One\n\nTwo\n'), {
+      type: 'saved',
+      text: 'One\n\nTwo\n',
+      hash: 'h1',
+      baseHash: 'h0',
+    })
+    expect(state.baseHash).toBe('h1')
+    expect(state.savedText).toBe('One\n\nTwo\n')
+    expect(isDirty(state)).toBe(false)
+  })
+
   it('a deleted file pauses saving instead of being recreated', () => {
     const state = run(loaded(), { type: 'external', text: '', hash: null, exists: false })
     expect(state.status).toBe('missing')
