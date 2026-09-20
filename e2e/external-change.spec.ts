@@ -122,14 +122,6 @@ test('an unclosed fence does not swallow the rest of the article across a reload
     app.readArticle().replace('This is a sample article', 'This is a CHANGED article'),
   )
   await expect(notice(page)).toContainText('changed on disk')
-  console.log(
-    'DEBUG editors:',
-    await editor(page).count(),
-    'blocks:',
-    await page.getByTestId('block').count(),
-  )
-  console.log('DEBUG notice:', await notice(page).innerText())
-  console.log('DEBUG file has shortcode:', app.readArticle().includes('A paired Hugo shortcode'))
 
   // Leaving the editor commits what it holds. That must not be the short version: everything
   // the fence took in has to survive the commit on screen, and then the save that follows it.
