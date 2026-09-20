@@ -138,9 +138,14 @@ export function flush(ref: DocRef): Promise<void> {
 store.subscribe(() => {
   for (const [key, doc] of Object.entries(store.get().docs)) {
     if (!isDirty(doc)) continue
+    // Keyed by the revision as well as the text: a reload can restore the editor's block and
+    // leave the live text exactly as it was last saved, while the disk — now a revision on —
+    // no longer holds it. Text alone called that a repeat and the writer's block stayed unsaved
+    // until they typed again.
     const text = liveText(doc)
-    if (lastSeen.get(key) === text) continue
-    lastSeen.set(key, text)
+    const seen = `${doc.baseHash ?? ''}\u0000${text}`
+    if (lastSeen.get(key) === seen) continue
+    lastSeen.set(key, seen)
     window.clearTimeout(timers.get(key))
     timers.set(
       key,

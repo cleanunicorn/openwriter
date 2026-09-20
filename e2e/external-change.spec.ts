@@ -104,6 +104,34 @@ test('a reload keeps what was typed after the save it carries', async ({ page, a
   await expect(editor(page)).toHaveText('A brand new paragraph. AND MORE')
 })
 
+test('a block deleted from outside while it was being edited is saved again', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type(' MINE')
+  await saved
+
+  // Another writer removes that whole paragraph. The reducer keeps the open editor's text, so
+  // the live text goes back to exactly what was last saved — and autosave must still write it,
+  // because the disk has moved on and no longer has it.
+  // The blank line after it goes too, so restoring the paragraph reproduces the saved file
+  // byte for byte — which is exactly when a text-keyed autosave check calls it a repeat.
+  writeFileSync(
+    app.articlePath(),
+    app.readArticle().replace(/^Results arrive as ghost diffs.*\n\n/m, ''),
+  )
+  await expect(notice(page)).toContainText('was kept')
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('reject the rest. MINE')
+  })
+})
+
 test('a file deleted from outside is not recreated from memory', async ({ page, app }) => {
   await openArticle(page)
   rmSync(app.articlePath())
