@@ -308,6 +308,24 @@ describe('a reload that carries the editor’s own text', () => {
     expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree CHANGED\n')
   })
 
+  it('keeps a multi-block slot once when a fence from disk swallows the fold', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three\n\n## Four')
+    const state = reload(open, '```js\nnever closed\n\nOne\n')
+    expect(occurrences(liveText(state), 'Three')).toBe(1)
+    expect(occurrences(liveText(state), '## Four')).toBe(1)
+    expect(state.doc.blocks.some((block) => block.id === state.focusedId)).toBe(true)
+  })
+
+  it('ignores a commit addressed to the slot after the reload moved the editor', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, liveText(open))
+    // The editor is on a real block now, so the slot's name no longer addresses anything. A
+    // late commit from an editor that was unmounted mid-gesture must change nothing.
+    const after = docReducer(state, { type: 'commit', id: NEW_BLOCK_ID, text: 'Three' })
+    expect(after).toBe(state)
+    expect(liveText(after)).toBe('One\n\nTwo\n\nThree\n')
+  })
+
   it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
     // The behaviours the fix must not disturb, from the other side of the same code path.
     const editing = run(
@@ -491,6 +509,19 @@ describe('outside changes', () => {
     }
   })
 
+  it('accepts a save based on no revision at all, the first of a session', () => {
+    const fresh = docReducer(initialDocState({ kind: 'article', slug: 'post' }), {
+      type: 'loaded',
+      text: 'One\n',
+      hash: null,
+      exists: true,
+    })
+    expect(fresh.baseHash).toBeNull()
+    const state = run(fresh, { type: 'saved', text: 'One\n', hash: 'h1', baseHash: null })
+    expect(state.baseHash).toBe('h1')
+    expect(isDirty(state)).toBe(false)
+  })
+
   it('a deleted file pauses saving instead of being recreated', () => {
     const state = run(loaded(), { type: 'external', text: '', hash: null, exists: false })
     expect(state.status).toBe('missing')
@@ -579,6 +610,29 @@ describe('an open editor never loses its block', () => {
   it('emptying the focused block and leaving it still deletes it', () => {
     const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
     expect(text(state)).toBe('A\n\nC\n\nD\n')
+  })
+
+  it('names the case the reload property carves out: a fence that swallows its neighbours', () => {
+    const state = run(
+      loaded('A\n\nB\n\nC\n'),
+      { type: 'focus', id: 'b1', cursor: 0 },
+      { type: 'draft', id: 'b1', text: '```js\nnever closed' },
+    )
+    const saved = liveText(state)
+    const reloaded = docReducer(state, {
+      type: 'external',
+      text: saved,
+      hash: 'h1',
+      exists: true,
+    })
+    // The unclosed fence swallowed B and C, so the block the editor sits on holds strictly more
+    // than the editor does. That is the condition the property test below excludes, pinned here
+    // so the exclusion cannot quietly widen: whose text wins is a defect of its own, deferred.
+    const open = reloaded.doc.blocks.find((block) => block.id === reloaded.draft?.id)
+    expect(open?.raw).toContain('never closed')
+    expect(open?.raw).toContain('B')
+    expect(open?.raw).not.toBe(reloaded.draft?.text)
+    expect(open?.raw.includes(reloaded.draft?.text ?? '')).toBe(true)
   })
 
   it('holds for any sequence of structural changes', () => {
