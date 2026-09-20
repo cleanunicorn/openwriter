@@ -112,6 +112,9 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
   return { afterId: survivor?.id ?? null }
 }
 
+/** Both paths that put a focused block back after a reload say this; an e2e asserts it. */
+const BLOCK_KEPT = 'The file changed on disk. The block you are editing was kept.'
+
 /**
  * The focused block vanished on disk: put its editor text back into `disk` after its nearest
  * surviving neighbour, so the open editor still points at a block. Returns the ID of the block
@@ -383,7 +386,7 @@ function settleFold(
     // Say which text was kept. A rescued tail is not the block the writer is editing.
     notice:
       rescued === 'held'
-        ? 'The file changed on disk. The block you are editing was kept.'
+        ? BLOCK_KEPT
         : rescued === 'tail'
           ? 'The file changed on disk. Your unsaved text was kept.'
           : null,
@@ -581,7 +584,7 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         const rescue = rescueDraft(state.doc, doc, draft, mint)
         doc = rescue.doc
         reopened = rescue.reopened
-        notice = 'The file changed on disk. The block you are editing was kept.'
+        notice = BLOCK_KEPT
       }
       return change({ ...state, status: 'ready', ...reopened }, doc, next(), {
         baseHash: action.hash,
