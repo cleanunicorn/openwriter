@@ -77,6 +77,33 @@ test('a new block the autosave already wrote is not duplicated by a reload', asy
   await expect(blockWith(page, 'A brand new paragraph.')).toHaveCount(1)
 })
 
+test('a reload keeps what was typed after the save it carries', async ({ page, app }) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type('A brand new paragraph.')
+  await saved
+
+  // Hold every later save, so the editor provably holds more than the disk does: no timing.
+  await page.route('**/api/docs/**', (route) =>
+    route.request().method() === 'PUT' ? route.abort() : route.continue(),
+  )
+  await page.keyboard.type(' AND MORE')
+
+  // The outside change carries the file as it was saved — without ' AND MORE'. The reload
+  // folds the slot into a real block, which moves the editor; it must not be rebuilt from the
+  // disk's copy of the paragraph.
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
+  await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
+  await expect(editor(page)).toHaveText('A brand new paragraph. AND MORE')
+})
+
 test('a file deleted from outside is not recreated from memory', async ({ page, app }) => {
   await openArticle(page)
   rmSync(app.articlePath())

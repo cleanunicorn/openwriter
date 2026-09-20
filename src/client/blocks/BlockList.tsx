@@ -43,7 +43,7 @@ function rangeOf(state: DocState, fromId: string, toId: string): string[] {
 }
 
 export function BlockList({ state, decorate, rowsAfter }: Props) {
-  const { ref: docRef, doc, focusedId, focusCursor, pendingNew, selectedIds } = state
+  const { ref: docRef, doc, draft, focusedId, focusCursor, pendingNew, selectedIds } = state
   const assetBase = docRef.kind === 'article' ? `/api/docs/article/${docRef.slug}/assets/` : null
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -131,7 +131,14 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
       <div className="block is-focused" data-testid="block" data-block-id={NEW_BLOCK_ID}>
         <div className="gutter" />
         <div className="block-body">
-          <BlockEditor docRef={docRef} id={NEW_BLOCK_ID} initialText="" cursor="start" />
+          <BlockEditor
+            docRef={docRef}
+            id={NEW_BLOCK_ID}
+            // The slot moves when its anchor goes (an accepted op can delete it), and React
+            // builds a fresh editor at the new position: seed it with what is being typed.
+            initialText={draft?.id === NEW_BLOCK_ID ? draft.text : ''}
+            cursor="start"
+          />
         </div>
       </div>
     ) : null
@@ -154,6 +161,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
                 focused={focusedId === block.id}
                 cursor={focusCursor}
                 selected={selectedIds.includes(block.id)}
+                draftText={draft?.id === block.id ? draft.text : undefined}
                 assetBase={assetBase}
                 decoration={decorate?.(block.id)}
               />

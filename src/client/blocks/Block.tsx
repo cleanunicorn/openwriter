@@ -17,11 +17,27 @@ type Props = {
   focused: boolean
   cursor: FocusCursor
   selected: boolean
+  /**
+   * What the editor for this block is holding, when it differs from the block's raw. A reload
+   * can move the editor onto another block — the slot becomes real — and React then builds a
+   * fresh CodeMirror; seeding it from the raw would show the disk's copy and throw away
+   * whatever was typed since the save that reload is carrying.
+   */
+  draftText?: string
   assetBase: string | null
   decoration?: Decoration
 }
 
-export function Block({ docRef, block, focused, cursor, selected, assetBase, decoration }: Props) {
+export function Block({
+  docRef,
+  block,
+  focused,
+  cursor,
+  selected,
+  draftText,
+  assetBase,
+  decoration,
+}: Props) {
   const fixed = block.kind === 'frontmatter'
   const {
     attributes,
@@ -67,7 +83,12 @@ export function Block({ docRef, block, focused, cursor, selected, assetBase, dec
       </div>
       <div className="block-body" data-testid="block-body">
         {focused ? (
-          <BlockEditor docRef={docRef} id={block.id} initialText={block.raw} cursor={cursor} />
+          <BlockEditor
+            docRef={docRef}
+            id={block.id}
+            initialText={draftText ?? block.raw}
+            cursor={cursor}
+          />
         ) : (
           (decoration?.replaceBody ??
           (fixed ? (
