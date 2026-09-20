@@ -94,6 +94,8 @@ function minter(state: DocState): { mint: MintId; next: () => number } {
 }
 
 const indexOf = (doc: Doc, id: string) => doc.blocks.findIndex((block) => block.id === id)
+/** How many of a document's blocks say exactly this. */
+const copies = (doc: Doc, raw: string) => doc.blocks.filter((block) => block.raw === raw).length
 
 /**
  * The anchor of an open new-block slot, carried over to `next`: the anchor itself when it
@@ -347,14 +349,19 @@ function settleFold(
     // The block the editor keeps is re-applied from its draft, so it only has to exist. The
     // rest of the fold lives in the document alone, and an ID is not enough to find it:
     // `reconcile` gives the first slice of a changed run the old ID of that run, so a block
-    // still answering to one of these IDs can be a different one, from disk. Look for the text
-    // itself — if it is gone, the writer's tail went with it.
+    // still answering to one of these IDs can be a different one, from disk.
+    //
+    // So look for the text instead — and *count* it. An article may already say the same thing
+    // twice: matching any block with that text would find the one that was always there and
+    // call the writer's copy safe while it was being dropped.
     const survivor =
       id === folded.held.id
-        ? doc.blocks[indexOf(doc, id)]
-        : doc.blocks.find((candidate) => candidate.raw === block.raw)
+        ? doc.blocks[indexOf(doc, id)]?.id
+        : copies(doc, block.raw) >= copies(base, block.raw)
+          ? id
+          : undefined
     if (survivor !== undefined) {
-      settled.push(survivor.id)
+      settled.push(survivor)
       continue
     }
     const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)

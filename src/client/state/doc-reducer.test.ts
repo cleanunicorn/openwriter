@@ -298,6 +298,22 @@ describe('a reload that carries the editor’s own text', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('restores a folded tail even when the article already said the same thing', () => {
+    // An article may repeat a heading. Asking only whether *a* block with that text is still
+    // there finds the one that was always there, and calls the writer's copy safe while it is
+    // being dropped — so the question is how many there are, not whether there are any.
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n\n## Heading\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    expect(occurrences(liveText(open), '## Heading')).toBe(2)
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n\n## Heading\n')
+    expect(occurrences(liveText(state), '## Heading')).toBe(2)
+    // …and it is still there once the editor closes, not just in the live view.
+    expect(occurrences(text(docReducer(state, { type: 'blur' })), '## Heading')).toBe(2)
+  })
+
   it('keeps a folded tail the disk dropped, when a later block also changed', () => {
     const open = run(
       loaded('One\n\nTwo\n\nThree\n'),
