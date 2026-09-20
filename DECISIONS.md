@@ -473,6 +473,26 @@ codex exec --json --skip-git-repo-check --ephemeral
   deletable: `defaultWorkspace()` re-creates it, and deleting it is already the documented reset.
 - **`/api/health` reports `workspace.root`, not `options.workspace`.** The latter is the string
   the process started with and would keep naming the old workspace after a switch.
+- **The switch clears the open documents and bumps a document session.** `resync()` reconciles
+  every open document against disk, so a document left in the store after a switch would be read
+  as an *outside change* to the new workspace's article of the same slug. The session counter
+  covers what clearing cannot: a load or a save already in flight belongs to the workspace that
+  is no longer open, and is dropped when it lands rather than written into the new one's state.
+- **The switch waits for the saves; it does not fire them.** `flushAll` fires `void flush(...)`
+  and returns void, so awaiting it guarantees nothing; `flush` is the one that returns a promise.
+  After the server retargets, a save resolves against the new root, so the order is what keeps
+  unsaved work. An e2e spec injects five seconds of save latency to force that order rather than
+  race it.
+- **`src/client/state/app.ts` was edited rather than worked around** (manager decision on Q3,
+  option (a)). The alternative — a second state container for the confirmation dialog — would
+  have shipped the race the session counter closes, and this client has exactly one store. The
+  edits are four: the `confirm` palette mode, the workspace list in `AppState` beside `articles`
+  and `skills` (the palette lists it the same way), the document session, and one `else if` for
+  `workspace.changed`. The parallel work item that owned the file had merged, so the conflict
+  risk was zero rather than merely low.
+- **The delete confirmation trims surrounding space, like every other palette input.** A stray
+  space is not evidence of an accident; a different name is, and is refused. The server compares
+  without trimming, because it is a second lock and not a re-run of the typing.
 - **The mutating workspace routes are serialised through one promise chain.** They all read the
   list, change the world and write it back; two interleaving across the `await` in `quiesce`
   would lose a write, or retarget while another request was halfway through an erase.

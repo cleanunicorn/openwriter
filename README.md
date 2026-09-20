@@ -81,6 +81,17 @@ wants them and `hugo server` is the true preview.
 You can work on more than one workspace without restarting the server. The editor opens
 another one, creates one, and remembers the ones you have opened.
 
+Everything is reached from the command palette (`Cmd/Ctrl+K`) — there is no new toolbar:
+
+| Command | What it does |
+| --- | --- |
+| `Switch to workspace: <name>` | opens one you have opened before |
+| `Open workspace…` | opens one by its absolute path |
+| `New workspace…` | scaffolds a new one at a path you name, and opens it |
+| `Rename workspace: <name>` | changes the label you see, nothing on disk |
+| `Remove workspace from the list: <name>` | forgets it; every file stays where it is |
+| `Delete workspace from disk: <name>` | deletes it, after you type its name (see below) |
+
 The list of remembered workspaces is the one piece of state that cannot live in a workspace,
 so it lives beside them:
 
