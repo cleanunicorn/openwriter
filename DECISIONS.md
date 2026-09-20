@@ -83,6 +83,22 @@ directory keeps the name `.zen/`.
   to the document when the editor has nothing left to undo.
 - **The focused editor's text (the draft) is part of every save and every job snapshot,** so
   autosave and jobs never miss what is being typed.
+- **A reload folds the open editor's text in before reconciling.** That text is already in the
+  file autosave wrote, so reconciling against the committed document — which does not have it
+  yet — brought it back from disk *and* left the editor holding it: the writer's paragraph
+  twice. A draft's own block is left as it is, and only its tail folded: rewriting its raw would
+  cost it the identity the reconcile needs to match the disk's older copy instead of adding one.
+  The editor's text comes from the folded document, never from the reconciled one, because the
+  disk's copy can be a keystroke behind the keyboard.
+- **Blocks that exist only in a derived document get IDs the store cannot mint** (`live1`, not
+  `b3`). `liveDoc` folds the editor in with the document's counter but nothing reserves the ID,
+  so a job snapshot could show the agent a block under an ID the store later gave to different
+  content. Derived IDs make such an op *missing*, which the existing withdraw path handles.
+- **A save that resolves after a reload is dropped.** It carries the hash of the revision it
+  wrote, which is one behind; applying it rolled `baseHash` back and made the next PUT a certain
+  409. The save says which revision it was based on and the reducer keeps it only while that is
+  still the document's — in the reducer, not in `save()`, because that is where document state
+  transitions are owned and the only client state the unit suite can reach.
 - **Edit mode is entered on mouseup, with the cursor computed at mousedown.** A blur elsewhere can
   re-render and shift the layout between the two; a drag that selects text never enters edit mode,
   so text in a rendered block can be selected for a prompt.
