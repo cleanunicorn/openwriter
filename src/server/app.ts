@@ -15,6 +15,7 @@ import { mountDocRoutes } from './routes/docs.ts'
 import { mountEventRoutes } from './routes/events.ts'
 import { mountExportRoutes } from './routes/export.ts'
 import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
+import { mountWorkspaceRoutes } from './routes/workspaces.ts'
 import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
 import { EventHub } from './sse.ts'
@@ -89,6 +90,7 @@ export function createApp(options: AppOptions): CreatedApp {
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)
+  mountWorkspaceRoutes(app, context, jobs)
   mountExportRoutes(app, context)
   if (options.fakeControl) mountFakeControl(app, gate, events)
 
