@@ -14,6 +14,8 @@ export const blocks = (page: Page): Locator => page.getByTestId('block')
 export const blockWith = (page: Page, text: string | RegExp): Locator =>
   blocks(page).filter({ hasText: text })
 export const editor = (page: Page): Locator => page.getByRole('textbox', { name: 'Block editor' })
+/** How many times `needle` occurs in `text` — a duplicate is a count, never a substring. */
+export const occurrences = (text: string, needle: string) => text.split(needle).length - 1
 /** dnd-kit also renders a `status` live region, so the notice is addressed by name. */
 export const notice = (page: Page): Locator => page.getByRole('status', { name: 'Document notice' })
 
