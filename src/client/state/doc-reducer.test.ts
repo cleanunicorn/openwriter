@@ -326,6 +326,31 @@ describe('a reload that carries the editor’s own text', () => {
     expect(liveText(after)).toBe('One\n\nTwo\n\nThree\n')
   })
 
+  it('leaves the caret alone when the editor did not move', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 3 },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    const state = reload(open, 'One CHANGED\n\nTwo\n\n## Heading\n\nThree\n')
+    expect(state.focusedId).toBe('b2')
+    expect(state.focusCursor).toBe(3)
+    expect(state.notice).toBe('Reloaded: the file changed on disk.')
+    // The slot is a different matter: its editor is rebuilt on the new block, caret at the end.
+    const slot = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    expect(reload(slot, liveText(slot)).focusCursor).toBe('end')
+  })
+
+  it('says whose text was kept when only a folded tail needed rescuing', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n')
+    expect(state.notice).toBe('The file changed on disk. Your unsaved text was kept.')
+  })
+
   it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
     // The behaviours the fix must not disturb, from the other side of the same code path.
     const editing = run(

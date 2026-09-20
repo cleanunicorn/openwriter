@@ -471,6 +471,8 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       let reopened: Partial<DocState> = {}
       // Disk wins everywhere except what the writer is editing, which keeps its text.
       if (folded !== null && draft !== null) {
+        let rescuedHeld = false
+        let rescuedTail = false
         const settled = folded.ids.map((id) => {
           const block = base.blocks[indexOf(base, id)]
           if (block === undefined) return id
@@ -486,9 +488,13 @@ export function docReducer(state: DocState, action: DocAction): DocState {
           if (survivor !== undefined) return survivor.id
           const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
           doc = rescue.doc
-          notice = 'The file changed on disk. The block you are editing was kept.'
+          if (id === folded.held.id) rescuedHeld = true
+          else rescuedTail = true
           return rescue.id
         })
+        // Say which text was kept. A rescued tail is not the block the writer is editing.
+        if (rescuedHeld) notice = 'The file changed on disk. The block you are editing was kept.'
+        else if (rescuedTail) notice = 'The file changed on disk. Your unsaved text was kept.'
         // The editor keeps what it held, with the writer's own text: the raw the reconcile
         // produced would be the disk's copy, one save behind the keyboard. A rescue that fused
         // the text into another block moves the editor there instead.
@@ -497,7 +503,16 @@ export function docReducer(state: DocState, action: DocAction): DocState {
           moved === folded.held.id
             ? folded.held
             : { id: moved, text: doc.blocks[indexOf(doc, moved)]?.raw ?? folded.held.text }
-        reopened = { draft: held, focusedId: held.id, focusCursor: 'end', pendingNew: null }
+        // The caret only moves when the editor does — the slot becoming a real block rebuilds
+        // it, and the end of what was typed is where a writer expects to carry on. An editor
+        // that stayed on its own block keeps the position the writer left it at.
+        const rebuilt = held.id !== draft.id
+        reopened = {
+          draft: held,
+          focusedId: held.id,
+          pendingNew: null,
+          ...(rebuilt ? { focusCursor: 'end' as const } : {}),
+        }
       } else if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
         const rescue = keepFocusedBlock(state.doc, doc, draft, mint)
         doc = rescue.doc
