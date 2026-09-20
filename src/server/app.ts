@@ -81,7 +81,9 @@ export function createApp(options: AppOptions): CreatedApp {
     return c.json({ error: 'internal error' }, 500)
   })
 
-  app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(options.workspace) }))
+  // `workspace.root`, not `options.workspace`: the latter is the string the process started
+  // with, and it would keep naming the old workspace after a switch.
+  app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(workspace.root) }))
 
   mountEventRoutes(app, events)
   mountDocRoutes(app, context)

@@ -4,6 +4,7 @@ import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
 import {
   type FailureReason,
   isActive,
+  isUnsettled,
   PROGRESS_TAIL,
   type Job,
   type JobRequest,
@@ -31,6 +32,8 @@ import {
 import { type JobFile, recoverJobs, saveJobFile } from './store.ts'
 
 const PROGRESS_LOG_LIMIT = 512 * 1024
+/** How long a workspace switch waits for the runs it cancelled; the epoch fences the rest. */
+const QUIESCE_BUDGET_MS = 2000
 
 export type ManagerOptions = {
   workspace: Workspace
@@ -47,6 +50,8 @@ type Entry = {
   skill?: Skill
   handle?: AdapterHandle
   logBytes: number
+  /** The workspace generation this entry belongs to; see `rebind`. */
+  epoch: number
 }
 
 function newJobId(now = new Date()): string {
@@ -68,11 +73,24 @@ export class JobManager {
   private readonly waiting: string[] = []
   private running = 0
   private readonly options: ManagerOptions
+  /**
+   * Bumped by `rebind` when the workspace changes. Every write a job makes is stamped with the
+   * epoch it started in and dropped if that is no longer the current one, so a run still
+   * settling cannot create `<new workspace>/.zen/jobs/<old id>/`.
+   */
+  private epoch = 0
+  /** The runs currently in flight, so `quiesce` can wait for them instead of hoping. */
+  private readonly inFlight = new Set<Promise<void>>()
 
   constructor(options: ManagerOptions) {
     this.options = options
-    for (const file of recoverJobs(options.workspace.jobsDir())) {
-      this.entries.set(file.job.id, { file, logBytes: 0 })
+    this.recover()
+  }
+
+  /** Adopt whatever job directories the current workspace already has. */
+  private recover(): void {
+    for (const file of recoverJobs(this.options.workspace.jobsDir())) {
+      this.entries.set(file.job.id, { file, logBytes: 0, epoch: this.epoch })
     }
   }
 
@@ -98,6 +116,9 @@ export class JobManager {
   }
 
   private update(entry: Entry, patch: Partial<Job>): void {
+    // A job of a workspace that is no longer open writes nothing and says nothing: its directory
+    // is in the other root, and `jobDir()` would now resolve into this one.
+    if (entry.epoch !== this.epoch) return
     entry.file.job = {
       ...entry.file.job,
       ...patch,
@@ -123,6 +144,7 @@ export class JobManager {
   }
 
   private progress(entry: Entry, text: string): void {
+    if (entry.epoch !== this.epoch) return
     const job = entry.file.job
     job.progress = [...job.progress, text].slice(-PROGRESS_TAIL)
     if (entry.logBytes < PROGRESS_LOG_LIMIT) {
@@ -188,7 +210,7 @@ export class JobManager {
       promoted: {},
       dismissed: false,
     }
-    const entry: Entry = { file, request, skill, logBytes: 0 }
+    const entry: Entry = { file, request, skill, logBytes: 0, epoch: this.epoch }
     // Publish the job only once its files exist. Reading the context can fail (strategy.md that is
     // not UTF-8, a full disk); a half-created job must not stay listed as "queued" forever.
     try {
@@ -267,12 +289,29 @@ export class JobManager {
       const entry = this.entries.get(id)
       if (entry === undefined || entry.file.job.state !== 'queued') continue
       this.running++
-      void this.run(entry)
-        .catch((error: unknown) => this.crashed(entry, error))
-        .finally(() => {
-          this.running--
-          this.pump()
-        })
+      const done = this.settle(entry)
+      this.inFlight.add(done)
+      const forget = () => this.inFlight.delete(done)
+      void done.then(forget, forget)
+    }
+  }
+
+  /**
+   * One run, from start to finish, including its slot. The epoch is read before the run so a
+   * switch that happens while it is in flight cannot give a slot back to the workspace that is
+   * open now — `rebind` has already reset the count.
+   */
+  private async settle(entry: Entry): Promise<void> {
+    const epoch = this.epoch
+    try {
+      await this.run(entry)
+    } catch (error) {
+      this.crashed(entry, error)
+    } finally {
+      if (epoch === this.epoch) {
+        this.running--
+        this.pump()
+      }
     }
   }
 
@@ -366,7 +405,10 @@ export class JobManager {
 
   private async run(entry: Entry): Promise<void> {
     const id = entry.file.job.id
-    const still = (state: JobState) => entry.file.job.state === state
+    // Every checkpoint asks two questions: is this job still in the state I left it in, and is
+    // its workspace still the one that is open? A job whose root has moved stops here — its
+    // directory is in the other workspace, and every path below would resolve into this one.
+    const still = (state: JobState) => entry.epoch === this.epoch && entry.file.job.state === state
     this.update(entry, { state: 'running' })
     const jobRel = `.zen/jobs/${id}`
     const first = await this.attempt(entry, `Read ${jobRel}/instruction.md and follow it exactly.`)
@@ -517,12 +559,53 @@ export class JobManager {
     return assetMap
   }
 
+  /**
+   * Let go of this workspace's jobs so its root can move.
+   *
+   * Every unsettled job is marked stale with the reason, which writes into the workspace that is
+   * still open and keeps whatever the agent produced; every agent is force-cancelled; and the
+   * runs still in flight are awaited so their last bookkeeping lands in the old root too. The
+   * wait is bounded, exactly as the shutdown path bounds `dispose`, because golden rule 8 says a
+   * wedged agent may not block the writer — and `rebind`'s epoch fences whatever outlives the
+   * budget.
+   */
+  async quiesce(reason: string, budgetMs = QUIESCE_BUDGET_MS): Promise<void> {
+    for (const entry of [...this.entries.values()]) {
+      if (isUnsettled(entry.file.job.state)) this.markStale(entry.file.job.id, reason)
+    }
+    await Promise.race([
+      Promise.allSettled([...this.inFlight, ...this.cancelAll()]),
+      new Promise((resolve) => setTimeout(resolve, budgetMs)),
+    ])
+  }
+
+  /**
+   * Adopt another workspace's jobs. The epoch moves first, so anything still running for the
+   * previous root is fenced out of `update` and `progress` before a single path is re-resolved;
+   * then the in-memory list is dropped and rebuilt from the new root's own job directories. The
+   * files of the old workspace are untouched, so switching back finds them again.
+   *
+   * Call it only after `quiesce`, and only inside the synchronous block that retargets the
+   * workspace.
+   */
+  rebind(): void {
+    this.epoch++
+    this.entries.clear()
+    this.waiting.length = 0
+    this.running = 0
+    this.recover()
+  }
+
+  private cancelAll(): Promise<unknown>[] {
+    return [...this.entries.values()].map((entry) =>
+      entry.handle === undefined
+        ? Promise.resolve()
+        : entry.handle.cancel({ force: true }).catch(() => {}),
+    )
+  }
+
   /** Stop every running agent; used when the server shuts down. */
   async shutdown(): Promise<void> {
-    await Promise.all(
-      [...this.entries.values()].map((entry) =>
-        entry.handle?.cancel({ force: true }).catch(() => {}),
-      ),
-    )
+    await Promise.all(this.cancelAll())
   }
 }

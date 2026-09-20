@@ -1,12 +1,15 @@
 import {
+  cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
@@ -690,5 +693,103 @@ describe('routes', () => {
     } finally {
       plain.cleanup()
     }
+  })
+})
+
+describe('a workspace switch under the job manager', () => {
+  const SAMPLE = path.resolve(import.meta.dirname, '..', '..', '..', 'sample-workspace')
+  const SWITCHED = 'The workspace was switched.'
+
+  let next: string
+  beforeEach(() => {
+    next = mkdtempSync(path.join(os.tmpdir(), 'openwrite-next-'))
+    cpSync(SAMPLE, next, { recursive: true })
+  })
+  afterEach(() => rmSync(next, { recursive: true, force: true }))
+
+  /** What `POST /api/workspaces/open` does, in the order that makes it safe. */
+  const switchTo = async (root: string): Promise<void> => {
+    await t.jobs.quiesce(SWITCHED)
+    t.context.workspace.retarget(root)
+    t.context.watcher.reset()
+    t.jobs.rebind()
+  }
+
+  it('leaves the old workspace’s jobs behind, stale but intact', async () => {
+    const job = await start(request('fake:upper', byText('## Why blocks')))
+    await atCheckpoint(job.id)
+
+    await switchTo(next)
+
+    expect(t.jobs.list()).toEqual([])
+    const onDisk = JSON.parse(readFileSync(path.join(jobDir(job.id), 'job.json'), 'utf8'))
+    expect(onDisk.job.state).toBe('stale')
+    expect(onDisk.job.error).toBe(SWITCHED)
+    expect(existsSync(path.join(next, '.zen', 'jobs'))).toBe(false)
+  })
+
+  it('finds them again when the writer switches back', async () => {
+    const job = await start(request('fake:upper', byText('## Why blocks')))
+    await runToReady(job.id)
+
+    await switchTo(next)
+    expect(t.jobs.list()).toEqual([])
+
+    await switchTo(t.workspace)
+    const recovered = t.jobs.list()
+    expect(recovered.map((entry) => entry.id)).toEqual([job.id])
+    expect(recovered[0]?.state).toBe('stale')
+    expect(recovered[0]?.rawOutput).toContain('WHY BLOCKS')
+  })
+
+  it('never writes a job of the old workspace into the new one, however late it finishes', async () => {
+    // A wedged agent: cancelling changes nothing and the run outlives the quiesce budget. Two
+    // jobs of the old workspace are in flight — one started before the switch, one started while
+    // the switch was waiting, which is the one no state check catches, because nothing ever
+    // marked it stale. Both must finish without touching the workspace that is open now.
+    let wedge = true
+    const pending: ((completion: Completion) => void)[] = []
+    const wedged: AgentAdapter = {
+      name: 'fake',
+      start: () => ({
+        progress: (async function* () {})(),
+        done: wedge
+          ? new Promise<Completion>((resolve) => pending.push(resolve))
+          : Promise.resolve({ ok: true }),
+        cancel: async () => {},
+      }),
+    }
+    const manager = new JobManager({
+      workspace: t.context.workspace,
+      events: t.context.events,
+      registry: new AdapterRegistry().register(wedged),
+    })
+
+    const early = manager.create(request('x', byText('## Why blocks')))
+    await expect.poll(() => pending.length, { timeout: 5000 }).toBe(1)
+
+    const started = Date.now()
+    const quiescing = manager.quiesce(SWITCHED, 100)
+    const late = manager.create(request('x', byText('## A table')))
+    await expect.poll(() => pending.length, { timeout: 5000 }).toBe(2)
+    await quiescing
+    // Golden rule 8: the switch waits for its budget, never for the agent.
+    expect(Date.now() - started).toBeLessThan(2000)
+
+    t.context.workspace.retarget(next)
+    manager.rebind()
+
+    wedge = false
+    for (const resolve of pending) resolve({ ok: true })
+
+    // A whole job of the new workspace runs to completion: the barrier that proves the two old
+    // runs have had every chance to write something.
+    const fresh = manager.create(request('x', byText('## Why blocks')))
+    await expect.poll(() => manager.get(fresh.id).state, { timeout: 5000 }).toBe('failed')
+
+    expect(readdirSync(path.join(next, '.zen', 'jobs'))).toEqual([fresh.id])
+    expect(readdirSync(path.join(t.workspace, '.zen', 'jobs')).sort()).toEqual(
+      [early.id, late.id].sort(),
+    )
   })
 })

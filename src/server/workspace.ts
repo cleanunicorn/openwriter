@@ -44,9 +44,24 @@ export type DocOnDisk = { text: string; hash: string | null; exists: boolean }
 
 /** Owns every filesystem path of the workspace. Routes never build paths themselves. */
 export class Workspace {
-  readonly root: string
+  private current: string
   constructor(root: string) {
-    this.root = root
+    this.current = root
+  }
+
+  get root(): string {
+    return this.current
+  }
+
+  /**
+   * Point every path at another directory. Nothing here is cached — every method below resolves
+   * from `root` when it is called — so each holder of this instance follows, and the guards go
+   * on guarding, now against the new root. The caller is responsible for the order: the job manager
+   * must be quiesced first, and the watcher reset straight after, both without an `await` in
+   * between (see `POST /api/workspaces/open`).
+   */
+  retarget(next: string): void {
+    this.current = next
   }
 
   config() {
