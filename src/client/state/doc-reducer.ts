@@ -11,6 +11,7 @@ import {
   reconcile,
   replaceBlock,
   serialise,
+  splitText,
 } from '../../shared/blocks/index.ts'
 
 /** ID of the editor slot for a block that does not exist yet (Enter on an empty last line). */
@@ -197,6 +198,39 @@ function withDraft(state: DocState, id: string, text: string): { doc: Doc; nextI
   return { doc: replaceBlock(state.doc, index, text, mint), nextId: next() }
 }
 
+/**
+ * Fold into the document what the open editor holds but the document does not have yet: the
+ * whole text of a new-block slot, or the tail blocks of a draft that spans several. Both are
+ * already in the text autosave wrote, so a reload carrying that text would bring them back a
+ * second time. Returns the IDs the draft now occupies, the one the editor keeps first.
+ *
+ * A draft's own block is deliberately left as it is: rewriting its raw would cost it the
+ * identity `reconcile` needs to match the disk's older copy of it instead of adding one.
+ */
+function foldDraft(
+  state: DocState,
+  draft: Draft,
+): { doc: Doc; nextId: number; ids: string[] } | null {
+  const { slices, gaps } = splitText(draft.text)
+  if (draft.id !== NEW_BLOCK_ID && slices.length < 2) return null
+  const known = new Set(state.doc.blocks.map((block) => block.id))
+  const { mint, next } = minter(state)
+  let doc: Doc
+  if (draft.id === NEW_BLOCK_ID) {
+    if (draft.text.trim() === '' || state.pendingNew === null) return null
+    doc = insertMarkdown(state.doc, slotIndex(state.doc, state.pendingNew), draft.text, mint)
+  } else {
+    const index = indexOf(state.doc, draft.id)
+    if (index === -1) return null
+    const tail = serialise({ blocks: slices.slice(1), gaps: ['', ...gaps.slice(2)] })
+    doc = insertMarkdown(state.doc, index + 1, tail, mint)
+  }
+  if (doc === state.doc) return null
+  const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
+  const ids = draft.id === NEW_BLOCK_ID ? fresh : [draft.id, ...fresh]
+  return ids.length === 0 ? null : { doc, nextId: next(), ids }
+}
+
 /** The document as the writer sees it right now: committed blocks plus the open editor's text. */
 export function liveDoc(state: DocState): Doc {
   return state.draft === null ? state.doc : withDraft(state, state.draft.id, state.draft.text).doc
@@ -364,16 +398,36 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         }
       }
       if (action.hash === state.baseHash) return state
-      const { mint, next } = minter(state)
-      let doc = reconcile(state.doc, action.text, mint)
-      let notice: string | null = 'Reloaded: the file changed on disk.'
       const draft = state.draft
-      // Disk wins everywhere except the focused block, which keeps its editor text.
-      if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
+      // What the editor holds is already in the file autosave wrote. Reconciling against
+      // `state.doc`, which does not have it yet, would bring it back from disk *and* leave the
+      // editor holding it: the writer's paragraph twice. Fold it in first, so the reconcile
+      // matches the disk's copy with it instead of adding one.
+      const folded = draft === null ? null : foldDraft(state, draft)
+      const base = folded?.doc ?? state.doc
+      const { mint, next } = minter({ ...state, nextId: folded?.nextId ?? state.nextId })
+      let doc = reconcile(base, action.text, mint)
+      let notice: string | null = 'Reloaded: the file changed on disk.'
+      let reopened: Partial<DocState> = {}
+      // Disk wins everywhere except what the writer is editing, which keeps its text.
+      if (folded !== null && draft !== null) {
+        for (const id of folded.ids) {
+          if (indexOf(doc, id) !== -1) continue
+          const block = base.blocks[indexOf(base, id)]
+          if (block === undefined) continue
+          doc = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
+          notice = 'The file changed on disk. The block you are editing was kept.'
+        }
+        // The editor keeps the first block of what it held, with the writer's own text: the
+        // raw the reconcile produced would be the disk's copy, one save behind the keyboard.
+        const first = folded.ids[0] as string
+        const held = { id: first, text: splitText(draft.text).slices[0]?.raw ?? draft.text }
+        reopened = { draft: held, focusedId: first, focusCursor: 'end', pendingNew: null }
+      } else if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
         doc = keepFocusedBlock(state.doc, doc, draft, mint)
         notice = 'The file changed on disk. The block you are editing was kept.'
       }
-      return change({ ...state, status: 'ready' }, doc, next(), {
+      return change({ ...state, status: 'ready', ...reopened }, doc, next(), {
         baseHash: action.hash,
         savedText: action.text,
         notice,

@@ -163,8 +163,13 @@ describe('an open new-block slot whose anchor disappears', () => {
       hash: 'h1',
       exists: true,
     })
-    expect(state.pendingNew).toEqual({ afterId: 'b2' })
+    // A reload folds the slot into a real block first, so that the disk's copy of it (when the
+    // disk has one) is matched instead of added. The editor moves to that block, and it lands
+    // after the anchor's nearest survivor — never at the top of the file.
     expect(liveText(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+    expect(state.doc.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'my new paragraph'])
+    expect(state.focusedId).toBe(state.doc.blocks[2]?.id)
+    expect(state.pendingNew).toBeNull()
   })
 
   it('stays in place when an accepted delete removes the anchor (replace-doc)', () => {
@@ -193,12 +198,100 @@ describe('an open new-block slot whose anchor disappears', () => {
   })
 
   it('commits where it was shown', () => {
+    // `blur` commits whatever the editor holds, wherever the reload left it — addressing the
+    // slot by name would now be a no-op, and a test that asserts nothing is worse than none.
     const state = run(
       slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b3', 'Three'),
       { type: 'external', text: 'One\n\nTwo\n', hash: 'h1', exists: true },
-      { type: 'commit', id: NEW_BLOCK_ID, text: 'my new paragraph' },
+      { type: 'blur' },
     )
     expect(text(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+    expect(state.doc.blocks).toHaveLength(3)
+  })
+})
+
+describe('a reload that carries the editor’s own text', () => {
+  // Autosave writes `liveText`, which includes whatever the open editor holds. When that same
+  // text comes back as an `external` — an SSE event from another writer, the re-check on
+  // reconnect, or the body of a 409 — the reload must not add what the editor is still holding.
+  const typedAfter = (state: DocState, id: string, raw: string, typed: string) =>
+    run(
+      state,
+      { type: 'focus', id, cursor: 'end' },
+      { type: 'new-block', currentId: id, currentText: raw },
+      { type: 'draft', id: NEW_BLOCK_ID, text: typed },
+    )
+  const reload = (state: DocState, disk: string): DocState =>
+    docReducer(state, { type: 'external', text: disk, hash: 'h1', exists: true })
+
+  it('does not duplicate the new block the autosave already wrote', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, liveText(open))
+    expect(liveText(state)).toBe('One\n\nTwo\n\nThree\n')
+    // Committing what is on screen writes the same thing: once in the store, once on disk.
+    const committed = docReducer(state, { type: 'blur' })
+    expect(text(committed)).toBe('One\n\nTwo\n\nThree\n')
+    expect(committed.doc.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'Three'])
+  })
+
+  it('keeps the keystrokes typed while the save was in flight', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const inFlight = liveText(open) // what the PUT carried
+    const typing = docReducer(open, { type: 'draft', id: NEW_BLOCK_ID, text: 'Threex' })
+    expect(liveText(reload(typing, inFlight))).toBe('One\n\nTwo\n\nThreex\n')
+  })
+
+  it('does not duplicate an appended block', () => {
+    const open = run(
+      loaded('Base\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Appended' },
+    )
+    expect(liveText(reload(open, liveText(open)))).toBe('Base\n\nAppended\n')
+  })
+
+  it('keeps an outside change and the new block, each exactly once', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, 'One\n\nTwo\n\nThree\n\nOUTSIDE\n')
+    expect(liveText(state)).toBe('One\n\nTwo\n\nThree\n\nOUTSIDE\n')
+  })
+
+  it('does not duplicate a slot holding several blocks', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three\n\n## Four')
+    expect(liveText(reload(open, liveText(open)))).toBe('One\n\nTwo\n\nThree\n\n## Four\n')
+  })
+
+  it('keeps a slot that grew past what the save carried', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const saved = liveText(open)
+    const grown = docReducer(open, { type: 'draft', id: NEW_BLOCK_ID, text: 'Three\n\nFour' })
+    expect(liveText(reload(grown, saved))).toBe('One\n\nTwo\n\nThree\n\nFour\n')
+  })
+
+  it('does not duplicate the tail of a draft that spans several blocks', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    expect(liveText(reload(open, liveText(open)))).toBe(
+      'One\n\nTwo EDITED\n\n## Heading\n\nThree\n',
+    )
+  })
+
+  it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
+    // The behaviours the fix must not disturb, from the other side of the same code path.
+    const editing = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two UNSAVED' },
+    )
+    expect(liveText(reload(editing, 'One CHANGED\n\nTwo\n\nThree\n'))).toBe(
+      'One CHANGED\n\nTwo UNSAVED\n\nThree\n',
+    )
+    const vanished = reload(editing, 'One\n\nThree\n')
+    expect(liveText(vanished)).toBe('One\n\nTwo UNSAVED\n\nThree\n')
+    expect(vanished.notice).toContain('was kept')
   })
 })
 

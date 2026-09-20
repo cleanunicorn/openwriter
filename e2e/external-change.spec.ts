@@ -1,6 +1,14 @@
 import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { type App, expect, test } from './fixtures.ts'
-import { blockEnd, dropEventStreams, editor, expectFile, notice, openArticle } from './helpers.ts'
+import {
+  blockEnd,
+  blockWith,
+  dropEventStreams,
+  editor,
+  expectFile,
+  notice,
+  openArticle,
+} from './helpers.ts'
 
 /** The article as another program would rewrite it: one heading changed, nothing else. */
 const withHeading = (app: App, heading: string): string =>
@@ -29,6 +37,44 @@ test('an outside change reloads the document without losing the focused block’
     expect(file).toContain('## Why blocks, from outside')
     expect(file).toContain('reject the rest. UNSAVED')
   })
+})
+
+/** How many times `needle` occurs in `text` — a duplicate is a count, never a substring. */
+const occurrences = (text: string, needle: string) => text.split(needle).length - 1
+
+test('a new block the autosave already wrote is not duplicated by a reload', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  // The reported gesture: Enter at the end of a block, the ordinary way to start a paragraph.
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await expect(editor(page)).toHaveText('')
+
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type('A brand new paragraph.')
+  await saved
+  // The paragraph is on disk now, while its editor is still open and still holding it.
+  expect(occurrences(app.readArticle(), 'A brand new paragraph.')).toBe(1)
+
+  // Another writer changes a different block. The reload this triggers carries the file as it
+  // now is — our paragraph included.
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
+  await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
+  await expect(blockWith(page, 'A brand new paragraph.')).toHaveCount(1)
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('## Why blocks, from outside')
+    expect(occurrences(file, 'A brand new paragraph.')).toBe(1)
+  })
+
+  // …and it survives the round trip: still one block after a reload from disk.
+  await page.reload()
+  await expect(blockWith(page, 'A brand new paragraph.')).toHaveCount(1)
 })
 
 test('a file deleted from outside is not recreated from memory', async ({ page, app }) => {
