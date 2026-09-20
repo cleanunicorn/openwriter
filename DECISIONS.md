@@ -83,6 +83,24 @@ directory keeps the name `.zen/`.
   to the document when the editor has nothing left to undo.
 - **The focused editor's text (the draft) is part of every save and every job snapshot,** so
   autosave and jobs never miss what is being typed.
+- **A reload folds the open editor's text in before reconciling,** so that what autosave has
+  already written to the file is matched instead of added a second time — which is how a new
+  block came back doubled. `foldDraft` in `doc-reducer.ts` holds the two rules that make it
+  work, and says why each is load-bearing.
+- **A job snapshot carries only store block IDs.** `liveDoc` folds the editor in with the
+  document's own counter and nothing reserves the ID, so a snapshot can show the agent a block
+  under an ID the store later gives to different content, and an accepted op then lands on the
+  wrong block. Giving derived blocks their own ID namespace was tried and reverted: `liveDoc` is
+  the job snapshot (`jobs.ts:113`) and `SnapshotSchema` binds every ID to `BlockIdSchema`
+  (`/^b\d+$/`), so the request became a 400 and a job started while the editor was open never
+  ran. The real fix belongs with the contract — the ID shapes, the README's job-file section,
+  `job-files.ts`'s instruction text and `fake.ts`'s block regex move together — and has its own
+  follow-up. A test pins the snapshot against `SnapshotSchema` so the boundary cannot drift
+  again.
+- **A save that resolves after a reload is dropped,** since its hash would roll `baseHash` back
+  to a revision the disk has moved past. The check is in the reducer rather than in `save()`:
+  that is where document state transitions are owned, and the only client state the unit suite
+  can reach.
 - **Edit mode is entered on mouseup, with the cursor computed at mousedown.** A blur elsewhere can
   re-render and shift the layout between the two; a drag that selects text never enters edit mode,
   so text in a rendered block can be selected for a prompt.

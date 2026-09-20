@@ -1,12 +1,14 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { serialise } from '../../shared/blocks/index.ts'
+import { SnapshotSchema } from '../../shared/jobs/job-types.ts'
 import {
   type DocAction,
   type DocState,
   docReducer,
   initialDocState,
   isDirty,
+  liveDoc,
   liveText,
   NEW_BLOCK_ID,
 } from './doc-reducer.ts'
@@ -23,6 +25,8 @@ function loaded(text = TEXT): DocState {
 }
 const run = (state: DocState, ...actions: DocAction[]) => actions.reduce(docReducer, state)
 const text = (state: DocState) => serialise(state.doc)
+/** How many times `needle` occurs in `haystack` — a duplicate is a count, never a substring. */
+const occurrences = (haystack: string, needle: string) => haystack.split(needle).length - 1
 
 describe('editing', () => {
   it('loads clean: not dirty, no history', () => {
@@ -163,8 +167,13 @@ describe('an open new-block slot whose anchor disappears', () => {
       hash: 'h1',
       exists: true,
     })
-    expect(state.pendingNew).toEqual({ afterId: 'b2' })
+    // A reload folds the slot into a real block first, so that the disk's copy of it (when the
+    // disk has one) is matched instead of added. The editor moves to that block, and it lands
+    // after the anchor's nearest survivor — never at the top of the file.
     expect(liveText(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+    expect(state.doc.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'my new paragraph'])
+    expect(state.focusedId).toBe(state.doc.blocks[2]?.id)
+    expect(state.pendingNew).toBeNull()
   })
 
   it('stays in place when an accepted delete removes the anchor (replace-doc)', () => {
@@ -193,12 +202,197 @@ describe('an open new-block slot whose anchor disappears', () => {
   })
 
   it('commits where it was shown', () => {
+    // `blur` commits whatever the editor holds, wherever the reload left it — addressing the
+    // slot by name would now be a no-op, and a test that asserts nothing is worse than none.
     const state = run(
       slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b3', 'Three'),
       { type: 'external', text: 'One\n\nTwo\n', hash: 'h1', exists: true },
-      { type: 'commit', id: NEW_BLOCK_ID, text: 'my new paragraph' },
+      { type: 'blur' },
     )
     expect(text(state)).toBe('One\n\nTwo\n\nmy new paragraph\n')
+    expect(state.doc.blocks).toHaveLength(3)
+  })
+})
+
+describe('a reload that carries the editor’s own text', () => {
+  // Autosave writes `liveText`, which includes whatever the open editor holds. When that same
+  // text comes back as an `external` — an SSE event from another writer, the re-check on
+  // reconnect, or the body of a 409 — the reload must not add what the editor is still holding.
+  const typedAfter = (state: DocState, id: string, raw: string, typed: string) =>
+    run(
+      state,
+      { type: 'focus', id, cursor: 'end' },
+      { type: 'new-block', currentId: id, currentText: raw },
+      { type: 'draft', id: NEW_BLOCK_ID, text: typed },
+    )
+  const reload = (state: DocState, disk: string): DocState =>
+    docReducer(state, { type: 'external', text: disk, hash: 'h1', exists: true })
+
+  it('does not duplicate the new block the autosave already wrote', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, liveText(open))
+    expect(liveText(state)).toBe('One\n\nTwo\n\nThree\n')
+    // Committing what is on screen writes the same thing: once in the store, once on disk.
+    const committed = docReducer(state, { type: 'blur' })
+    expect(text(committed)).toBe('One\n\nTwo\n\nThree\n')
+    expect(committed.doc.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'Three'])
+  })
+
+  it('keeps the keystrokes typed while the save was in flight', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const inFlight = liveText(open) // what the PUT carried
+    const typing = docReducer(open, { type: 'draft', id: NEW_BLOCK_ID, text: 'Threex' })
+    expect(liveText(reload(typing, inFlight))).toBe('One\n\nTwo\n\nThreex\n')
+  })
+
+  it('does not duplicate an appended block', () => {
+    const open = run(
+      loaded('Base\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Appended' },
+    )
+    expect(liveText(reload(open, liveText(open)))).toBe('Base\n\nAppended\n')
+  })
+
+  it('keeps an outside change and the new block, each exactly once', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, 'One\n\nTwo\n\nThree\n\nOUTSIDE\n')
+    expect(liveText(state)).toBe('One\n\nTwo\n\nThree\n\nOUTSIDE\n')
+  })
+
+  it('does not duplicate a slot holding several blocks', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three\n\n## Four')
+    expect(liveText(reload(open, liveText(open)))).toBe('One\n\nTwo\n\nThree\n\n## Four\n')
+  })
+
+  it('keeps a slot that grew past what the save carried', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const saved = liveText(open)
+    const grown = docReducer(open, { type: 'draft', id: NEW_BLOCK_ID, text: 'Three\n\nFour' })
+    expect(liveText(reload(grown, saved))).toBe('One\n\nTwo\n\nThree\n\nFour\n')
+  })
+
+  it('does not duplicate the tail of a draft that spans several blocks', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    expect(liveText(reload(open, liveText(open)))).toBe(
+      'One\n\nTwo EDITED\n\n## Heading\n\nThree\n',
+    )
+  })
+
+  it('keeps a folded tail whose ID a changed block from disk inherited', () => {
+    // `reconcile` gives the first slice of a changed run the old ID of that run, so the block
+    // answering to the folded tail's ID afterwards can be a different one, from disk. Checking
+    // the ID alone said the tail had survived, and it was dropped without a word.
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n\nFour\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n\nFour\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree CHANGED\n\nFour\n')
+    const ids = state.doc.blocks.map((block) => block.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('restores a folded tail even when the article already said the same thing', () => {
+    // An article may repeat a heading. Asking only whether *a* block with that text is still
+    // there finds the one that was always there, and calls the writer's copy safe while it is
+    // being dropped — so the question is how many there are, not whether there are any.
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n\n## Heading\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    expect(occurrences(liveText(open), '## Heading')).toBe(2)
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n\n## Heading\n')
+    expect(occurrences(liveText(state), '## Heading')).toBe(2)
+    // …and it is still there once the editor closes, not just in the live view.
+    expect(occurrences(text(docReducer(state, { type: 'blur' })), '## Heading')).toBe(2)
+  })
+
+  it('keeps a folded tail the disk dropped, when a later block also changed', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree CHANGED\n')
+  })
+
+  it('keeps a multi-block slot once when a fence from disk swallows the fold', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three\n\n## Four')
+    const state = reload(open, '```js\nnever closed\n\nOne\n')
+    expect(occurrences(liveText(state), 'Three')).toBe(1)
+    expect(occurrences(liveText(state), '## Four')).toBe(1)
+    expect(state.doc.blocks.some((block) => block.id === state.focusedId)).toBe(true)
+  })
+
+  it('ignores a commit addressed to the slot after the reload moved the editor', () => {
+    const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    const state = reload(open, liveText(open))
+    // The editor is on a real block now, so the slot's name no longer addresses anything. A
+    // late commit from an editor that was unmounted mid-gesture must change nothing.
+    const after = docReducer(state, { type: 'commit', id: NEW_BLOCK_ID, text: 'Three' })
+    expect(after).toBe(state)
+    expect(liveText(after)).toBe('One\n\nTwo\n\nThree\n')
+  })
+
+  it('leaves the caret alone when the editor did not move', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 3 },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    const state = reload(open, 'One CHANGED\n\nTwo\n\n## Heading\n\nThree\n')
+    expect(state.focusedId).toBe('b2')
+    expect(state.focusCursor).toBe(3)
+    expect(state.notice).toBe('Reloaded: the file changed on disk.')
+    // The slot is a different matter: its editor is rebuilt on the new block, caret at the end.
+    const slot = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
+    expect(reload(slot, liveText(slot)).focusCursor).toBe('end')
+  })
+
+  it('says whose text was kept when only a folded tail needed rescuing', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n')
+    expect(state.notice).toBe('The file changed on disk. Your unsaved text was kept.')
+  })
+
+  it('speaks for the block being edited when a reload rescues it and a tail', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    // The disk drops the draft's own block and its folded tail: both come back, and the notice
+    // names the one the writer has their cursor in.
+    const state = reload(open, 'One\n\nThree\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree\n')
+    expect(state.notice).toBe('The file changed on disk. The block you are editing was kept.')
+  })
+
+  it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
+    // The behaviours the fix must not disturb, from the other side of the same code path.
+    const editing = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two UNSAVED' },
+    )
+    expect(liveText(reload(editing, 'One CHANGED\n\nTwo\n\nThree\n'))).toBe(
+      'One CHANGED\n\nTwo UNSAVED\n\nThree\n',
+    )
+    const vanished = reload(editing, 'One\n\nThree\n')
+    expect(liveText(vanished)).toBe('One\n\nTwo UNSAVED\n\nThree\n')
+    expect(vanished.notice).toContain('was kept')
   })
 })
 
@@ -312,6 +506,76 @@ describe('outside changes', () => {
     expect(run(state, { type: 'external', text: TEXT, hash: 'h0', exists: true })).toBe(state)
   })
 
+  it('ignores a save that lands after a reload moved the document on', () => {
+    // The PUT left while the document was based on h0; the reload landed before it came back.
+    const reloaded = run(loaded('One\n\nTwo\n'), {
+      type: 'external',
+      text: 'One\n\nTwo CHANGED\n',
+      hash: 'h1',
+      exists: true,
+    })
+    const late = run(reloaded, {
+      type: 'saved',
+      text: 'One\n\nTwo\n',
+      hash: 'h-of-the-older-text',
+      baseHash: 'h0',
+    })
+    expect(late).toBe(reloaded)
+    expect(late.baseHash).toBe('h1')
+    expect(late.savedText).toBe('One\n\nTwo CHANGED\n')
+  })
+
+  it('accepts a save the document is still waiting for', () => {
+    const state = run(loaded('One\n\nTwo\n'), {
+      type: 'saved',
+      text: 'One\n\nTwo\n',
+      hash: 'h1',
+      baseHash: 'h0',
+    })
+    expect(state.baseHash).toBe('h1')
+    expect(state.savedText).toBe('One\n\nTwo\n')
+    expect(isDirty(state)).toBe(false)
+  })
+
+  it('gives a job snapshot only block IDs the job contract accepts', () => {
+    // `liveDoc` is what `postNow` sends as a job's snapshot, and `SnapshotSchema` binds every
+    // block ID to `BlockIdSchema`. An ID shape the schema rejects makes the request a 400, so
+    // starting a job while the editor is open fails and the writer only sees "Could not start".
+    const open = run(
+      loaded('One\n\nTwo\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'new-block', currentId: 'b2', currentText: 'Two' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Three' },
+    )
+    const appended = run(
+      loaded('One\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Appended' },
+    )
+    const splitting = run(
+      loaded('One\n\nTwo\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    for (const state of [open, appended, splitting, loaded()]) {
+      const { blocks, gaps } = liveDoc(state)
+      expect(SnapshotSchema.safeParse({ blocks, gaps }).success).toBe(true)
+    }
+  })
+
+  it('accepts a save based on no revision at all, the first of a session', () => {
+    const fresh = docReducer(initialDocState({ kind: 'article', slug: 'post' }), {
+      type: 'loaded',
+      text: 'One\n',
+      hash: null,
+      exists: true,
+    })
+    expect(fresh.baseHash).toBeNull()
+    const state = run(fresh, { type: 'saved', text: 'One\n', hash: 'h1', baseHash: null })
+    expect(state.baseHash).toBe('h1')
+    expect(isDirty(state)).toBe(false)
+  })
+
   it('a deleted file pauses saving instead of being recreated', () => {
     const state = run(loaded(), { type: 'external', text: '', hash: null, exists: false })
     expect(state.status).toBe('missing')
@@ -369,9 +633,60 @@ describe('an open editor never loses its block', () => {
     expect(text(reloaded)).toBe('A\n\nC\n\nD\n\nE\n')
   })
 
+  it('keeps the editor’s text once when a fence from disk swallows its block', () => {
+    // The rescue puts the text back, but an unclosed fence arriving from disk swallows it, so
+    // no block carries the draft's ID afterwards — and the rescue used to run a second time.
+    const state = run(
+      loaded('A\n\nB\n\nC\n\nD\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'typed' },
+      { type: 'external', text: '```js\nnever closed\n\nB\n', hash: 'h1', exists: true },
+    )
+    expect(occurrences(liveText(state), 'typed')).toBe(1)
+    expect(dangling(state)).toBe(false)
+  })
+
+  it('follows its text, not the first block, when the draft ends in whitespace', () => {
+    // `splitText` trims a block's trailing whitespace into the gap after it, so looking for the
+    // untrimmed draft found nothing and the editor was reopened on the top of the article.
+    const state = run(
+      loaded('A\n\nB\n\nC\n\nD\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'typed with trailing spaces   ' },
+      { type: 'external', text: 'A\n\n```js\nnever closed', hash: 'h1', exists: true },
+    )
+    expect(liveText(state)).toContain('typed with trailing spaces')
+    expect(state.draft?.text).toContain('typed with trailing spaces')
+    expect(state.focusedId).not.toBe('b1')
+    expect(dangling(state)).toBe(false)
+  })
+
   it('emptying the focused block and leaving it still deletes it', () => {
     const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
     expect(text(state)).toBe('A\n\nC\n\nD\n')
+  })
+
+  it('keeps what an unclosed fence swallowed when its own save comes back', () => {
+    // The fence swallows B and C, so what autosave writes is one block — while the editor is
+    // still holding only the fence. Reloading that text used to leave the two disagreeing, and
+    // the next save wrote the editor's shorter version over the rest of the article.
+    const state = run(
+      loaded('A\n\nB\n\nC\n'),
+      { type: 'focus', id: 'b1', cursor: 0 },
+      { type: 'draft', id: 'b1', text: '```js\nnever closed' },
+    )
+    const saved = liveText(state)
+    const reloaded = docReducer(state, {
+      type: 'external',
+      text: saved,
+      hash: 'h1',
+      exists: true,
+    })
+    expect(liveText(reloaded)).toBe(saved)
+    // …and it is still true once the editor closes, which is when the loss used to land.
+    expect(text(docReducer(reloaded, { type: 'blur' }))).toBe(saved)
+    expect(liveText(reloaded)).toContain('B')
+    expect(liveText(reloaded)).toContain('C')
   })
 
   it('holds for any sequence of structural changes', () => {
@@ -414,18 +729,50 @@ describe('an open editor never loses its block', () => {
           },
           nextId: 99,
         })),
+      // Enter at the end of a block, and the append button: both open the editor slot.
+      fc.record({
+        type: fc.constant('new-block' as const),
+        currentId: fc.constantFrom('b1', 'b2', 'b3', 'b4'),
+      }),
+      fc.constant({ type: 'append' as const }),
+      // The reload that carries what this client itself last saved — the open editor included.
+      fc.constant({ type: 'reload-own-save' as const }),
       fc.constant({ type: 'blur' as const }),
       fc.constant({ type: 'undo' as const }),
     )
     fc.assert(
       fc.property(fc.array(step, { maxLength: 12 }), (steps) => {
         let state = loaded('A\n\nB\n\nC\n\nD\n')
+        let hash = 0
         for (const action of steps) {
           if (action.type === 'focus' && !state.doc.blocks.some((block) => block.id === action.id))
             continue
           if (action.type === 'type') {
-            if (state.focusedId === null || state.focusedId === NEW_BLOCK_ID) continue
+            // The slot types too: its text is exactly the text that used to come back doubled.
+            if (state.focusedId === null) continue
             state = docReducer(state, { type: 'draft', id: state.focusedId, text: action.text })
+          } else if (action.type === 'new-block') {
+            const current = state.doc.blocks.find((block) => block.id === action.currentId)
+            if (current === undefined) continue
+            state = run(
+              state,
+              { type: 'focus', id: current.id, cursor: 0 },
+              { type: 'new-block', currentId: current.id, currentText: current.raw },
+            )
+          } else if (action.type === 'reload-own-save') {
+            hash += 1
+            const saved = liveText(state)
+            state = docReducer(state, {
+              type: 'external',
+              text: saved,
+              hash: `saved-${hash}`,
+              exists: true,
+            })
+            // The heart of it: autosave writes the live text, editor included, so a reload that
+            // carries that same text must leave the document exactly as it was. When it does
+            // not, whatever the editor holds has been added a second time.
+            //
+            expect(liveText(state)).toBe(saved)
           } else {
             state = docReducer(state, action as DocAction)
           }

@@ -105,8 +105,9 @@ async function save(ref: DocRef): Promise<void> {
   if (state === undefined || !isDirty(state)) return
   const text = liveText(state)
   try {
-    const { hash } = await api.save(ref, text, state.baseHash)
-    dispatchDoc(ref, { type: 'saved', text, hash })
+    const base = state.baseHash
+    const { hash } = await api.save(ref, text, base)
+    dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       // Someone else changed (or deleted) the file: reconcile instead of overwriting.
@@ -137,9 +138,14 @@ export function flush(ref: DocRef): Promise<void> {
 store.subscribe(() => {
   for (const [key, doc] of Object.entries(store.get().docs)) {
     if (!isDirty(doc)) continue
+    // Keyed by the revision as well as the text: a reload can restore the editor's block and
+    // leave the live text exactly as it was last saved, while the disk — now a revision on —
+    // no longer holds it. Text alone called that a repeat and the writer's block stayed unsaved
+    // until they typed again.
     const text = liveText(doc)
-    if (lastSeen.get(key) === text) continue
-    lastSeen.set(key, text)
+    const seen = `${doc.baseHash ?? ''}\u0000${text}`
+    if (lastSeen.get(key) === seen) continue
+    lastSeen.set(key, seen)
     window.clearTimeout(timers.get(key))
     timers.set(
       key,
