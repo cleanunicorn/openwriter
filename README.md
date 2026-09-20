@@ -76,6 +76,50 @@ The server binds `127.0.0.1` only.
 path to point straight into a Hugo site's `content/` directory; articles then live where Hugo
 wants them and `hugo server` is the true preview.
 
+## Managing workspaces
+
+You can work on more than one workspace without restarting the server. The editor opens
+another one, creates one, and remembers the ones you have opened.
+
+The list of remembered workspaces is the one piece of state that cannot live in a workspace,
+so it lives beside them:
+
+```
+$XDG_CONFIG_HOME/openwrite/workspaces.json     (default: ~/.config/openwrite/workspaces.json)
+```
+
+It holds a label and a path per workspace, nothing else. If it is missing, unreadable or
+hand-edited into something invalid, the editor starts with no remembered workspaces rather
+than refusing to start. Nothing in it is secret, and you can edit or delete it by hand.
+
+**Creating** a workspace scaffolds `strategy.md`, `.zen/config.json`, `content/posts/` and
+`sources/` at a path you name, and refuses a directory that already has something in it.
+
+**Removing a workspace from the list** deletes nothing on disk. **Renaming** changes the label
+you see, nothing else.
+
+**Switching** first saves whatever is unsaved. Agent jobs of the workspace you are leaving are
+cancelled and marked stale — their files stay where they are, and switching back finds them
+again — so no job of one workspace can ever write into another.
+
+### Deleting a workspace from disk
+
+This one is irreversible. There is no undo and no trash: the directory is gone. To make it
+hard to do by accident, the editor asks you to type the workspace's name exactly, and the
+server refuses the request unless it comes back matching. It also refuses:
+
+- a workspace that is **not in the remembered list** — the path you delete is always one the
+  editor already knows, never one supplied in the request;
+- the workspace that is **currently open** — switch somewhere else first;
+- the **`sample-workspace/` that ships with this project**, which every test copies from;
+- a workspace whose **`contentDir` points outside it** — a workspace pointed at a real Hugo
+  site cannot be deleted from the editor at all, because deleting it would either miss those
+  posts or reach outside the workspace to take them. Remove it from the list instead.
+
+Nothing outside the workspace's own directory is ever deleted: a symlink inside it that
+points somewhere else is unlinked, not followed, and a remembered root that is itself a
+symlink is refused.
+
 ## Agents and settings
 
 Settings are reachable from the palette (`Settings…`) and stored in `<workspace>/.zen/config.json`

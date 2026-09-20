@@ -405,6 +405,60 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **The sample's `.zen/config.json` sets `mainAgent: "fake"`** so a first run can never spend
   credits or fail on a missing login. The schema default for any other workspace is `claude`.
 
+## Managing workspaces
+
+- **The workspace is retargeted in place, never replaced.** `Workspace` caches nothing — every
+  path method resolves from `root` when it is called — while every route module destructures
+  `ServerContext` at mount time (`routes/docs.ts`, `export.ts`, `config.ts`) and `mountJobRoutes`
+  takes `jobs` as a bare parameter. Swapping the instances would strand every route closure;
+  mutating them is also what `DocWatcher.reset()` already exists for.
+- **Everything after `quiesce` is one synchronous block.** `writeDoc` is fully synchronous, so a
+  concurrent `PUT /api/docs/:kind/:slug` either completes entirely against the old root or begins
+  entirely against the new one. An `await` inside that block would let a half-applied switch
+  write the old workspace's document into the new workspace.
+- **A job carries the workspace generation it started in.** Cancelling an agent is not enough:
+  `pump()` launches runs fire-and-forget and `saveJobFile` creates the directory it writes to, so
+  a run still settling would create `<new workspace>/.zen/jobs/<old id>/`. The job's own state
+  checkpoints do not cover a job created *while* the switch is waiting on `quiesce`, because
+  nothing ever marked it stale. So `rebind()` moves an epoch that `run()`'s checkpoints,
+  `update()` and `progress()` all consult.
+- **`quiesce` waits for the runs it cancelled, but only for a budget.** Golden rule 8: a wedged
+  agent may delay a switch by two seconds, never block the writer. The epoch fences whatever
+  outlives the budget.
+- **`workspacesFile` is required on `AppOptions`, not optional with an XDG default.** Injection
+  is the only version in which the compiler proves that no test can write the developer's real
+  `~/.config/openwrite/workspaces.json`. `XDG_CONFIG_HOME` is read in `main()` and nowhere else.
+  It follows the `toolLookup` / `skillsDir` precedent.
+- **The list degrades to `[]`; it never throws.** A missing, unreadable or hand-broken file must
+  not stop the editor from starting, the same rule `loadConfig` follows.
+- **The file is named `workspace-list.ts`, not `workspaces.ts`.** A file one letter away from the
+  existing `workspace.ts` in the same directory is a readability trap.
+- **Erase takes an id; open takes a path.** Opening an arbitrary readable directory is the
+  feature. Deleting one is not: the root that is deleted is read from the list the server owns,
+  so a root the list does not own cannot be expressed in the request at all. The verb is `erase`
+  rather than a second `DELETE`, because two delete verbs — one meaning "forget", one meaning
+  "destroy" — is how an accident happens.
+- **`EraseWorkspaceRequestSchema` is the only strict schema in the project.** A plain `z.object`
+  strips unknown keys, so a body carrying a `path` would be silently ignored rather than refused.
+  On the destructive route that difference is worth one departure from the surrounding style.
+- **`rm -r` is the delete, and a test is why.** `rmSync(root, { recursive: true, force: true })`
+  unlinks a symlink instead of walking through it — proven by a real decoy inside a workspace
+  pointing at a directory outside it, not by Node's documentation. The top is checked separately:
+  a recorded root that is itself a symlink is refused rather than followed.
+- **A workspace whose `contentDir` points outside it cannot be erased at all.** Deleting only
+  what it owns would leave the writer believing the workspace is gone while their real Hugo posts
+  remain. The refusal names `contentDir` so it is not mistaken for a bug; removing the entry from
+  the list still works.
+- **The tracked `sample-workspace/` is recognised by path**, resolved from `import.meta.dirname`
+  the same way `main.ts` derives `REPO_ROOT`. There is no marker file inside it, and adding one
+  would change what every test copies. The gitignored `.openwrite/sample-workspace` copy stays
+  deletable: `defaultWorkspace()` re-creates it, and deleting it is already the documented reset.
+- **`/api/health` reports `workspace.root`, not `options.workspace`.** The latter is the string
+  the process started with and would keep naming the old workspace after a switch.
+- **The mutating workspace routes are serialised through one promise chain.** They all read the
+  list, change the world and write it back; two interleaving across the `await` in `quiesce`
+  would lose a write, or retarget while another request was halfway through an erase.
+
 ## Runtime dependencies
 
 | Package | Reason |
