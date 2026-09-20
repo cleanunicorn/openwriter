@@ -1,5 +1,14 @@
 import { expect, test } from './fixtures.ts'
-import { blockStart, blocks, editor, expectFile, openArticle } from './helpers.ts'
+import {
+  blockEnd,
+  blockStart,
+  blocks,
+  blockWith,
+  editor,
+  expectFile,
+  occurrences,
+  openArticle,
+} from './helpers.ts'
 
 test('arrow keys cross block edges in edit mode', async ({ page }) => {
   await openArticle(page)
@@ -35,6 +44,29 @@ test('Enter on an empty last line creates a new block', async ({ page, app }) =>
   await expectFile(app.articlePath(), (file) =>
     expect(file).toContain('## Why blocks\n\nA brand new paragraph.\n\nEvery paragraph'),
   )
+})
+
+test('Enter, type, Enter leaves one paragraph, not two', async ({ page, app }) => {
+  // The gesture the duplicate was reported for, and nothing else: no outside change, no
+  // reload. Carrying on with a second Enter moves the editor slot below the block just made,
+  // which rebuilds its editor — and a rebuild must not commit the text one more time.
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await expect(editor(page)).toHaveText('')
+
+  await page.keyboard.type('Hello from the writer')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+
+  await expect(blockWith(page, 'Hello from the writer')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(blockWith(page, 'Hello from the writer')).toHaveCount(1)
+  await expectFile(app.articlePath(), (file) => {
+    expect(occurrences(file, 'Hello from the writer')).toBe(1)
+  })
 })
 
 test('Enter inside an open code fence does not split the block', async ({ page }) => {

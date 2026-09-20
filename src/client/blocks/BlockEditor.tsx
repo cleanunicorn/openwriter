@@ -3,7 +3,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, keymap, type ViewUpdate } from '@codemirror/view'
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { DocRef } from '../../shared/api-types.ts'
 import { api } from '../api.ts'
 import { editorSelection } from '../jobs/selection.ts'
@@ -116,7 +116,7 @@ export function BlockEditor({ docRef, id, initialText, cursor, seed }: Props) {
   const applied = useRef(seed)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new seed replaces the text
-  useEffect(() => {
+  useLayoutEffect(() => {
     const current = view.current
     if (current === null || seed === applied.current) return
     applied.current = seed
@@ -126,8 +126,12 @@ export function BlockEditor({ docRef, id, initialText, cursor, seed }: Props) {
     })
   }, [seed])
 
+  // The view's life is a layout effect, not a passive one. React runs passive cleanup *after*
+  // it has removed the node, and removing a focused node makes the browser fire `blur` — which
+  // would commit this editor's text one more time, into a document that already has it. A
+  // layout cleanup runs before the removal, so the view is gone before the blur can happen.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the editor is created once per focus
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (host.current === null) return
     // Destroying a focused view can fire `blur`; that must not count as the writer leaving.
     let destroyed = false
