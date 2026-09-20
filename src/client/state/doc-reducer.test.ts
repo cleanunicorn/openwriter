@@ -351,6 +351,19 @@ describe('a reload that carries the editor’s own text', () => {
     expect(state.notice).toBe('The file changed on disk. Your unsaved text was kept.')
   })
 
+  it('speaks for the block being edited when a reload rescues it and a tail', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    // The disk drops the draft's own block and its folded tail: both come back, and the notice
+    // names the one the writer has their cursor in.
+    const state = reload(open, 'One\n\nThree\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree\n')
+    expect(state.notice).toBe('The file changed on disk. The block you are editing was kept.')
+  })
+
   it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
     // The behaviours the fix must not disturb, from the other side of the same code path.
     const editing = run(

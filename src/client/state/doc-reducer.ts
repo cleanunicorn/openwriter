@@ -329,11 +329,18 @@ function settleFold(
   mint: MintId,
 ): { doc: Doc; reopened: Partial<DocState>; notice: string | null } {
   let doc = reconciled
-  let rescuedHeld = false
-  let rescuedTail = false
-  const settled = folded.ids.map((id) => {
+  // Which of the two a rescue had to put back, if either. The block the editor is on speaks for
+  // the notice when both did — a writer cares first about the paragraph under their cursor.
+  let rescued: 'held' | 'tail' | null = null
+  // A loop, not a `map`: each pass reads the document the one before it may have just changed,
+  // so the order is part of the meaning.
+  const settled: string[] = []
+  for (const id of folded.ids) {
     const block = base.blocks[indexOf(base, id)]
-    if (block === undefined) return id
+    if (block === undefined) {
+      settled.push(id)
+      continue
+    }
     // The block the editor keeps is re-applied from its draft, so it only has to exist. The
     // rest of the fold lives in the document alone, and an ID is not enough to find it:
     // `reconcile` gives the first slice of a changed run the old ID of that run, so a block
@@ -343,13 +350,16 @@ function settleFold(
       id === folded.held.id
         ? doc.blocks[indexOf(doc, id)]
         : doc.blocks.find((candidate) => candidate.raw === block.raw)
-    if (survivor !== undefined) return survivor.id
+    if (survivor !== undefined) {
+      settled.push(survivor.id)
+      continue
+    }
     const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
     doc = rescue.doc
-    if (id === folded.held.id) rescuedHeld = true
-    else rescuedTail = true
-    return rescue.id
-  })
+    if (id === folded.held.id) rescued = 'held'
+    else if (rescued === null) rescued = 'tail'
+    settled.push(rescue.id)
+  }
   // The editor keeps what it held, with the writer's own text: the raw the reconcile produced
   // would be the disk's copy, one save behind the keyboard. A rescue that fused the text into
   // another block moves the editor there instead.
@@ -371,11 +381,12 @@ function settleFold(
       ...(rebuilt ? { focusCursor: 'end' as const } : {}),
     },
     // Say which text was kept. A rescued tail is not the block the writer is editing.
-    notice: rescuedHeld
-      ? 'The file changed on disk. The block you are editing was kept.'
-      : rescuedTail
-        ? 'The file changed on disk. Your unsaved text was kept.'
-        : null,
+    notice:
+      rescued === 'held'
+        ? 'The file changed on disk. The block you are editing was kept.'
+        : rescued === 'tail'
+          ? 'The file changed on disk. Your unsaved text was kept.'
+          : null,
   }
 }
 
