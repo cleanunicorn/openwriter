@@ -69,6 +69,37 @@ test('Enter, type, Enter leaves one paragraph, not two', async ({ page, app }) =
   })
 })
 
+test('three paragraphs in a row all survive, none doubled, none lost', async ({ page, app }) => {
+  // What the writer actually does all day: paragraph, Enter, paragraph, Enter, paragraph. Each
+  // continuation moves the slot and rebuilds the editor, so the damage compounds — before the
+  // fix the first paragraph arrived twice and the second never arrived at all.
+  await openArticle(page)
+  const before = await blocks(page).count()
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await expect(editor(page)).toHaveText('')
+
+  const paragraphs = ['Alpha paragraph', 'Beta paragraph', 'Gamma paragraph']
+  for (const text of paragraphs) {
+    await page.keyboard.type(text)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+  }
+  await page.keyboard.press('Escape')
+
+  await expect(blocks(page)).toHaveCount(before + paragraphs.length)
+  for (const text of paragraphs) {
+    await expect(blockWith(page, text)).toHaveCount(1)
+  }
+  await expectFile(app.articlePath(), (file) => {
+    for (const text of paragraphs) {
+      expect(occurrences(file, text)).toBe(1)
+    }
+  })
+})
+
 test('Enter inside an open code fence does not split the block', async ({ page }) => {
   await openArticle(page)
   await page.getByRole('heading', { name: 'Why blocks' }).click()
