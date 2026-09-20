@@ -83,13 +83,10 @@ directory keeps the name `.zen/`.
   to the document when the editor has nothing left to undo.
 - **The focused editor's text (the draft) is part of every save and every job snapshot,** so
   autosave and jobs never miss what is being typed.
-- **A reload folds the open editor's text in before reconciling.** That text is already in the
-  file autosave wrote, so reconciling against the committed document — which does not have it
-  yet — brought it back from disk *and* left the editor holding it: the writer's paragraph
-  twice. A draft's own block is left as it is, and only its tail folded: rewriting its raw would
-  cost it the identity the reconcile needs to match the disk's older copy instead of adding one.
-  The editor's text comes from the folded document, never from the reconciled one, because the
-  disk's copy can be a keystroke behind the keyboard.
+- **A reload folds the open editor's text in before reconciling,** so that what autosave has
+  already written to the file is matched instead of added a second time — which is how a new
+  block came back doubled. `foldDraft` in `doc-reducer.ts` holds the two rules that make it
+  work, and says why each is load-bearing.
 - **A job snapshot carries only store block IDs.** `liveDoc` folds the editor in with the
   document's own counter and nothing reserves the ID, so a snapshot can show the agent a block
   under an ID the store later gives to different content, and an accepted op then lands on the
@@ -100,11 +97,10 @@ directory keeps the name `.zen/`.
   `job-files.ts`'s instruction text and `fake.ts`'s block regex move together — and has its own
   follow-up. A test pins the snapshot against `SnapshotSchema` so the boundary cannot drift
   again.
-- **A save that resolves after a reload is dropped.** It carries the hash of the revision it
-  wrote, which is one behind; applying it rolled `baseHash` back and made the next PUT a certain
-  409. The save says which revision it was based on and the reducer keeps it only while that is
-  still the document's — in the reducer, not in `save()`, because that is where document state
-  transitions are owned and the only client state the unit suite can reach.
+- **A save that resolves after a reload is dropped,** since its hash would roll `baseHash` back
+  to a revision the disk has moved past. The check is in the reducer rather than in `save()`:
+  that is where document state transitions are owned, and the only client state the unit suite
+  can reach.
 - **Edit mode is entered on mouseup, with the cursor computed at mousedown.** A blur elsewhere can
   re-render and shift the layout between the two; a drag that selects text never enters edit mode,
   so text in a rendered block can be selected for a prompt.
