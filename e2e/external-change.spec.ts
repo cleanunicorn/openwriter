@@ -7,6 +7,7 @@ import {
   dropEventStreams,
   editor,
   expectFile,
+  mod,
   notice,
   occurrences,
   openArticle,
@@ -98,6 +99,75 @@ test('a reload keeps what was typed after the save it carries', async ({ page, a
   writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
   await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
   await expect(editor(page)).toHaveText('A brand new paragraph. AND MORE')
+})
+
+test('an unclosed fence does not swallow the rest of the article across a reload', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Every paragraph, list').click()
+  // Replace the whole paragraph with an unclosed fence: from here it swallows every block
+  // after it, so what autosave writes is one big block while the editor holds only two lines.
+  await page.keyboard.press(`${mod}+a`)
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type('```js\nnever closed')
+  await saved
+
+  // Another writer touches a paragraph above it, and the reload brings our own save back.
+  writeFileSync(
+    app.articlePath(),
+    app.readArticle().replace('This is a sample article', 'This is a CHANGED article'),
+  )
+  await expect(notice(page)).toContainText('changed on disk')
+  console.log(
+    'DEBUG editors:',
+    await editor(page).count(),
+    'blocks:',
+    await page.getByTestId('block').count(),
+  )
+  console.log('DEBUG notice:', await notice(page).innerText())
+  console.log('DEBUG file has shortcode:', app.readArticle().includes('A paired Hugo shortcode'))
+
+  // Leaving the editor commits what it holds. That must not be the short version: everything
+  // the fence took in has to survive the commit on screen, and then the save that follows it.
+  await page.keyboard.press('Escape')
+  await expect(page.getByText('A paired Hugo shortcode stays one block')).toBeVisible()
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('This is a CHANGED article')
+    expect(file).toContain('A paired Hugo shortcode stays one block')
+    expect(file).toContain('## What is next')
+  })
+})
+
+test('a heading typed under a paragraph is not duplicated by a reload and a blur', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  // One editor, two blocks' worth of markdown: the heading is a block of its own once saved.
+  await page.keyboard.type('## A heading typed inline')
+  await saved
+  expect(occurrences(app.readArticle(), '## A heading typed inline')).toBe(1)
+
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
+  await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
+
+  // The reload folds the heading into the document, so the editor must stop holding it too —
+  // otherwise closing the editor writes it a second time.
+  await page.keyboard.press('Escape')
+  await expectFile(app.articlePath(), (file) => {
+    expect(occurrences(file, '## A heading typed inline')).toBe(1)
+  })
+  await expect(blockWith(page, 'A heading typed inline')).toHaveCount(1)
 })
 
 test('a block deleted from outside while it was being edited is saved again', async ({

@@ -10,7 +10,19 @@ import { editorSelection } from '../jobs/selection.ts'
 import { dispatchDoc } from '../state/app.ts'
 import type { DocAction, FocusCursor } from '../state/doc-reducer.ts'
 
-type Props = { docRef: DocRef; id: string; initialText: string; cursor: FocusCursor }
+type Props = {
+  docRef: DocRef
+  id: string
+  initialText: string
+  cursor: FocusCursor
+  /**
+   * Changes when the reducer replaced this block's draft — a reload folded the editor's text
+   * into the document, or a rescue moved it. The view is updated in place rather than rebuilt:
+   * React runs effect cleanup after it has already removed the node, so a rebuild would let the
+   * old view's `blur` commit the text we are replacing.
+   */
+  seed?: number
+}
 
 const isInsideOpenFence = (text: string) =>
   (text.match(/^ {0,3}(```|~~~)/gm)?.length ?? 0) % 2 === 1
@@ -98,8 +110,21 @@ function publishSelection(id: string, update: ViewUpdate) {
 }
 
 /** The editing state of one block: a CodeMirror instance created on focus, destroyed on blur. */
-export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
+export function BlockEditor({ docRef, id, initialText, cursor, seed }: Props) {
   const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const applied = useRef(seed)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new seed replaces the text
+  useEffect(() => {
+    const current = view.current
+    if (current === null || seed === applied.current) return
+    applied.current = seed
+    current.dispatch({
+      changes: { from: 0, to: current.state.doc.length, insert: initialText },
+      selection: EditorSelection.cursor(initialText.length),
+    })
+  }, [seed])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the editor is created once per focus
   useEffect(() => {
@@ -134,7 +159,7 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
         : cursor === 'end'
           ? initialText.length
           : Math.min(cursor, initialText.length)
-    const view = new EditorView({
+    const editor = new EditorView({
       parent: host.current,
       state: EditorState.create({
         doc: initialText,
@@ -173,10 +198,12 @@ export function BlockEditor({ docRef, id, initialText, cursor }: Props) {
         ],
       }),
     })
-    view.focus()
+    editor.focus()
+    view.current = editor
     return () => {
       destroyed = true
-      view.destroy()
+      view.current = null
+      editor.destroy()
     }
   }, [id])
 

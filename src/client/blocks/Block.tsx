@@ -24,6 +24,8 @@ type Props = {
    * whatever was typed since the save that reload is carrying.
    */
   draftText?: string
+  /** Changes when the reducer replaced the draft, which is when the editor must be rebuilt. */
+  draftSeed?: number
   assetBase: string | null
   decoration?: Decoration
 }
@@ -35,6 +37,7 @@ export function Block({
   cursor,
   selected,
   draftText,
+  draftSeed,
   assetBase,
   decoration,
 }: Props) {
@@ -88,6 +91,7 @@ export function Block({
             id={block.id}
             initialText={draftText ?? block.raw}
             cursor={cursor}
+            seed={draftSeed}
           />
         ) : (
           (decoration?.replaceBody ??

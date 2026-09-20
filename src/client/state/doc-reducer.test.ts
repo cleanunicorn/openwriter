@@ -666,7 +666,10 @@ describe('an open editor never loses its block', () => {
     expect(text(state)).toBe('A\n\nC\n\nD\n')
   })
 
-  it('names the case the reload property carves out: a fence that swallows its neighbours', () => {
+  it('keeps what an unclosed fence swallowed when its own save comes back', () => {
+    // The fence swallows B and C, so what autosave writes is one block — while the editor is
+    // still holding only the fence. Reloading that text used to leave the two disagreeing, and
+    // the next save wrote the editor's shorter version over the rest of the article.
     const state = run(
       loaded('A\n\nB\n\nC\n'),
       { type: 'focus', id: 'b1', cursor: 0 },
@@ -679,14 +682,11 @@ describe('an open editor never loses its block', () => {
       hash: 'h1',
       exists: true,
     })
-    // The unclosed fence swallowed B and C, so the block the editor sits on holds strictly more
-    // than the editor does. That is the condition the property test below excludes, pinned here
-    // so the exclusion cannot quietly widen: whose text wins is a defect of its own, deferred.
-    const open = reloaded.doc.blocks.find((block) => block.id === reloaded.draft?.id)
-    expect(open?.raw).toContain('never closed')
-    expect(open?.raw).toContain('B')
-    expect(open?.raw).not.toBe(reloaded.draft?.text)
-    expect(open?.raw.includes(reloaded.draft?.text ?? '')).toBe(true)
+    expect(liveText(reloaded)).toBe(saved)
+    // …and it is still true once the editor closes, which is when the loss used to land.
+    expect(text(docReducer(reloaded, { type: 'blur' }))).toBe(saved)
+    expect(liveText(reloaded)).toContain('B')
+    expect(liveText(reloaded)).toContain('C')
   })
 
   it('holds for any sequence of structural changes', () => {
@@ -772,17 +772,7 @@ describe('an open editor never loses its block', () => {
             // carries that same text must leave the document exactly as it was. When it does
             // not, whatever the editor holds has been added a second time.
             //
-            // The exception is an unclosed fence still being typed: it swallows the blocks
-            // after it, so the block the reload produces holds strictly more than the editor
-            // does, and the next save would drop the rest. That is a defect of its own, with
-            // its own follow-up — whose text wins there is a judgement call, not a duplicate.
-            const open = state.doc.blocks.find((block) => block.id === state.draft?.id)
-            const swallowed =
-              open !== undefined &&
-              state.draft !== null &&
-              open.raw !== state.draft.text &&
-              open.raw.includes(state.draft.text)
-            if (!swallowed) expect(liveText(state)).toBe(saved)
+            expect(liveText(state)).toBe(saved)
           } else {
             state = docReducer(state, action as DocAction)
           }

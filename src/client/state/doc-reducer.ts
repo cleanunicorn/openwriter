@@ -38,6 +38,13 @@ export type DocState = {
   focusCursor: FocusCursor
   /** Live text of the focused editor; part of every save and every job snapshot. */
   draft: Draft | null
+  /**
+   * Bumped whenever the reducer replaces the draft itself — a reload folding the editor's text
+   * in, or a rescue moving it. The open editor holds its own copy of the text and never hears
+   * about state changes, so this is what tells the view to build it again from the new draft.
+   * Without it the two disagree and whichever writes last wins, which loses the difference.
+   */
+  draftSeed: number
   pendingNew: PendingNew | null
   selectedIds: string[]
   notice: string | null
@@ -81,6 +88,7 @@ export function initialDocState(ref: DocRef): DocState {
     focusedId: null,
     focusCursor: 'end',
     draft: null,
+    draftSeed: 0,
     pendingNew: null,
     selectedIds: [],
     notice: null,
@@ -221,6 +229,7 @@ function change(
     rescued = {
       notice: 'A change replaced the block you are editing. Your text was kept.',
       ...rescue.reopened,
+      ...(rescue.reopened.draft === undefined ? {} : { draftSeed: state.draftSeed + 1 }),
     }
   } else if (
     state.focusedId !== null &&
@@ -261,6 +270,22 @@ function withDraft(state: DocState, id: string, text: string): { doc: Doc; nextI
 type Folded = { doc: Doc; nextId: number; ids: string[]; held: Draft }
 
 /**
+ * Fold the draft in, its own block rewritten along with the rest. Only for a draft whose text
+ * restructures the document — an unclosed fence swallowing what follows it, or an edit that
+ * closes one — where the block's old raw is not something `reconcile` could match against the
+ * disk anyway, because the writer has already replaced it.
+ */
+function foldWhole(state: DocState, draft: Draft): Folded | null {
+  const known = new Set(state.doc.blocks.map((block) => block.id))
+  const { doc, nextId } = withDraft(state, draft.id, draft.text)
+  if (doc === state.doc) return null
+  const own = doc.blocks[indexOf(doc, draft.id)]
+  if (own === undefined) return null
+  const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
+  return { doc, nextId, ids: [draft.id, ...fresh], held: { id: draft.id, text: own.raw } }
+}
+
+/**
  * Fold into the document what the open editor holds but the document does not have yet: the
  * whole text of a new-block slot, or the tail blocks of a draft that spans several. Both are
  * already in the text autosave wrote, so a reload carrying that text would bring them back a
@@ -273,7 +298,16 @@ type Folded = { doc: Doc; nextId: number; ids: string[]; held: Draft }
  */
 function foldDraft(state: DocState, draft: Draft): Folded | null {
   const { slices, gaps } = splitText(draft.text)
-  if (draft.id !== NEW_BLOCK_ID && slices.length < 2) return null
+  if (draft.id !== NEW_BLOCK_ID && slices.length < 2) {
+    // One block's worth of text normally leaves the document's shape alone, and then there is
+    // nothing to fold. An unclosed fence is the exception: it swallows the blocks after it, so
+    // what autosave wrote has fewer blocks than the document being edited, and the editor holds
+    // only the fence. Fold it in, and the editor holds what the fence took in with it —
+    // otherwise the reload leaves the two disagreeing and the next save drops the difference.
+    if (draft.text.trim() === '') return null
+    const whole = foldWhole(state, draft)
+    return whole === null || whole.doc.blocks.length === state.doc.blocks.length ? null : whole
+  }
   const known = new Set(state.doc.blocks.map((block) => block.id))
   const { mint, next } = minter(state)
   let doc: Doc
@@ -295,14 +329,18 @@ function foldDraft(state: DocState, draft: Draft): Folded | null {
   const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
 
   if (draft.id !== NEW_BLOCK_ID) {
-    // Only the tail was folded in, so the editor keeps the draft's own block. Its raw is the
-    // one it had — that is the point, see the note above — so the editor's text is the first
-    // block of what the writer typed. Unless the tail fused into it rather than becoming its
-    // own block, and then the document holds the two together and so does the editor.
-    const tailFoldedOut = fresh.length > 0
-    const own = doc.blocks[indexOf(doc, draft.id)]
-    const text = tailFoldedOut ? (slices[0] as Slice).raw : (own?.raw ?? draft.text)
-    return { doc, nextId: next(), ids: [draft.id, ...fresh], held: { id: draft.id, text } }
+    // The tail fused into the draft's own block instead of becoming blocks of its own. That
+    // block still carries the raw it had, deliberately — so it fused with text the writer has
+    // already replaced, and there is no identity left worth protecting. Fold the lot.
+    if (fresh.length === 0) return foldWhole(state, draft)
+    // Only the tail was folded in, so the editor keeps the draft's own block, and holds the
+    // first block of what the writer typed: that block's raw is the old one, by design.
+    return {
+      doc,
+      nextId: next(),
+      ids: [draft.id, ...fresh],
+      held: { id: draft.id, text: (slices[0] as Slice).raw },
+    }
   }
   // The slot became blocks of its own — unless an unclosed fence above it swallowed the text,
   // and then the block that took it in is the one the editor holds, whole.
@@ -593,6 +631,7 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         reopened = rescue.reopened
         notice = BLOCK_KEPT
       }
+      if (reopened.draft !== undefined) reopened.draftSeed = state.draftSeed + 1
       return change({ ...state, status: 'ready', ...reopened }, doc, next(), {
         baseHash: action.hash,
         savedText: action.text,

@@ -43,7 +43,16 @@ function rangeOf(state: DocState, fromId: string, toId: string): string[] {
 }
 
 export function BlockList({ state, decorate, rowsAfter }: Props) {
-  const { ref: docRef, doc, draft, focusedId, focusCursor, pendingNew, selectedIds } = state
+  const {
+    ref: docRef,
+    doc,
+    draft,
+    draftSeed,
+    focusedId,
+    focusCursor,
+    pendingNew,
+    selectedIds,
+  } = state
   const assetBase = docRef.kind === 'article' ? `/api/docs/article/${docRef.slug}/assets/` : null
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -162,6 +171,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
                 cursor={focusCursor}
                 selected={selectedIds.includes(block.id)}
                 draftText={draft?.id === block.id ? draft.text : undefined}
+                draftSeed={draftSeed}
                 assetBase={assetBase}
                 decoration={decorate?.(block.id)}
               />
