@@ -113,9 +113,17 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
 
 /**
  * The focused block vanished on disk: put its editor text back into `disk` after its nearest
- * surviving neighbour, under its old ID, so the open editor still points at a block.
+ * surviving neighbour, so the open editor still points at a block. Returns the ID of the block
+ * that now holds the text — its old one normally, but the insert can land inside a block that
+ * was already there (an unclosed fence arriving from disk swallows whatever follows it), and
+ * then the editor follows its text rather than the caller putting it back a second time.
  */
-function keepFocusedBlock(previous: Doc, disk: Doc, draft: Draft, mint: MintId): Doc {
+function keepFocusedBlock(
+  previous: Doc,
+  disk: Doc,
+  draft: Draft,
+  mint: MintId,
+): { doc: Doc; id: string } {
   // `previous` always has the block: `change()` never lets an open draft lose its block.
   const oldIndex = indexOf(previous, draft.id)
   const survivor = previous.blocks
@@ -124,12 +132,25 @@ function keepFocusedBlock(previous: Doc, disk: Doc, draft: Draft, mint: MintId):
     .find((block: Block) => indexOf(disk, block.id) !== -1)
   const at = survivor === undefined ? 0 : indexOf(disk, survivor.id) + 1
   const known = new Set(disk.blocks.map((block) => block.id))
-  const inserted = insertMarkdown(disk, at, draft.text.trim() === '' ? '…' : draft.text, mint)
+  const text = draft.text.trim() === '' ? '…' : draft.text
+  const inserted = insertMarkdown(disk, at, text, mint)
   const fresh = inserted.blocks.find((block) => !known.has(block.id))
-  return {
-    ...inserted,
-    blocks: inserted.blocks.map((block) => (block === fresh ? { ...block, id: draft.id } : block)),
+  if (fresh !== undefined) {
+    return {
+      doc: {
+        ...inserted,
+        blocks: inserted.blocks.map((block) =>
+          block === fresh ? { ...block, id: draft.id } : block,
+        ),
+      },
+      id: draft.id,
+    }
   }
+  const holder =
+    inserted.blocks.find((block) => block.raw.includes(text)) ??
+    inserted.blocks[at] ??
+    disk.blocks[0]
+  return { doc: inserted, id: holder?.id ?? draft.id }
 }
 
 /**
@@ -160,9 +181,18 @@ function change(
   let rescued: Partial<DocState> = {}
   if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
     const { mint, next } = minter({ ...state, nextId })
-    doc = keepFocusedBlock(state.doc, doc, draft, mint)
+    const rescue = keepFocusedBlock(state.doc, doc, draft, mint)
+    doc = rescue.doc
     nextId = next()
     rescued = { notice: 'A change replaced the block you are editing. Your text was kept.' }
+    if (rescue.id !== draft.id) {
+      const holder = doc.blocks[indexOf(doc, rescue.id)]
+      rescued = {
+        ...rescued,
+        focusedId: rescue.id,
+        draft: { id: rescue.id, text: holder?.raw ?? draft.text },
+      }
+    }
   } else if (
     state.focusedId !== null &&
     state.focusedId !== NEW_BLOCK_ID &&
@@ -230,25 +260,44 @@ function withDraft(
 function foldDraft(
   state: DocState,
   draft: Draft,
-): { doc: Doc; nextId: number; ids: string[] } | null {
+): { doc: Doc; nextId: number; ids: string[]; held: Draft } | null {
   const { slices, gaps } = splitText(draft.text)
   if (draft.id !== NEW_BLOCK_ID && slices.length < 2) return null
   const known = new Set(state.doc.blocks.map((block) => block.id))
   const { mint, next } = minter(state)
   let doc: Doc
+  let at: number
   if (draft.id === NEW_BLOCK_ID) {
     if (draft.text.trim() === '' || state.pendingNew === null) return null
-    doc = insertMarkdown(state.doc, slotIndex(state.doc, state.pendingNew), draft.text, mint)
+    at = slotIndex(state.doc, state.pendingNew)
+    doc = insertMarkdown(state.doc, at, draft.text, mint)
   } else {
     const index = indexOf(state.doc, draft.id)
     if (index === -1) return null
     const tail = serialise({ blocks: slices.slice(1), gaps: ['', ...gaps.slice(2)] })
+    at = index
     doc = insertMarkdown(state.doc, index + 1, tail, mint)
   }
   if (doc === state.doc) return null
   const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
+  // Which block the editor goes on, and what it holds there. Taking the text from the folded
+  // document rather than from the reconciled one matters: the disk's copy can be a keystroke
+  // behind the keyboard. Folding nothing new means the text landed inside a block that was
+  // already there — an unclosed fence swallows whatever follows it — and the editor holds that
+  // block whole, because that is what the document now has.
   const ids = draft.id === NEW_BLOCK_ID ? fresh : [draft.id, ...fresh]
-  return ids.length === 0 ? null : { doc, nextId: next(), ids }
+  const heldId =
+    ids[0] ??
+    doc.blocks.find((block) => block.raw.includes(draft.text))?.id ??
+    doc.blocks[Math.min(at, doc.blocks.length - 1)]?.id
+  if (heldId === undefined) return null
+  const block = doc.blocks[indexOf(doc, heldId)]
+  if (block === undefined) return null
+  // A draft's own block still carries the raw it had: only its tail was folded in, so the
+  // editor keeps the first block of what the writer typed.
+  const ownBlockKeptItsText = draft.id !== NEW_BLOCK_ID && fresh.length > 0
+  const text = ownBlockKeptItsText ? (slices[0]?.raw ?? draft.text) : block.raw
+  return { doc, nextId: next(), ids: ids.length > 0 ? ids : [heldId], held: { id: heldId, text } }
 }
 
 /** The document as the writer sees it right now: committed blocks plus the open editor's text. */
@@ -435,21 +484,35 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       let reopened: Partial<DocState> = {}
       // Disk wins everywhere except what the writer is editing, which keeps its text.
       if (folded !== null && draft !== null) {
-        for (const id of folded.ids) {
-          if (indexOf(doc, id) !== -1) continue
+        const settled = folded.ids.map((id) => {
+          if (indexOf(doc, id) !== -1) return id
           const block = base.blocks[indexOf(base, id)]
-          if (block === undefined) continue
-          doc = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
+          if (block === undefined) return id
+          const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
+          doc = rescue.doc
           notice = 'The file changed on disk. The block you are editing was kept.'
-        }
-        // The editor keeps the first block of what it held, with the writer's own text: the
-        // raw the reconcile produced would be the disk's copy, one save behind the keyboard.
-        const first = folded.ids[0] as string
-        const held = { id: first, text: splitText(draft.text).slices[0]?.raw ?? draft.text }
-        reopened = { draft: held, focusedId: first, focusCursor: 'end', pendingNew: null }
+          return rescue.id
+        })
+        // The editor keeps what it held, with the writer's own text: the raw the reconcile
+        // produced would be the disk's copy, one save behind the keyboard. A rescue that fused
+        // the text into another block moves the editor there instead.
+        const moved = settled[folded.ids.indexOf(folded.held.id)] ?? folded.held.id
+        const held =
+          moved === folded.held.id
+            ? folded.held
+            : { id: moved, text: doc.blocks[indexOf(doc, moved)]?.raw ?? folded.held.text }
+        reopened = { draft: held, focusedId: held.id, focusCursor: 'end', pendingNew: null }
       } else if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
-        doc = keepFocusedBlock(state.doc, doc, draft, mint)
+        const rescue = keepFocusedBlock(state.doc, doc, draft, mint)
+        doc = rescue.doc
         notice = 'The file changed on disk. The block you are editing was kept.'
+        if (rescue.id !== draft.id) {
+          const holder = doc.blocks[indexOf(doc, rescue.id)]
+          reopened = {
+            draft: { id: rescue.id, text: holder?.raw ?? draft.text },
+            focusedId: rescue.id,
+          }
+        }
       }
       return change({ ...state, status: 'ready', ...reopened }, doc, next(), {
         baseHash: action.hash,

@@ -24,6 +24,8 @@ function loaded(text = TEXT): DocState {
 }
 const run = (state: DocState, ...actions: DocAction[]) => actions.reduce(docReducer, state)
 const text = (state: DocState) => serialise(state.doc)
+/** How many times `needle` occurs in `haystack` — a duplicate is a count, never a substring. */
+const occurrences = (haystack: string, needle: string) => haystack.split(needle).length - 1
 
 describe('editing', () => {
   it('loads clean: not dirty, no history', () => {
@@ -517,6 +519,19 @@ describe('an open editor never loses its block', () => {
     expect(text(reloaded)).toBe('A\n\nC\n\nD\n\nE\n')
   })
 
+  it('keeps the editor’s text once when a fence from disk swallows its block', () => {
+    // The rescue puts the text back, but an unclosed fence arriving from disk swallows it, so
+    // no block carries the draft's ID afterwards — and the rescue used to run a second time.
+    const state = run(
+      loaded('A\n\nB\n\nC\n\nD\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'typed' },
+      { type: 'external', text: '```js\nnever closed\n\nB\n', hash: 'h1', exists: true },
+    )
+    expect(occurrences(liveText(state), 'typed')).toBe(1)
+    expect(dangling(state)).toBe(false)
+  })
+
   it('emptying the focused block and leaving it still deletes it', () => {
     const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
     expect(text(state)).toBe('A\n\nC\n\nD\n')
@@ -562,18 +577,60 @@ describe('an open editor never loses its block', () => {
           },
           nextId: 99,
         })),
+      // Enter at the end of a block, and the append button: both open the editor slot.
+      fc.record({
+        type: fc.constant('new-block' as const),
+        currentId: fc.constantFrom('b1', 'b2', 'b3', 'b4'),
+      }),
+      fc.constant({ type: 'append' as const }),
+      // The reload that carries what this client itself last saved — the open editor included.
+      fc.constant({ type: 'reload-own-save' as const }),
       fc.constant({ type: 'blur' as const }),
       fc.constant({ type: 'undo' as const }),
     )
     fc.assert(
       fc.property(fc.array(step, { maxLength: 12 }), (steps) => {
         let state = loaded('A\n\nB\n\nC\n\nD\n')
+        let hash = 0
         for (const action of steps) {
           if (action.type === 'focus' && !state.doc.blocks.some((block) => block.id === action.id))
             continue
           if (action.type === 'type') {
-            if (state.focusedId === null || state.focusedId === NEW_BLOCK_ID) continue
+            // The slot types too: its text is exactly the text that used to come back doubled.
+            if (state.focusedId === null) continue
             state = docReducer(state, { type: 'draft', id: state.focusedId, text: action.text })
+          } else if (action.type === 'new-block') {
+            const current = state.doc.blocks.find((block) => block.id === action.currentId)
+            if (current === undefined) continue
+            state = run(
+              state,
+              { type: 'focus', id: current.id, cursor: 0 },
+              { type: 'new-block', currentId: current.id, currentText: current.raw },
+            )
+          } else if (action.type === 'reload-own-save') {
+            hash += 1
+            const saved = liveText(state)
+            state = docReducer(state, {
+              type: 'external',
+              text: saved,
+              hash: `saved-${hash}`,
+              exists: true,
+            })
+            // The heart of it: autosave writes the live text, editor included, so a reload that
+            // carries that same text must leave the document exactly as it was. When it does
+            // not, whatever the editor holds has been added a second time.
+            //
+            // The exception is an unclosed fence still being typed: it swallows the blocks
+            // after it, so the block the reload produces holds strictly more than the editor
+            // does, and the next save would drop the rest. That is a defect of its own, with
+            // its own follow-up — whose text wins there is a judgement call, not a duplicate.
+            const open = state.doc.blocks.find((block) => block.id === state.draft?.id)
+            const swallowed =
+              open !== undefined &&
+              state.draft !== null &&
+              open.raw !== state.draft.text &&
+              open.raw.includes(state.draft.text)
+            if (!swallowed) expect(liveText(state)).toBe(saved)
           } else {
             state = docReducer(state, action as DocAction)
           }
