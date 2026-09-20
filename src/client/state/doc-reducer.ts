@@ -150,10 +150,14 @@ function keepFocusedBlock(
       id: draft.id,
     }
   }
+  // `splitText` moves a block's trailing whitespace into the gap after it, so the text to look
+  // for is the trimmed one. Failing that, the block where the insert went — `at` is an index
+  // into `disk`, so it has to be clamped — and never some unrelated block elsewhere.
+  const needle = text.trimEnd()
   const holder =
-    inserted.blocks.find((block) => block.raw.includes(text)) ??
-    inserted.blocks[at] ??
-    disk.blocks[0]
+    inserted.blocks.find((block) => block.raw.includes(needle)) ??
+    inserted.blocks[Math.min(at, inserted.blocks.length - 1)]
+  // `holder` is always defined here: `fresh === undefined` means `disk` had blocks of its own.
   return { doc: inserted, id: holder?.id ?? draft.id }
 }
 
@@ -272,7 +276,7 @@ function foldDraft(
   const ids = draft.id === NEW_BLOCK_ID ? fresh : [draft.id, ...fresh]
   const heldId =
     ids[0] ??
-    doc.blocks.find((block) => block.raw.includes(draft.text))?.id ??
+    doc.blocks.find((block) => block.raw.includes(draft.text.trimEnd()))?.id ??
     doc.blocks[Math.min(at, doc.blocks.length - 1)]?.id
   if (heldId === undefined) return null
   const block = doc.blocks[indexOf(doc, heldId)]

@@ -561,6 +561,21 @@ describe('an open editor never loses its block', () => {
     expect(dangling(state)).toBe(false)
   })
 
+  it('follows its text, not the first block, when the draft ends in whitespace', () => {
+    // `splitText` trims a block's trailing whitespace into the gap after it, so looking for the
+    // untrimmed draft found nothing and the editor was reopened on the top of the article.
+    const state = run(
+      loaded('A\n\nB\n\nC\n\nD\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'typed with trailing spaces   ' },
+      { type: 'external', text: 'A\n\n```js\nnever closed', hash: 'h1', exists: true },
+    )
+    expect(liveText(state)).toContain('typed with trailing spaces')
+    expect(state.draft?.text).toContain('typed with trailing spaces')
+    expect(state.focusedId).not.toBe('b1')
+    expect(dangling(state)).toBe(false)
+  })
+
   it('emptying the focused block and leaving it still deletes it', () => {
     const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
     expect(text(state)).toBe('A\n\nC\n\nD\n')
