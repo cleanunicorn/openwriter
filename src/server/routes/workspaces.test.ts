@@ -6,12 +6,14 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { WorkspaceList } from '../workspace-list.ts'
 
 const SAMPLE = path.resolve(import.meta.dirname, '..', '..', '..', 'sample-workspace')
 
@@ -185,5 +187,150 @@ describe('creating a workspace', () => {
 
   it('refuses a relative path', async () => {
     expect((await t.send('POST', '/api/workspaces', { path: 'somewhere' })).status).toBe(400)
+  })
+})
+
+describe('deleting a workspace from disk', () => {
+  /** Put a root in the list without opening it — the list is this test's own file. */
+  const remember = (root: string, label: string): string => {
+    const entry = new WorkspaceList(t.workspacesFile).touch(root, label)
+    return entry.id
+  }
+  const erase = (id: string, confirm: string) =>
+    t.send('POST', `/api/workspaces/${id}/erase`, { confirm })
+
+  it('deletes the files and the entry once the writer types its name', async () => {
+    const second = another('second')
+    const id = remember(second, 'Second')
+    const res = await erase(id, 'Second')
+    expect(res.status).toBe(200)
+    expect(existsSync(second)).toBe(false)
+    expect((await json(res)).entries.map((entry: { id: string }) => entry.id)).not.toContain(id)
+  })
+
+  // AC12.1 — the confirmation is checked on the server too. The palette is where the writer
+  // types it, but the client is not the trust boundary.
+  it.each([
+    ['the wrong name', 'second'],
+    ['a near miss', 'Second '],
+    ['something else entirely', 'yes'],
+  ])('refuses %s and deletes nothing', async (_name, confirm) => {
+    const second = another('second')
+    const id = remember(second, 'Second')
+    const res = await erase(id, confirm)
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('Second')
+    expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
+  })
+
+  // AC12.2 — nothing outside the entry's own directory.
+  it('unlinks a symlink that leaves the workspace instead of following it', async () => {
+    const outside = path.join(base, 'outside')
+    mkdirSync(outside)
+    writeFileSync(path.join(outside, 'secret.txt'), 'secret')
+    const second = another('second')
+    symlinkSync(outside, path.join(second, 'sources', 'link-out'))
+
+    const id = remember(second, 'Second')
+    expect((await erase(id, 'Second')).status).toBe(200)
+
+    expect(existsSync(second)).toBe(false)
+    expect(existsSync(outside)).toBe(true)
+    expect(readFileSync(path.join(outside, 'secret.txt'), 'utf8')).toBe('secret')
+  })
+
+  it('refuses a recorded root that is itself a symlink', async () => {
+    const real = another('real')
+    const link = path.join(base, 'link')
+    symlinkSync(real, link)
+    const id = remember(link, 'Link')
+    const res = await erase(id, 'Link')
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('not a plain directory')
+    expect(existsSync(real)).toBe(true)
+    expect(existsSync(link)).toBe(true)
+  })
+
+  it('refuses a workspace whose contentDir points outside it, and says why', async () => {
+    const hugo = path.join(base, 'hugo-site')
+    mkdirSync(path.join(hugo, 'posts'), { recursive: true })
+    writeFileSync(path.join(hugo, 'posts', 'real.md'), 'a real post')
+    const second = another('second', (root) => {
+      writeFileSync(
+        path.join(root, '.zen', 'config.json'),
+        JSON.stringify({ contentDir: hugo }, null, 2),
+      )
+    })
+    const id = remember(second, 'Second')
+    const res = await erase(id, 'Second')
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('contentDir')
+    expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
+    expect(readFileSync(path.join(hugo, 'posts', 'real.md'), 'utf8')).toBe('a real post')
+  })
+
+  it('refuses a workspace whose contentDir cannot be used at all', async () => {
+    const second = another('second', (root) => {
+      writeFileSync(
+        path.join(root, '.zen', 'config.json'),
+        JSON.stringify({ contentDir: '../elsewhere' }, null, 2),
+      )
+    })
+    const id = remember(second, 'Second')
+    const res = await erase(id, 'Second')
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('contentDir')
+    expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
+  })
+
+  // AC12.3 — only a root the list owns. The request cannot name a path at all.
+  it('refuses an id the list does not have', async () => {
+    const second = another('second')
+    const res = await erase('deadbeef0000', 'Second')
+    expect(res.status).toBe(404)
+    expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
+  })
+
+  it('refuses a body that tries to name a path of its own', async () => {
+    const second = another('second')
+    const id = remember(second, 'Second')
+    const outside = path.join(base, 'outside')
+    mkdirSync(outside)
+    const res = await t.send('POST', `/api/workspaces/${id}/erase`, {
+      confirm: 'Second',
+      path: outside,
+    })
+    expect(res.status).toBe(400)
+    expect(existsSync(outside)).toBe(true)
+    expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
+  })
+
+  // AC12.4 — never the open workspace, never the tracked sample.
+  it('refuses the workspace that is open', async () => {
+    const { entries } = await json(t.get('/api/workspaces'))
+    const res = await erase(entries[0].id, entries[0].label)
+    expect(res.status).toBe(409)
+    expect(existsSync(path.join(t.workspace, 'strategy.md'))).toBe(true)
+    expect((await json(t.get('/api/articles'))).articles).toHaveLength(1)
+  })
+
+  it('refuses the sample workspace this project ships', async () => {
+    const id = remember(SAMPLE, 'sample-workspace')
+    const res = await erase(id, 'sample-workspace')
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('sample workspace')
+    expect(existsSync(path.join(SAMPLE, 'strategy.md'))).toBe(true)
+    expect(existsSync(path.join(SAMPLE, 'content', 'posts', 'hello-openwrite', 'index.md'))).toBe(
+      true,
+    )
+  })
+
+  it('drops the entry when its directory is already gone', async () => {
+    const second = another('second')
+    const id = remember(second, 'Second')
+    rmSync(second, { recursive: true, force: true })
+    const res = await erase(id, 'Second')
+    expect(res.status).toBe(200)
+    expect((await json(res)).entries.map((entry: { id: string }) => entry.id)).not.toContain(id)
   })
 })
