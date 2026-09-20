@@ -17,9 +17,12 @@ const { values } = parseArgs({
 const root = path.resolve(import.meta.dirname, '..')
 const workspace = mkdtempSync(path.join(os.tmpdir(), 'openwrite-e2e-'))
 cpSync(path.join(root, 'sample-workspace'), workspace, { recursive: true })
+// Its own known-workspace list, beside the workspace: an e2e run never touches the real one.
+const state = mkdtempSync(path.join(os.tmpdir(), 'openwrite-e2e-state-'))
 
 const server = await startServer({
   workspace,
+  workspacesFile: path.join(state, 'workspaces.json'),
   port: Number(values.port),
   adapterOverride: 'fake',
   fakeControl: values['fake-control'],
@@ -36,6 +39,7 @@ async function shutdown(): Promise<void> {
   setTimeout(() => process.exit(0), 3500).unref()
   await server.close()
   rmSync(workspace, { recursive: true, force: true })
+  rmSync(state, { recursive: true, force: true })
   process.exit(0)
 }
 process.on('SIGINT', () => void shutdown())

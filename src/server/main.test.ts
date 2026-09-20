@@ -5,11 +5,15 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { startServer } from './main.ts'
 
 const workspace = mkdtempSync(path.join(os.tmpdir(), 'openwrite-main-'))
-afterAll(() => rmSync(workspace, { recursive: true, force: true }))
+const workspacesFile = path.join(workspace, '..', `openwrite-main-list-${process.pid}.json`)
+afterAll(() => {
+  rmSync(workspace, { recursive: true, force: true })
+  rmSync(workspacesFile, { force: true })
+})
 
 describe('startServer', () => {
   it('binds the loopback interface only and answers on its own host', async () => {
-    const server = await startServer({ workspace, port: 0 })
+    const server = await startServer({ workspace, workspacesFile, port: 0 })
     try {
       expect(server.address).toBe('127.0.0.1')
       expect(server.url).toBe(`http://127.0.0.1:${server.port}`)
@@ -22,7 +26,7 @@ describe('startServer', () => {
   })
 
   it('answers 404 for unknown API routes', async () => {
-    const server = await startServer({ workspace, port: 0 })
+    const server = await startServer({ workspace, workspacesFile, port: 0 })
     try {
       expect((await fetch(`${server.url}/api/nope`)).status).toBe(404)
     } finally {

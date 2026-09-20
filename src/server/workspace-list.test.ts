@@ -12,7 +12,9 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { WorkspaceList } from './workspace-list.ts'
+import { createApp } from './app.ts'
+import { createTestApp } from './test-helpers.ts'
+import { realpathOrSelf, WorkspaceList } from './workspace-list.ts'
 
 let base: string
 let file: string
@@ -145,5 +147,38 @@ describe('rename and forget change the list only', () => {
     expect(list.rename('000000000000', 'x')).toBeUndefined()
     expect(list.forget('000000000000')).toBe(false)
     expect(list.entries()).toEqual([entry])
+  })
+})
+
+describe('the workspace the server started on', () => {
+  it('is remembered, so the palette is never empty on a first run', () => {
+    const t = createTestApp()
+    try {
+      const entries = new WorkspaceList(t.workspacesFile).entries()
+      expect(entries).toHaveLength(1)
+      expect(realpathOrSelf(entries[0]?.path ?? '')).toBe(realpathOrSelf(t.workspace))
+      expect(entries[0]?.label).toBe(path.basename(t.workspace))
+    } finally {
+      t.cleanup()
+    }
+  })
+
+  it('is remembered once, however many times the server restarts on it', () => {
+    const t = createTestApp()
+    try {
+      const again = createApp({
+        workspace: t.workspace,
+        workspacesFile: t.workspacesFile,
+        fakeControl: false,
+        allowedHosts: () => [],
+      })
+      try {
+        expect(new WorkspaceList(t.workspacesFile).entries()).toHaveLength(1)
+      } finally {
+        void again.dispose()
+      }
+    } finally {
+      t.cleanup()
+    }
   })
 })

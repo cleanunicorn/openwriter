@@ -347,6 +347,7 @@ describe('nothing inside a job run can take the server down', () => {
     })
     const restarted = createApp({
       workspace: t.workspace,
+      workspacesFile: t.workspacesFile,
       fakeControl: false,
       allowedHosts: () => [],
     })
@@ -567,6 +568,7 @@ describe('staleness and restart', () => {
 
     const restarted = createApp({
       workspace: t.workspace,
+      workspacesFile: t.workspacesFile,
       fakeControl: false,
       allowedHosts: () => [],
     })
@@ -583,7 +585,12 @@ describe('staleness and restart', () => {
     } finally {
       void restarted.dispose()
     }
-    const again = createApp({ workspace: t.workspace, fakeControl: false, allowedHosts: () => [] })
+    const again = createApp({
+      workspace: t.workspace,
+      workspacesFile: t.workspacesFile,
+      fakeControl: false,
+      allowedHosts: () => [],
+    })
     try {
       expect(again.jobs.list().map((job) => job.id)).toEqual([running.id])
     } finally {

@@ -19,6 +19,7 @@ import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
 import { EventHub } from './sse.ts'
 import { DocWatcher } from './watcher.ts'
+import { realpathOrSelf, WorkspaceList } from './workspace-list.ts'
 import { ConflictError, UndecodableError, Workspace } from './workspace.ts'
 
 export type CreatedApp = {
@@ -32,6 +33,15 @@ export type CreatedApp = {
 
 export function createApp(options: AppOptions): CreatedApp {
   const workspace = new Workspace(options.workspace)
+  const workspaces = new WorkspaceList(options.workspacesFile)
+  // The workspace the process started on is a known workspace: without this the palette would
+  // list nothing until the writer had already switched once, which they cannot do from an empty
+  // list. A list that cannot be written must not stop the server from starting.
+  try {
+    workspaces.touch(realpathOrSelf(options.workspace))
+  } catch (error) {
+    console.error('could not record the startup workspace', error)
+  }
   const events = new EventHub()
   const watcher = new DocWatcher(workspace, events)
   const gate = new FakeGate(options.fakeControl)
@@ -43,6 +53,7 @@ export function createApp(options: AppOptions): CreatedApp {
   const context: ServerContext = {
     options,
     workspace,
+    workspaces,
     events,
     watcher,
     adapterNames: () => registry.names(),
