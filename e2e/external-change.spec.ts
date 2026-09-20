@@ -1,4 +1,5 @@
 import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import type { Page } from '@playwright/test'
 import { type App, expect, test } from './fixtures.ts'
 import {
   blockEnd,
@@ -7,6 +8,7 @@ import {
   editor,
   expectFile,
   notice,
+  occurrences,
   openArticle,
 } from './helpers.ts'
 
@@ -39,26 +41,30 @@ test('an outside change reloads the document without losing the focused block’
   })
 })
 
-/** How many times `needle` occurs in `text` — a duplicate is a count, never a substring. */
-const occurrences = (text: string, needle: string) => text.split(needle).length - 1
-
-test('a new block the autosave already wrote is not duplicated by a reload', async ({
-  page,
-  app,
-}) => {
+/**
+ * The reported gesture, carried all the way to disk: Enter at the end of the last paragraph,
+ * type into the slot it opens, and wait for the autosave that writes the still-open slot's
+ * text to the file. What happens next is what each test is about.
+ */
+async function newBlockSavedToDisk(page: Page, text: string): Promise<void> {
   await openArticle(page)
-  // The reported gesture: Enter at the end of a block, the ordinary way to start a paragraph.
   await page.getByText('Results arrive as ghost diffs').click()
   await page.keyboard.press(blockEnd)
   await page.keyboard.press('Enter')
   await page.keyboard.press('Enter')
   await expect(editor(page)).toHaveText('')
-
   const saved = page.waitForResponse(
     (response) => response.request().method() === 'PUT' && response.status() === 200,
   )
-  await page.keyboard.type('A brand new paragraph.')
+  await page.keyboard.type(text)
   await saved
+}
+
+test('a new block the autosave already wrote is not duplicated by a reload', async ({
+  page,
+  app,
+}) => {
+  await newBlockSavedToDisk(page, 'A brand new paragraph.')
   // The paragraph is on disk now, while its editor is still open and still holding it.
   expect(occurrences(app.readArticle(), 'A brand new paragraph.')).toBe(1)
 
@@ -78,17 +84,7 @@ test('a new block the autosave already wrote is not duplicated by a reload', asy
 })
 
 test('a reload keeps what was typed after the save it carries', async ({ page, app }) => {
-  await openArticle(page)
-  await page.getByText('Results arrive as ghost diffs').click()
-  await page.keyboard.press(blockEnd)
-  await page.keyboard.press('Enter')
-  await page.keyboard.press('Enter')
-
-  const saved = page.waitForResponse(
-    (response) => response.request().method() === 'PUT' && response.status() === 200,
-  )
-  await page.keyboard.type('A brand new paragraph.')
-  await saved
+  await newBlockSavedToDisk(page, 'A brand new paragraph.')
 
   // Hold every later save, so the editor provably holds more than the disk does: no timing.
   await page.route('**/api/docs/**', (route) =>
