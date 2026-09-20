@@ -136,6 +136,10 @@ function keepFocusedBlock(
   const inserted = insertMarkdown(disk, at, text, mint)
   const fresh = inserted.blocks.find((block) => !known.has(block.id))
   if (fresh !== undefined) {
+    // The old ID goes back on only while it is free. A block from disk can already answer to
+    // it — `reconcile` hands the first slice of a changed run the old ID of that run — and two
+    // blocks with one ID would break every lookup that follows.
+    if (known.has(draft.id)) return { doc: inserted, id: fresh.id }
     return {
       doc: {
         ...inserted,
@@ -485,9 +489,18 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       // Disk wins everywhere except what the writer is editing, which keeps its text.
       if (folded !== null && draft !== null) {
         const settled = folded.ids.map((id) => {
-          if (indexOf(doc, id) !== -1) return id
           const block = base.blocks[indexOf(base, id)]
           if (block === undefined) return id
+          // The block the editor keeps is re-applied from its draft, so it only has to exist.
+          // The rest of the fold lives in the document alone, and an ID is not enough to find
+          // it: `reconcile` gives the first slice of a changed run the old ID of that run, so a
+          // block still answering to one of these IDs can be a different one, from disk. Look
+          // for the text itself — if it is gone, the writer's tail went with it.
+          const survivor =
+            id === folded.held.id
+              ? doc.blocks[indexOf(doc, id)]
+              : doc.blocks.find((candidate) => candidate.raw === block.raw)
+          if (survivor !== undefined) return survivor.id
           const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
           doc = rescue.doc
           notice = 'The file changed on disk. The block you are editing was kept.'

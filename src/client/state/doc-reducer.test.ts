@@ -282,6 +282,31 @@ describe('a reload that carries the editor’s own text', () => {
     )
   })
 
+  it('keeps a folded tail whose ID a changed block from disk inherited', () => {
+    // `reconcile` gives the first slice of a changed run the old ID of that run, so the block
+    // answering to the folded tail's ID afterwards can be a different one, from disk. Checking
+    // the ID alone said the tail had survived, and it was dropped without a word.
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n\nFour\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n\nFour\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree CHANGED\n\nFour\n')
+    const ids = state.doc.blocks.map((block) => block.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('keeps a folded tail the disk dropped, when a later block also changed', () => {
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two EDITED\n\n## Heading' },
+    )
+    const state = reload(open, 'One\n\nTwo\n\nThree CHANGED\n')
+    expect(liveText(state)).toBe('One\n\nTwo EDITED\n\n## Heading\n\nThree CHANGED\n')
+  })
+
   it('still lets the disk win where the editor is not, and keeps the editor’s block', () => {
     // The behaviours the fix must not disturb, from the other side of the same code path.
     const editing = run(
