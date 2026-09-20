@@ -1,6 +1,7 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { serialise } from '../../shared/blocks/index.ts'
+import { SnapshotSchema } from '../../shared/jobs/job-types.ts'
 import {
   type DocAction,
   type DocState,
@@ -464,27 +465,30 @@ describe('outside changes', () => {
     expect(isDirty(state)).toBe(false)
   })
 
-  it('never shows a job snapshot an ID the store will give to another block', () => {
-    // A job snapshot is `liveDoc`: the committed blocks plus whatever the editor holds. The
-    // open slot is not a block, so the ID it appears under must be one the store cannot mint —
-    // otherwise an accepted op aimed at it lands on whatever block that ID goes to next.
+  it('gives a job snapshot only block IDs the job contract accepts', () => {
+    // `liveDoc` is what `postNow` sends as a job's snapshot, and `SnapshotSchema` binds every
+    // block ID to `BlockIdSchema`. An ID shape the schema rejects makes the request a 400, so
+    // starting a job while the editor is open fails and the writer only sees "Could not start".
     const open = run(
       loaded('One\n\nTwo\n'),
       { type: 'focus', id: 'b2', cursor: 'end' },
       { type: 'new-block', currentId: 'b2', currentText: 'Two' },
       { type: 'draft', id: NEW_BLOCK_ID, text: 'Three' },
     )
-    const snapshot = liveDoc(open)
-    expect(snapshot.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'Three'])
-    const slotId = snapshot.blocks[2]?.id as string
-
-    // The writer backspaces out of the slot, and an ordinary insert happens instead.
-    const later = run(
-      open,
-      { type: 'merge-previous', id: NEW_BLOCK_ID, text: '' },
-      { type: 'insert', index: 1, markdown: 'A completely other paragraph' },
+    const appended = run(
+      loaded('One\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Appended' },
     )
-    expect(later.doc.blocks.map((block) => block.id)).not.toContain(slotId)
+    const splitting = run(
+      loaded('One\n\nTwo\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    for (const state of [open, appended, splitting, loaded()]) {
+      const { blocks, gaps } = liveDoc(state)
+      expect(SnapshotSchema.safeParse({ blocks, gaps }).success).toBe(true)
+    }
   })
 
   it('a deleted file pauses saving instead of being recreated', () => {

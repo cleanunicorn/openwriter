@@ -217,29 +217,9 @@ function change(
   }
 }
 
-/**
- * IDs for blocks that exist only in a derived document — the open editor's text folded in for a
- * save, a job snapshot or an export. The store never mints these, so an op that comes back aimed
- * at one is recognised as missing and withdrawn, instead of landing on whatever block the store
- * later gave that ID to.
- */
-function derivedMinter(): MintId {
-  let next = 1
-  return () => `live${next++}`
-}
-
-/**
- * Fold the focused editor's text into the document without touching history. `derived` mints the
- * IDs when the result is not going to be stored; without it the document's own counter is used.
- */
-function withDraft(
-  state: DocState,
-  id: string,
-  text: string,
-  derived?: MintId,
-): { doc: Doc; nextId: number } {
-  const { mint: stored, next } = minter(state)
-  const mint = derived ?? stored
+/** Fold the focused editor's text into the document without touching history. */
+function withDraft(state: DocState, id: string, text: string): { doc: Doc; nextId: number } {
+  const { mint, next } = minter(state)
   if (id === NEW_BLOCK_ID) {
     if (text.trim() === '' || state.pendingNew === null)
       return { doc: state.doc, nextId: state.nextId }
@@ -306,8 +286,7 @@ function foldDraft(
 
 /** The document as the writer sees it right now: committed blocks plus the open editor's text. */
 export function liveDoc(state: DocState): Doc {
-  if (state.draft === null) return state.doc
-  return withDraft(state, state.draft.id, state.draft.text, derivedMinter()).doc
+  return state.draft === null ? state.doc : withDraft(state, state.draft.id, state.draft.text).doc
 }
 
 export const liveText = (state: DocState): string => serialise(liveDoc(state))

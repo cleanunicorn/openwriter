@@ -90,10 +90,16 @@ directory keeps the name `.zen/`.
   cost it the identity the reconcile needs to match the disk's older copy instead of adding one.
   The editor's text comes from the folded document, never from the reconciled one, because the
   disk's copy can be a keystroke behind the keyboard.
-- **Blocks that exist only in a derived document get IDs the store cannot mint** (`live1`, not
-  `b3`). `liveDoc` folds the editor in with the document's counter but nothing reserves the ID,
-  so a job snapshot could show the agent a block under an ID the store later gave to different
-  content. Derived IDs make such an op *missing*, which the existing withdraw path handles.
+- **A job snapshot carries only store block IDs.** `liveDoc` folds the editor in with the
+  document's own counter and nothing reserves the ID, so a snapshot can show the agent a block
+  under an ID the store later gives to different content, and an accepted op then lands on the
+  wrong block. Giving derived blocks their own ID namespace was tried and reverted: `liveDoc` is
+  the job snapshot (`jobs.ts:113`) and `SnapshotSchema` binds every ID to `BlockIdSchema`
+  (`/^b\d+$/`), so the request became a 400 and a job started while the editor was open never
+  ran. The real fix belongs with the contract — the ID shapes, the README's job-file section,
+  `job-files.ts`'s instruction text and `fake.ts`'s block regex move together — and has its own
+  follow-up. A test pins the snapshot against `SnapshotSchema` so the boundary cannot drift
+  again.
 - **A save that resolves after a reload is dropped.** It carries the hash of the revision it
   wrote, which is one behind; applying it rolled `baseHash` back and made the next PUT a certain
   409. The save says which revision it was based on and the reducer keeps it only while that is
