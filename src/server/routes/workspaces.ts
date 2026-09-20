@@ -73,7 +73,7 @@ function scaffold(root: string): void {
 }
 
 export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
-  const { workspace, workspaces, watcher } = context
+  const { workspace, workspaces, watcher, events } = context
 
   // One mutation at a time. Opening, creating and erasing all read the list, change the world and
   // write it back; two of them interleaving across the `await` in `quiesce` would lose one of the
@@ -108,7 +108,8 @@ export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: Jo
     workspace.retarget(next)
     watcher.reset()
     jobs.rebind()
-    workspaces.touch(next, label)
+    const entry = workspaces.touch(next, label)
+    events.emit({ type: 'workspace.changed', root: next, label: entry.label })
   }
 
   app.get('/api/workspaces', (c) => c.json(body()))

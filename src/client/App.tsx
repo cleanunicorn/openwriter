@@ -8,8 +8,10 @@ import { Tray } from './jobs/Tray.tsx'
 import './jobs/commands.ts'
 import './export.ts'
 import './settings/commands.ts'
+import './workspaces/commands.ts'
 import { Settings } from './settings/Settings.tsx'
 import { startJobs } from './state/jobs.ts'
+import { watchForWorkspaceChanges } from './workspaces/switch.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
 import {
@@ -40,6 +42,7 @@ export function App() {
 
   useEffect(() => {
     startJobs()
+    watchForWorkspaceChanges()
     void start()
     return connectEvents()
   }, [])

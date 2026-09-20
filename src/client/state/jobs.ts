@@ -392,6 +392,31 @@ async function sync(): Promise<void> {
   pump()
 }
 
+/**
+ * Forget this workspace's jobs and load the other one's. Everything keyed by job id has to go:
+ * the tray, the held requests, the decisions on their way to the server, and the module state
+ * beside the store. `firstSync` goes back to true for the same reason a page reload sets it —
+ * the client holds no block IDs for the new workspace's documents, so a job found unsettled
+ * there cannot be applied and is marked stale with its output kept.
+ */
+export async function resetJobs(): Promise<void> {
+  jobsStore.set(() => ({
+    jobs: {},
+    order: [],
+    held: [],
+    inserted: {},
+    trayOpen: false,
+    researchJobId: null,
+  }))
+  createdHere.clear()
+  inFlight.clear()
+  posting.clear()
+  reportedStale.clear()
+  deciding = 0
+  firstSync = true
+  await sync()
+}
+
 export function startJobs(): void {
   setEventHandlers({
     onConnect: () =>

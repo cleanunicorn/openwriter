@@ -12,11 +12,12 @@ export function Palette({ mode }: { mode: PaletteMode }) {
   const articles = useApp((state) => state.articles)
   const config = useApp((state) => state.config)
   const skills = useApp((state) => state.skills)
+  const workspaces = useApp((state) => state.workspaces)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the list depends on app state slices
   const commands = useMemo(
     () => (mode.kind === 'commands' ? filterCommands(allCommands(store.get()), query) : []),
-    [mode, query, articles, config, skills],
+    [mode, query, articles, config, skills, workspaces],
   )
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the mode changes
@@ -44,6 +45,14 @@ export function Palette({ mode }: { mode: PaletteMode }) {
         if (query.trim() === '') return
         close()
         mode.submit(query.trim())
+        return
+      }
+      if (mode.kind === 'confirm') {
+        // A stray Enter does nothing at all: the palette stays open, and what was typed stays
+        // on screen so the writer can see it does not match.
+        if (query.trim() !== mode.phrase) return
+        close()
+        mode.submit()
         return
       }
       const command = commands[active]
@@ -75,14 +84,17 @@ export function Palette({ mode }: { mode: PaletteMode }) {
               ? `palette-option-${active}`
               : undefined
           }
-          aria-label={mode.kind === 'input' ? mode.label : 'Command palette'}
-          placeholder={mode.kind === 'input' ? mode.placeholder : 'Type a command…'}
+          aria-label={mode.kind === 'commands' ? 'Command palette' : mode.label}
+          placeholder={mode.kind === 'commands' ? 'Type a command…' : mode.placeholder}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value)
             setActive(0)
           }}
           onKeyDown={onKeyDown}
+          // Only for the destructive prompt: moving the focus away cancels it. Clicking a
+          // command uses onMouseDown with preventDefault, so the command list is unaffected.
+          onBlur={mode.kind === 'confirm' ? close : undefined}
         />
         {mode.kind === 'commands' && (
           <div id="palette-list" role="listbox" aria-label="Commands" className="palette-list">
