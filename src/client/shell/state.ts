@@ -42,7 +42,12 @@ const saveUi = (patch: Partial<UiState>) =>
     'The panel is open for now, but could not be remembered',
   )
 
-/** Open or close the left panel as the writer sees it; opening by hand may overlay on a narrow window. */
+/**
+ * Open or close the left panel as the writer sees it; opening by hand may overlay on a narrow
+ * window. The left side is toggle-first (setLeftOpen wraps this), the right side setter-first:
+ * every left toggle must write `leftDrawer`, because a narrow reload shows the panel closed while
+ * `ui.leftPanel` is still true, and only this write lets the next opening become an overlay.
+ */
 export function toggleLeft(): void {
   const open = currentLayout().left !== 'closed'
   shellStore.set((state) => ({ ...state, leftDrawer: !open }))
