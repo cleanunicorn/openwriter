@@ -7,6 +7,7 @@ import {
   editor,
   expectFile,
   expectOneWaiting,
+  expectWaiting,
   ghosts,
   jobFile,
   mod,
@@ -232,4 +233,26 @@ test('a ready turn offers "Review", naming the document only when it is another 
     tray(page).getByRole('button', { name: 'Review in Hello, openwrite', exact: true }),
   ).toBeVisible()
   await expect(tray(page)).not.toContainText('article:')
+})
+
+test('a message held behind a running job carries what became of that job', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await say(page, 'fake:upper rewrite the intro')
+  const first = await expectOneWaiting(app)
+  // A whole-article job runs alone: this one is held until the first is decided.
+  await say(page, 'make it shorter')
+  await expect(tray(page)).toContainText('queued behind another job')
+
+  await release(app, first)
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  const [second] = (await expectWaiting(app, 1)).filter((id) => id !== first)
+  if (second === undefined) throw new Error('the held message never started')
+  const conversation = readFileSync(jobFile(app, second, 'conversation.md'), 'utf8')
+  // Picked when it was posted, not when it was typed: the first turn is decided, not running.
+  expect(conversation).toContain('— rejected')
+  expect(conversation).not.toContain('still running')
 })
