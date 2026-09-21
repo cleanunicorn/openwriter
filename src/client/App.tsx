@@ -78,7 +78,17 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const state = store.get()
-      const action = routeKey(event, {
+      const key = {
+        key: event.key,
+        code: event.code,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        defaultPrevented: event.defaultPrevented,
+        altGraph: event.getModifierState('AltGraph'),
+      }
+      const action = routeKey(key, {
         modalOpen: state.panel !== null,
         paletteOpen: state.palette !== null,
         inTextField: inTextField(event.target),

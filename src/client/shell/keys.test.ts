@@ -9,6 +9,7 @@ const key = (overrides: Partial<KeyLike>): KeyLike => ({
   altKey: false,
   shiftKey: false,
   defaultPrevented: false,
+  altGraph: false,
   ...overrides,
 })
 const idle: KeyContext = {
@@ -34,6 +35,12 @@ describe('routeKey', () => {
     expect(routeKey(modB, { ...idle, inTextField: true })).toBe('toggle-left')
     expect(routeKey(modAltB, idle)).toBe('toggle-right')
     expect(routeKey(modAltB, { ...idle, inTextField: true })).toBe('toggle-right')
+  })
+
+  it('leaves AltGr+B alone: on Windows it arrives as Ctrl+Alt, and it types a character', () => {
+    const altGr = key({ key: '{', code: 'KeyB', ctrlKey: true, altKey: true, altGraph: true })
+    expect(routeKey(altGr, idle)).toBeNull()
+    expect(routeKey(altGr, { ...idle, inTextField: true })).toBeNull()
   })
 
   it('leaves Ctrl/Cmd+Shift+B and a bare B alone', () => {

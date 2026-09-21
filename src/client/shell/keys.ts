@@ -24,6 +24,11 @@ export type KeyLike = {
   altKey: boolean
   shiftKey: boolean
   defaultPrevented: boolean
+  /**
+   * AltGr is held. Windows reports it as Ctrl+Alt, and on many layouts AltGr+B types a character
+   * (Hungarian: `{`); that keystroke is the writer's text, never a panel toggle.
+   */
+  altGraph: boolean
 }
 
 export type KeyContext = {
@@ -44,7 +49,7 @@ export function routeKey(event: KeyLike, context: KeyContext): KeyAction {
   if (mod && key === 'k') return 'palette'
   if (context.modalOpen) return null
   if (event.defaultPrevented) return null
-  if (mod && !event.shiftKey && event.code === 'KeyB') {
+  if (mod && !event.shiftKey && !event.altGraph && event.code === 'KeyB') {
     return event.altKey ? 'toggle-right' : 'toggle-left'
   }
   if (context.inTextField) return null
