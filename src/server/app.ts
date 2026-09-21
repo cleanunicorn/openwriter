@@ -15,10 +15,12 @@ import { mountDocRoutes } from './routes/docs.ts'
 import { mountEventRoutes } from './routes/events.ts'
 import { mountExportRoutes } from './routes/export.ts'
 import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
+import { mountWorkspaceRoutes } from './routes/workspaces.ts'
 import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
 import { EventHub } from './sse.ts'
 import { DocWatcher } from './watcher.ts'
+import { realpathOrSelf, WorkspaceList } from './workspace-list.ts'
 import { ConflictError, UndecodableError, Workspace } from './workspace.ts'
 
 export type CreatedApp = {
@@ -32,6 +34,15 @@ export type CreatedApp = {
 
 export function createApp(options: AppOptions): CreatedApp {
   const workspace = new Workspace(options.workspace)
+  const workspaces = new WorkspaceList(options.workspacesFile)
+  // The workspace the process started on is a known workspace: without this the palette would
+  // list nothing until the writer had already switched once, which they cannot do from an empty
+  // list. A list that cannot be written must not stop the server from starting.
+  try {
+    workspaces.touch(realpathOrSelf(options.workspace))
+  } catch (error) {
+    console.error('could not record the startup workspace', error)
+  }
   const events = new EventHub()
   const watcher = new DocWatcher(workspace, events)
   const gate = new FakeGate(options.fakeControl)
@@ -43,6 +54,7 @@ export function createApp(options: AppOptions): CreatedApp {
   const context: ServerContext = {
     options,
     workspace,
+    workspaces,
     events,
     watcher,
     adapterNames: () => registry.names(),
@@ -70,12 +82,15 @@ export function createApp(options: AppOptions): CreatedApp {
     return c.json({ error: 'internal error' }, 500)
   })
 
-  app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(options.workspace) }))
+  // `workspace.root`, not `options.workspace`: the latter is the string the process started
+  // with, and it would keep naming the old workspace after a switch.
+  app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(workspace.root) }))
 
   mountEventRoutes(app, events)
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)
+  mountWorkspaceRoutes(app, context, jobs)
   mountExportRoutes(app, context)
   if (options.fakeControl) mountFakeControl(app, gate, events)
 

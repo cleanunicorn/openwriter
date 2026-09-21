@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
+import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { serve } from '@hono/node-server'
@@ -13,6 +14,8 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 
 export type StartOptions = {
   workspace: string
+  /** Where the known-workspace list lives; resolved from XDG in `main()` only. */
+  workspacesFile: string
   /** 0 picks a free port. Undefined tries SERVER_PORT and the ports after it. */
   port?: number
   dev?: boolean
@@ -46,6 +49,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   let port = 0
   const { app, dispose } = createApp({
     workspace: options.workspace,
+    workspacesFile: options.workspacesFile,
     clientDir: options.dev ? undefined : path.join(REPO_ROOT, 'dist', 'client'),
     adapterOverride: options.adapterOverride,
     fakeControl: options.fakeControl ?? false,
@@ -90,6 +94,12 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   }
 }
 
+/** `~/.config/openwrite/workspaces.json`, honouring `XDG_CONFIG_HOME`. Resolved here only. */
+function workspacesFile(): string {
+  const configHome = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config')
+  return path.join(configHome, 'openwrite', 'workspaces.json')
+}
+
 /** First run copies the tracked sample, so playing with the app never dirties what tests copy. */
 function defaultWorkspace(): string {
   const copy = path.join(REPO_ROOT, '.openwrite', 'sample-workspace')
@@ -126,6 +136,7 @@ async function main(): Promise<void> {
     values.port !== undefined ? Number(values.port) : values.dev ? SERVER_PORT : undefined
   const server = await startServer({
     workspace,
+    workspacesFile: workspacesFile(),
     port,
     dev: values.dev,
     adapterOverride: values.adapter,

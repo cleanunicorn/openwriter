@@ -5,6 +5,7 @@ import {
   docKey,
   type SkillInfo,
 } from '../../shared/api-types.ts'
+import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
 import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
 import { ApiError, api } from '../api.ts'
@@ -21,6 +22,14 @@ import { createStore, useStoreSlice } from './store.ts'
 export type PaletteMode =
   | { kind: 'commands' }
   | { kind: 'input'; label: string; placeholder: string; submit: (value: string) => void }
+  /** Like `input`, but Enter does nothing until what was typed is exactly `phrase`. */
+  | {
+      kind: 'confirm'
+      label: string
+      placeholder: string
+      phrase: string
+      submit: () => void
+    }
 
 export type Panel = 'settings' | null
 
@@ -34,6 +43,8 @@ export type AppState = {
   config: ConfigResponse | null
   /** Prompt templates from `skills/`; the palette lists them, the editor knows nothing else. */
   skills: SkillInfo[]
+  /** The open workspace and the ones the writer has opened before; the palette lists them. */
+  workspaces: WorkspacesResponse | null
   palette: PaletteMode | null
   panel: Panel
   /** Bumped whenever the effective theme changes, so baked-in colours (diagrams) re-render. */
@@ -47,6 +58,7 @@ export const store = createStore<AppState>({
   articles: [],
   config: null,
   skills: [],
+  workspaces: null,
   palette: null,
   panel: null,
   themeEpoch: 0,
@@ -99,16 +111,40 @@ const timers = new Map<string, number>()
 const lastSeen = new Map<string, string>()
 const inFlight = new Map<string, Promise<void>>()
 
+/**
+ * Which set of documents the editor is looking at. Document state is keyed by `DocRef`, which
+ * says nothing about the workspace, so a load or a save that was already in flight when the
+ * editor moved to another workspace would otherwise land in the new one's state — the same
+ * slug, a different article.
+ */
+let docSession = 0
+
+/**
+ * Forget the document session: every response still in flight belongs to the workspace that is
+ * no longer open and is dropped when it arrives. Called by the workspace switch, which clears
+ * `docs` in the same breath.
+ */
+export function resetDocSession(): void {
+  docSession++
+  for (const timer of timers.values()) window.clearTimeout(timer)
+  timers.clear()
+  lastSeen.clear()
+  inFlight.clear()
+}
+
 async function save(ref: DocRef): Promise<void> {
   const key = docKey(ref)
   const state = store.get().docs[key]
   if (state === undefined || !isDirty(state)) return
   const text = liveText(state)
+  const session = docSession
   try {
     const base = state.baseHash
     const { hash } = await api.save(ref, text, base)
+    if (session !== docSession) return
     dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
   } catch (error) {
+    if (session !== docSession) return
     if (error instanceof ApiError && error.status === 409) {
       // Someone else changed (or deleted) the file: reconcile instead of overwriting.
       const disk = error.body as { text: string; hash: string | null; exists: boolean }
@@ -177,10 +213,13 @@ function hashToRef(hash: string): DocRef | null {
 }
 
 async function load(ref: DocRef): Promise<void> {
+  const session = docSession
   try {
     const doc = await api.doc(ref)
+    if (session !== docSession) return
     dispatchDoc(ref, { type: 'loaded', ...doc })
   } catch (error) {
+    if (session !== docSession) return
     dispatchDoc(ref, { type: 'failed', error: (error as Error).message })
   }
 }
@@ -205,6 +244,11 @@ export async function openDoc(ref: DocRef): Promise<void> {
 export async function refreshArticles(): Promise<void> {
   const { articles } = await api.articles()
   store.set((state) => ({ ...state, articles }))
+}
+
+export async function refreshWorkspaces(): Promise<void> {
+  const workspaces = await api.workspaces()
+  store.set((state) => ({ ...state, workspaces }))
 }
 
 export async function refreshConfig(): Promise<void> {
@@ -238,6 +282,8 @@ export const setPanel = (panel: Panel) => store.set((state) => ({ ...state, pane
 type EventHandlers = {
   onJobEvent?: (event: ServerEvent) => void
   onConnect?: () => void
+  /** Another tab moved the server to a different workspace. */
+  onWorkspaceChanged?: (root: string) => void
 }
 const handlers: EventHandlers = {}
 export const setEventHandlers = (next: EventHandlers) => Object.assign(handlers, next)
@@ -245,10 +291,13 @@ export const setEventHandlers = (next: EventHandlers) => Object.assign(handlers,
 async function onDocChanged(ref: DocRef, hash: string | null): Promise<void> {
   const state = docStateOf(ref)
   if (state === undefined || state.baseHash === hash) return
+  const session = docSession
   try {
     const disk = await api.doc(ref)
+    if (session !== docSession) return
     dispatchDoc(ref, { type: 'external', ...disk })
   } catch (error) {
+    if (session !== docSession) return
     dispatchDoc(ref, { type: 'notice', notice: `Could not reload: ${(error as Error).message}` })
   }
 }
@@ -285,6 +334,7 @@ export function connectEvents(): () => void {
     if (!parsed.success) return
     const event = parsed.data
     if (event.type === 'doc.changed') void onDocChanged(event.ref, event.hash)
+    else if (event.type === 'workspace.changed') handlers.onWorkspaceChanged?.(event.root)
     else if (event.type === 'config.changed') {
       void refreshConfig().catch((error: unknown) =>
         notifyFailure('Could not reload the settings', error),
@@ -299,7 +349,7 @@ let listeningForHash = false
 export async function start(): Promise<void> {
   store.set((state) => ({ ...state, boot: 'loading' }))
   try {
-    await Promise.all([refreshArticles(), refreshConfig(), refreshSkills()])
+    await Promise.all([refreshArticles(), refreshConfig(), refreshSkills(), refreshWorkspaces()])
     const fromHash = hashToRef(window.location.hash)
     const first = store.get().articles[0]
     const initial =

@@ -12,6 +12,7 @@ import {
   SkillsResponseSchema,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
+import { WorkspacesResponseSchema } from '../shared/workspaces-schema.ts'
 import {
   DecisionsResponseSchema,
   type JobRequest,
@@ -88,4 +89,21 @@ export const api = {
   skills: () => request(SkillsResponseSchema, '/api/skills'),
   saveConfig: (config: Config) =>
     request(ConfigResponseSchema, '/api/config', { method: 'PUT', body: config }),
+  workspaces: () => request(WorkspacesResponseSchema, '/api/workspaces'),
+  openWorkspace: (path: string) =>
+    request(WorkspacesResponseSchema, '/api/workspaces/open', { method: 'POST', body: { path } }),
+  createWorkspace: (path: string) =>
+    request(WorkspacesResponseSchema, '/api/workspaces', { method: 'POST', body: { path } }),
+  renameWorkspace: (id: string, label: string) =>
+    request(WorkspacesResponseSchema, `/api/workspaces/${id}`, {
+      method: 'PATCH',
+      body: { label },
+    }),
+  forgetWorkspace: (id: string) =>
+    request(WorkspacesResponseSchema, `/api/workspaces/${id}`, { method: 'DELETE' }),
+  eraseWorkspace: (id: string, confirm: string) =>
+    request(WorkspacesResponseSchema, `/api/workspaces/${id}/erase`, {
+      method: 'POST',
+      body: { confirm },
+    }),
 }

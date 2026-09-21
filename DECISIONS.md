@@ -423,6 +423,80 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **The sample's `.zen/config.json` sets `mainAgent: "fake"`** so a first run can never spend
   credits or fail on a missing login. The schema default for any other workspace is `claude`.
 
+## Managing workspaces
+
+- **The workspace is retargeted in place, never replaced.** `Workspace` caches nothing — every
+  path method resolves from `root` when it is called — while every route module destructures
+  `ServerContext` at mount time (`routes/docs.ts`, `export.ts`, `config.ts`) and `mountJobRoutes`
+  takes `jobs` as a bare parameter. Swapping the instances would strand every route closure;
+  mutating them is also what `DocWatcher.reset()` already exists for.
+- **Everything after `quiesce` is one synchronous block.** `writeDoc` is fully synchronous, so a
+  concurrent `PUT /api/docs/:kind/:slug` either completes entirely against the old root or begins
+  entirely against the new one. An `await` inside that block would let a half-applied switch
+  write the old workspace's document into the new workspace.
+- **A job carries the workspace generation it started in.** Cancelling an agent is not enough:
+  `pump()` launches runs fire-and-forget and `saveJobFile` creates the directory it writes to, so
+  a run still settling would create `<new workspace>/.zen/jobs/<old id>/`. The job's own state
+  checkpoints do not cover a job created *while* the switch is waiting on `quiesce`, because
+  nothing ever marked it stale. So `rebind()` moves an epoch that `run()`'s checkpoints,
+  `update()` and `progress()` all consult.
+- **`quiesce` waits for the runs it cancelled, but only for a budget.** Golden rule 8: a wedged
+  agent may delay a switch by two seconds, never block the writer. The epoch fences whatever
+  outlives the budget.
+- **`workspacesFile` is required on `AppOptions`, not optional with an XDG default.** Injection
+  is the only version in which the compiler proves that no test can write the developer's real
+  `~/.config/openwrite/workspaces.json`. `XDG_CONFIG_HOME` is read in `main()` and nowhere else.
+  It follows the `toolLookup` / `skillsDir` precedent.
+- **The list degrades to `[]`; it never throws.** A missing, unreadable or hand-broken file must
+  not stop the editor from starting, the same rule `loadConfig` follows.
+- **The file is named `workspace-list.ts`, not `workspaces.ts`.** A file one letter away from the
+  existing `workspace.ts` in the same directory is a readability trap.
+- **Erase takes an id; open takes a path.** Opening an arbitrary readable directory is the
+  feature. Deleting one is not: the root that is deleted is read from the list the server owns,
+  so a root the list does not own cannot be expressed in the request at all. The verb is `erase`
+  rather than a second `DELETE`, because two delete verbs — one meaning "forget", one meaning
+  "destroy" — is how an accident happens.
+- **`EraseWorkspaceRequestSchema` is the only strict schema in the project.** A plain `z.object`
+  strips unknown keys, so a body carrying a `path` would be silently ignored rather than refused.
+  On the destructive route that difference is worth one departure from the surrounding style.
+- **`rm -r` is the delete, and a test is why.** `rmSync(root, { recursive: true, force: true })`
+  unlinks a symlink instead of walking through it — proven by a real decoy inside a workspace
+  pointing at a directory outside it, not by Node's documentation. The top is checked separately:
+  a recorded root that is itself a symlink is refused rather than followed.
+- **A workspace whose `contentDir` points outside it cannot be erased at all.** Deleting only
+  what it owns would leave the writer believing the workspace is gone while their real Hugo posts
+  remain. The refusal names `contentDir` so it is not mistaken for a bug; removing the entry from
+  the list still works.
+- **The tracked `sample-workspace/` is recognised by path**, resolved from `import.meta.dirname`
+  the same way `main.ts` derives `REPO_ROOT`. There is no marker file inside it, and adding one
+  would change what every test copies. The gitignored `.openwrite/sample-workspace` copy stays
+  deletable: `defaultWorkspace()` re-creates it, and deleting it is already the documented reset.
+- **`/api/health` reports `workspace.root`, not `options.workspace`.** The latter is the string
+  the process started with and would keep naming the old workspace after a switch.
+- **The switch clears the open documents and bumps a document session.** `resync()` reconciles
+  every open document against disk, so a document left in the store after a switch would be read
+  as an *outside change* to the new workspace's article of the same slug. The session counter
+  covers what clearing cannot: a load or a save already in flight belongs to the workspace that
+  is no longer open, and is dropped when it lands rather than written into the new one's state.
+- **The switch waits for the saves; it does not fire them.** `flushAll` fires `void flush(...)`
+  and returns void, so awaiting it guarantees nothing; `flush` is the one that returns a promise.
+  After the server retargets, a save resolves against the new root, so the order is what keeps
+  unsaved work. An e2e spec injects five seconds of save latency to force that order rather than
+  race it.
+- **`src/client/state/app.ts` was edited rather than worked around** (manager decision on Q3,
+  option (a)). The alternative — a second state container for the confirmation dialog — would
+  have shipped the race the session counter closes, and this client has exactly one store. The
+  edits are four: the `confirm` palette mode, the workspace list in `AppState` beside `articles`
+  and `skills` (the palette lists it the same way), the document session, and one `else if` for
+  `workspace.changed`. The parallel work item that owned the file had merged, so the conflict
+  risk was zero rather than merely low.
+- **The delete confirmation trims surrounding space, like every other palette input.** A stray
+  space is not evidence of an accident; a different name is, and is refused. The server compares
+  without trimming, because it is a second lock and not a re-run of the typing.
+- **The mutating workspace routes are serialised through one promise chain.** They all read the
+  list, change the world and write it back; two interleaving across the `await` in `quiesce`
+  would lose a write, or retarget while another request was halfway through an erase.
+
 ## Runtime dependencies
 
 | Package | Reason |

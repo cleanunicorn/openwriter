@@ -286,15 +286,17 @@ Keep it short and useful:
 src/shared/           no I/O; imported by client, server, and tests
   blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), test-helpers, corpus/
   jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, scope, herdr-hint
-  config-schema.ts  api-types.ts  events.ts  key-values.ts  names.ts  contrast.ts  ports.ts
+  config-schema.ts  api-types.ts  workspaces-schema.ts  events.ts  key-values.ts  names.ts
+  contrast.ts  ports.ts
 src/server/           Hono on Node (TypeScript run natively, no build step)
   main.ts               CLI flags, binds 127.0.0.1, opens the browser
   app.ts                createApp(options): wires workspace, watcher, jobs, adapters, routes
   paths.ts security.ts  the path guard; Host/Origin/content-type hardening
   context.ts            AppOptions and the ServerContext every route module receives
-  workspace.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
+  workspace.ts workspace-list.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
   test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
-  routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control), export
+  routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control),
+                        workspaces (the known list, switch, create, erase), export
   jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
                         job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
   adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent,
@@ -482,5 +484,7 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 - `src/shared/blocks/split.ts` — the block splitter; `src/shared/jobs/result-schema.ts`
   and `validate-ops.ts` — the `result.json` contract; `scheduler.ts` — the queue rules
 - `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
+- `src/server/workspace-list.ts` — the known-workspace list; `src/server/routes/workspaces.ts` —
+  the switch (quiesce, retarget, rebind) and the four guards on the delete
 - `scripts/verify-adapter.ts` — the sentinel check for a real adapter's confinement
 - `docs/herdr-evaluation.md` — what was tried with herdr, and why it was adopted

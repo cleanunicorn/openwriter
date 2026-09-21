@@ -9,6 +9,8 @@ export const HOST = '127.0.0.1:4317'
 
 export type TestApp = CreatedApp & {
   workspace: string
+  /** This test's own known-workspace list; never the developer's `~/.config`. */
+  workspacesFile: string
   get: (url: string) => Promise<Response>
   send: (method: string, url: string, body?: unknown) => Promise<Response>
   cleanup: () => void
@@ -20,8 +22,13 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
   cpSync(path.resolve(import.meta.dirname, '..', '..', 'sample-workspace'), workspace, {
     recursive: true,
   })
+  // Beside the workspace, not inside it: a test may erase the workspace, and the list has to
+  // outlive that. Defaulted here so no existing caller has to know about it.
+  const state = mkdtempSync(path.join(os.tmpdir(), 'openwrite-test-state-'))
+  const workspacesFile = path.join(state, 'workspaces.json')
   const created = createApp({
     workspace,
+    workspacesFile,
     fakeControl: false,
     adapterOverride: 'fake',
     allowedHosts: () => [HOST],
@@ -30,6 +37,7 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
   return {
     ...created,
     workspace,
+    workspacesFile,
     get: async (url) => created.app.request(url, { headers: { host: HOST } }),
     send: async (method, url, body = {}) =>
       created.app.request(url, {
@@ -40,6 +48,7 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
     cleanup: () => {
       void created.dispose()
       rmSync(workspace, { recursive: true, force: true })
+      rmSync(state, { recursive: true, force: true })
     },
   }
 }

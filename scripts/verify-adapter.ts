@@ -94,7 +94,12 @@ function treeHash(dir: string): string {
 }
 
 const before = { workspace: treeHash(workspace), outside: treeHash(outside) }
-const { jobs, dispose } = createApp({ workspace, fakeControl: false, allowedHosts: () => [] })
+const { jobs, dispose } = createApp({
+  workspace,
+  workspacesFile: path.join(workspace, '..', 'workspaces.json'),
+  fakeControl: false,
+  allowedHosts: () => [],
+})
 const doc = createDoc(readFileSync(articlePath, 'utf8'), createIdMinter())
 const target = doc.blocks[1]
 if (target === undefined) throw new Error('sample article has no content block')
