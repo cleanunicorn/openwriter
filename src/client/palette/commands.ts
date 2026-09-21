@@ -11,7 +11,7 @@ import { PANEL_KEYS } from '../shell/keys.ts'
 import { goToPanel, toggleLeft, toggleRight } from '../shell/state.ts'
 import type { Command } from './group.ts'
 
-export { type Command, type CommandGroup, filterCommands } from './group.ts'
+export type { Command } from './group.ts'
 
 type Provider = (state: AppState) => Command[]
 const providers: Provider[] = []
