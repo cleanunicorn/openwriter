@@ -11,6 +11,13 @@ export const DocRefSchema = z.discriminatedUnion('kind', [
 ])
 export type DocRef = z.infer<typeof DocRefSchema>
 
+/**
+ * A config write names the workspace it was made for. The server has one open workspace at a
+ * time and a switch can happen while a write is on its way (this tab or another), so it refuses a
+ * write meant for a workspace that is no longer open instead of saving it into the new one.
+ */
+export const WORKSPACE_HEADER = 'x-openwrite-workspace'
+
 export const docKey = (ref: DocRef): string =>
   ref.kind === 'strategy' ? 'strategy' : `${ref.kind}:${ref.slug}`
 

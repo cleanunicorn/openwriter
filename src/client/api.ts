@@ -10,6 +10,7 @@ import {
   OkResponseSchema,
   SaveResponseSchema,
   SkillsResponseSchema,
+  WORKSPACE_HEADER,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
 import { WorkspacesResponseSchema } from '../shared/workspaces-schema.ts'
@@ -87,8 +88,13 @@ export const api = {
   dismissJob: (id: string) =>
     request(OkResponseSchema, `/api/jobs/${id}/dismiss`, { method: 'POST' }),
   skills: () => request(SkillsResponseSchema, '/api/skills'),
-  saveConfig: (config: Config) =>
-    request(ConfigResponseSchema, '/api/config', { method: 'PUT', body: config }),
+  /** `root`: the workspace this was written for; the server refuses it if another is open now. */
+  saveConfig: (config: Config, root?: string) =>
+    request(ConfigResponseSchema, '/api/config', {
+      method: 'PUT',
+      body: config,
+      headers: root === undefined ? undefined : { [WORKSPACE_HEADER]: root },
+    }),
   workspaces: () => request(WorkspacesResponseSchema, '/api/workspaces'),
   openWorkspace: (path: string) =>
     request(WorkspacesResponseSchema, '/api/workspaces/open', { method: 'POST', body: { path } }),

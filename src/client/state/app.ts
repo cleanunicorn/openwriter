@@ -278,6 +278,9 @@ function queueConfigWrite<T>(write: () => Promise<T>): Promise<T> {
   return next
 }
 
+/** Resolves once every config write queued so far has been answered. A switch waits for this. */
+export const configWritesSettled = (): Promise<void> => configWrites.then(() => undefined)
+
 /**
  * The writer for quick toggles (theme, panels). The store changes first, so the next toggle sees
  * this one; the write is queued behind any other, and toggles made while one waits share it. While
@@ -297,12 +300,14 @@ export async function saveConfigPatch(patch: ConfigPatch, what: string): Promise
   quickWriteQueued = true
   await queueConfigWrite(async () => {
     quickWriteQueued = false
-    const latest = store.get().config
+    const { config: latest, workspaces } = store.get()
     if (latest === null || latest.error !== null) return
     try {
-      await api.saveConfig(latest.config)
+      await api.saveConfig(latest.config, workspaces?.active.root)
     } catch (error) {
       notifyFailure(what, error)
+      // Refused because another workspace is open now: show the settings that are really in force.
+      if (error instanceof ApiError && error.status === 409) void refreshConfig()
     }
   })
 }
@@ -314,8 +319,9 @@ export async function saveConfigPatch(patch: ConfigPatch, what: string): Promise
  */
 export function saveSettings(draft: Config): Promise<void> {
   return queueConfigWrite(async () => {
-    const ui = store.get().config?.config.ui ?? draft.ui
-    const saved = await api.saveConfig({ ...draft, ui })
+    const { config, workspaces } = store.get()
+    const ui = config?.config.ui ?? draft.ui
+    const saved = await api.saveConfig({ ...draft, ui }, workspaces?.active.root)
     store.set((state) => ({
       ...state,
       config: { ...saved, config: { ...saved.config, ui: state.config?.config.ui ?? ui } },

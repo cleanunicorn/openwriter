@@ -473,3 +473,39 @@ test('with an invalid config.json a toggle still works and the file is never ove
   expect(puts).toBe(0)
   expect(readFileSync(configPath(app), 'utf8')).toBe(broken)
 })
+
+test('a panel toggle still on its way lands in its own workspace, never the next one', async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  let releaseFirst = () => {}
+  const firstHeld = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+  let puts = 0
+  await page.route('**/api/config', async (route) => {
+    if (route.request().method() === 'PUT' && ++puts === 1)
+      void firstHeld.then(() => route.continue())
+    else await route.continue()
+  })
+  await page.keyboard.press(`${mod}+b`)
+  await expect(leftPanel(page)).toBeVisible()
+
+  // The switch starts while the toggle's save is still held on its way to the server.
+  const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-panels-'))
+  try {
+    const second = path.join(base, 'second')
+    await runCommand(page, 'new workspace')
+    await answer(page, 'New workspace path', second)
+    releaseFirst()
+    await expect(page.getByText('No article yet')).toBeVisible()
+
+    expect(savedUi(app).leftPanel).toBe(true)
+    const next = JSON.parse(readFileSync(path.join(second, '.zen', 'config.json'), 'utf8'))
+    expect(next.ui?.leftPanel ?? false).toBe(false)
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
+})

@@ -544,6 +544,12 @@ codex exec --json --skip-git-repo-check --ephemeral
   whole file on each PUT, so without the queue an earlier write could land last, or a background
   toggle could undo a Settings save. `refreshConfig` keeps the local theme and panels while a write
   is queued. This also fixes the same race the theme command had.
+- **A config write names its workspace (`x-openwrite-workspace`), and a switch waits for the
+  queue.** One server has one open workspace, and a switch (from this tab or another) can happen
+  while a write is on its way. `PUT /api/config` refuses, with 409, a write made for a workspace
+  that is no longer open. The check and the write run with no await between them, so no switch
+  falls in between. A tab drains its config queue before it asks to switch, and reloads the config
+  after a refusal. The header is optional, so a request without it still works as before.
 - **A settings save resets the document watcher only when `contentDir` changed.** This keeps the
   PR from turning every panel toggle into a watcher reset, which would stop external-change
   detection for the open document until its next save. It does not fix issue #14 §4: a real

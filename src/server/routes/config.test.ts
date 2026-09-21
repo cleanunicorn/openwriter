@@ -1,7 +1,8 @@
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { WORKSPACE_HEADER } from '../../shared/api-types.ts'
+import { createTestApp, HOST, json, type TestApp } from '../test-helpers.ts'
 
 let t: TestApp
 beforeEach(() => {
@@ -84,5 +85,36 @@ describe('config', () => {
     } finally {
       rmSync(outside, { recursive: true, force: true })
     }
+  })
+})
+
+describe('a config write names the workspace it was made for', () => {
+  const put = (config: unknown, root?: string) =>
+    t.app.request('/api/config', {
+      method: 'PUT',
+      headers: {
+        host: HOST,
+        'content-type': 'application/json',
+        ...(root === undefined ? {} : { [WORKSPACE_HEADER]: root }),
+      },
+      body: JSON.stringify(config),
+    })
+
+  it('is saved when that workspace is the one open', async () => {
+    const { config } = await json(t.get('/api/config'))
+    const res = await put({ ...config, concurrency: 5 }, t.workspace)
+    expect(res.status).toBe(200)
+    expect((await json(t.get('/api/config'))).config.concurrency).toBe(5)
+  })
+
+  it('is refused, and nothing written, when another workspace is open now', async () => {
+    const file = path.join(t.workspace, '.zen', 'config.json')
+    const before = readFileSync(file, 'utf8')
+    const { config } = await json(t.get('/api/config'))
+    // Made for a workspace the server has since switched away from (this tab or another).
+    const res = await put({ ...config, concurrency: 7 }, '/somewhere/else')
+    expect(res.status).toBe(409)
+    expect((await json(res)).error).toContain('workspace changed')
+    expect(readFileSync(file, 'utf8')).toBe(before)
   })
 })
