@@ -5,7 +5,7 @@ import { docKey, type SkillInfo, SkillInfoSchema } from '../../shared/api-types.
 import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
 import { splitHeader } from '../../shared/key-values.ts'
 import { docReducer, initialDocState } from '../state/doc-reducer.ts'
-import { type Command, filterCommands, GROUP_ORDER, groupCommands, orderCommands } from './group.ts'
+import { type Command, filterCommands, GROUP_ORDER, groupCommands } from './group.ts'
 
 // The real providers, registered in App.tsx's order: palette/commands.ts first (jobs/commands.ts
 // imports it), then jobs, export, settings, workspaces. They are loaded by a computed URL, not a
@@ -150,7 +150,9 @@ describe('the first match of every palette query the e2e suite runs', () => {
   ]
   for (const [query, id] of cases) {
     it(`"${query}" → ${id}`, () => {
-      expect(orderCommands(filterCommands(REGISTRY, query))[0]?.id).toBe(id)
+      // The palette's order: the sections, flattened (Palette.tsx).
+      const shown = groupCommands(filterCommands(REGISTRY, query)).flatMap((s) => s.commands)
+      expect(shown[0]?.id).toBe(id)
     })
   }
 

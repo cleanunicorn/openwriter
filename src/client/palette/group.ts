@@ -41,7 +41,3 @@ export function groupCommands(commands: Command[]): CommandSection[] {
     commands: commands.filter((command) => command.group === group),
   })).filter((section) => section.commands.length > 0)
 }
-
-/** The order the palette shows and the keyboard walks: the sections, flattened. */
-export const orderCommands = (commands: Command[]): Command[] =>
-  groupCommands(commands).flatMap((section) => section.commands)
