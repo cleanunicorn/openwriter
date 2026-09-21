@@ -127,9 +127,7 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   const targets = effectiveTargets(request.scope, request.targets, snapshot)
   // Picked now, not when the request was made: a held request then carries what became of the
   // job it waited for. A conversation's first turn sends no field at all.
-  const { jobs, order, threadStarts } = jobsStore.get()
-  const key = docKey(request.doc)
-  const conversation = threadFor(key, jobs, order, threadStarts[key] ?? null)
+  const conversation = threadOf(jobsStore.get(), request.doc)
   try {
     const job = await api.createJob({
       ...request,
