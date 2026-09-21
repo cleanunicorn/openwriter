@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { type DocRef, docKey } from '../../shared/api-types.ts'
+import type { DocRef } from '../../shared/api-types.ts'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
-import { docLabel, reviewLabel } from '../doc-label.ts'
+import { otherDocLabel, reviewLabel } from '../doc-label.ts'
 import { openDoc, useApp } from '../state/app.ts'
 import {
   type HeldRequest,
@@ -40,11 +40,7 @@ function TurnHeader({
   skill: string | null | undefined
 }) {
   // The transcript holds every document's turns; one about another document says which.
-  const other = useApp((state) =>
-    state.current !== null && docKey(state.current) === docKey(doc)
-      ? null
-      : docLabel(doc, state.articles),
-  )
+  const other = useApp((state) => otherDocLabel(doc, state.current, state.articles))
   return (
     <div className="tray-line">
       <span className="tray-instruction" title={instruction}>

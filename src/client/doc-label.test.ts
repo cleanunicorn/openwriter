@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { docLabel, reviewLabel } from './doc-label.ts'
+import { docLabel, otherDocLabel, reviewLabel } from './doc-label.ts'
 
 const articles = [{ slug: 'hello-openwrite', title: 'Hello, openwrite' }]
 const hello = { kind: 'article', slug: 'hello-openwrite' } as const
@@ -30,5 +30,13 @@ describe('reviewLabel', () => {
   it('names the other document', () => {
     expect(reviewLabel(hello, { kind: 'strategy' }, articles)).toBe('Review in Hello, openwrite')
     expect(reviewLabel({ kind: 'strategy' }, hello, articles)).toBe('Review in strategy.md')
+  })
+})
+
+describe('otherDocLabel', () => {
+  it('is null for the document on screen, and the label for another one', () => {
+    expect(otherDocLabel(hello, hello, articles)).toBeNull()
+    expect(otherDocLabel(hello, { kind: 'strategy' }, articles)).toBe('Hello, openwrite')
+    expect(otherDocLabel(hello, null, articles)).toBe('Hello, openwrite')
   })
 })
