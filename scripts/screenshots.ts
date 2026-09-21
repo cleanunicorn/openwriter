@@ -14,23 +14,23 @@ const out = path.join(root, 'docs', 'screenshots')
 mkdirSync(out, { recursive: true })
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control'
 
-async function fake(page: Page, route: 'waiting' | 'release'): Promise<void> {
-  if (route === 'release') {
-    await page.evaluate(() =>
-      fetch('/api/__fake/release', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      }),
-    )
-    return
-  }
-  await page.waitForFunction(
+/** Wait until the fake adapter holds a job at its checkpoint. */
+const waitForFakeJob = (page: Page) =>
+  page.waitForFunction(
     async () =>
       ((await (await fetch('/api/__fake/waiting')).json()) as { waiting: string[] }).waiting
         .length > 0,
   )
-}
+
+/** Let every held fake job finish. */
+const releaseFakeJobs = (page: Page) =>
+  page.evaluate(() =>
+    fetch('/api/__fake/release', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    }),
+  )
 
 const browser = await chromium.launch()
 let written = 0
@@ -59,8 +59,8 @@ try {
         .getByRole('textbox', { name: 'Instruction for the agent' })
         .fill('fake:multi tighten this section')
       await page.keyboard.press('Enter')
-      await fake(page, 'waiting')
-      await fake(page, 'release')
+      await waitForFakeJob(page)
+      await releaseFakeJobs(page)
       await page.getByTestId('ghost').first().waitFor()
       await page.getByRole('region', { name: 'Agent jobs' }).getByRole('button').first().click()
       await page.getByRole('region', { name: 'Agent', exact: true }).waitFor()
