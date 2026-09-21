@@ -133,6 +133,16 @@ export function Composer() {
             </button>
           </p>
         )}
+        {!empty && starters.length > 0 && (
+          // Once there is a conversation the drafts move here, still one click away.
+          <div className="composer-skills">
+            {starters.map((c) => (
+              <button key={c.id} type="button" className="chip" onClick={() => void c.run()}>
+                {c.title}
+              </button>
+            ))}
+          </div>
+        )}
         {ready && currentSkills.length > 0 && (
           <div className="composer-skills">
             {currentSkills.map((skill) => (

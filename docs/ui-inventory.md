@@ -35,8 +35,8 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | `new-article` | New article… | L·D | creating a file belongs with the file list |
 | `edit-strategy` | Edit strategy | L·D "strategy.md" | it opens a document |
 | `edit-brief` | Edit brief | L·D "Brief" | the current article's companion document |
-| `draft-brief` | Draft brief from my notes | R starter | an agent job, reviewed like any other |
-| `draft-article` | Draft article from brief | R starter | an agent job, reviewed like any other |
+| `draft-brief` | Draft brief from my notes | R starter (a row on an empty transcript, a chip under the composer after) | an agent job, reviewed like any other |
+| `draft-article` | Draft article from brief | R starter (a row on an empty transcript, a chip under the composer after) | an agent job, reviewed like any other |
 | `ask-article` | Instruct the agent: whole article… | R composer ("Ask about: whole article") | an agent request; the palette's own prompt stays too |
 | `ask-research` | Research question… | R composer ("Ask about: research") | an agent request; the palette's own prompt stays too |
 | `export-markdown` | Export: markdown + assets (zip) | L·A | the clearest action on the article |

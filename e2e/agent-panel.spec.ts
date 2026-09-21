@@ -179,3 +179,18 @@ test('an unsent message belongs to its document and is sent against it', async (
   }
   expect(job.doc.slug).toBe('hello-openwrite')
 })
+
+test('the draft starters stay one click away once the conversation has turns', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  const brief = agent(page).getByRole('button', { name: 'Draft brief from my notes' })
+  await expect(brief).toBeVisible()
+  await say(page, 'fake:upper make it louder')
+  await expectOneWaiting(app)
+  await expect(tray(page)).toContainText('make it louder')
+  await expect(brief).toBeVisible()
+  await expect(agent(page).getByRole('button', { name: 'Draft article from brief' })).toBeVisible()
+})
