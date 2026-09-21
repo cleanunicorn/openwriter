@@ -72,9 +72,8 @@ describe('layout.ts and theme.css agree', () => {
   })
 
   it('gives the column the same gutters', () => {
-    expect(css).toMatch(
-      new RegExp(`\\.column \\{\\s*width: min\\(var\\(--column\\), 100% - ${COLUMN_GUTTERS}px\\)`),
-    )
+    expect(css).toContain(`--column-width: min(var(--column), 100% - ${COLUMN_GUTTERS}px);`)
+    expect(css).toMatch(/\.column \{\s*width: var\(--column-width\)/)
   })
 
   it('moves the left handle at the same width the gutter reaches the edge', () => {

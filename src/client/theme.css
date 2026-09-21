@@ -12,6 +12,8 @@
   --del-bg: #f9dede;
   --code-bg: #f1efea;
   --column: 680px;
+  /* The column's width: 680px, less on a window too narrow for it plus its two 48px gutters. */
+  --column-width: min(var(--column), 100% - 96px);
   /* Edge panel widths; src/client/shell/layout.test.ts checks they match layout.ts. */
   --left-panel: 280px;
   --right-panel: 380px;
@@ -69,7 +71,7 @@ body {
 }
 
 .column {
-  width: min(var(--column), 100% - 96px);
+  width: var(--column-width);
   margin: 0 auto;
   padding: 72px 0 40vh;
 }
@@ -479,7 +481,7 @@ body[data-right="docked"] {
 /* No room beside the text: the agent panel follows the article instead of lying over it. */
 .shell-right[data-layout="stacked"] {
   position: static;
-  width: min(var(--column), 100% - 96px);
+  width: var(--column-width);
   margin: 0 auto;
   padding: 24px 0 96px;
   overflow: visible;
