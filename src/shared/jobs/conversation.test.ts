@@ -101,6 +101,15 @@ describe('threadFor', () => {
     expect(research?.notes).toHaveLength(CONVERSATION_LIMITS.notes)
   })
 
+  it('never cuts an emoji in half at a limit', () => {
+    // The cut lands between the two halves of 😀 (U+1F600, a surrogate pair).
+    const text = `${'a'.repeat(CONVERSATION_LIMITS.instruction - 2)}😀 and more`
+    const [turn] = thread([job({ instruction: text })])
+    expect(turn?.instruction).toBe(`${'a'.repeat(CONVERSATION_LIMITS.instruction - 2)}…`)
+    expect(turn?.instruction).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+    expect(Buffer.from(turn?.instruction ?? '').toString('utf8')).not.toContain('\uFFFD')
+  })
+
   it('has no summary for a turn without a result', () => {
     expect(thread([job({ state: 'running', result: null })])[0]?.summary).toBeNull()
   })

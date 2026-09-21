@@ -62,8 +62,14 @@ export function threadFor(
   return turns.slice(-CONVERSATION_LIMITS.turns)
 }
 
+/** At most `max` UTF-16 units, ending in `…`. Never splits a surrogate pair (an emoji, say). */
 const clip = (text: string, max: number): string =>
-  text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+  text.length <= max
+    ? text
+    : `${text
+        .slice(0, max - 1)
+        .replace(/[\uD800-\uDBFF]$/, '')
+        .trimEnd()}…`
 
 const SCOPE_NAMES: Record<Turn['scope'], string> = {
   blocks: 'a selection',
