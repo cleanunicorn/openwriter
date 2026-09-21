@@ -99,14 +99,13 @@ export function LeftPanel() {
               </details>
             </li>
           )}
-          {['workspace-open-path', 'workspace-new'].map((id) => {
-            const c = command(id)
-            return c === undefined ? null : (
-              <Item key={id} onClick={c.run}>
+          {['workspace-open-path', 'workspace-new']
+            .flatMap((id) => command(id) ?? [])
+            .map((c) => (
+              <Item key={c.id} onClick={c.run}>
                 {c.title}
               </Item>
-            )
-          })}
+            ))}
         </ul>
       </Section>
 
