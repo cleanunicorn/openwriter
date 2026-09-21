@@ -256,3 +256,21 @@ test('a message held behind a running job carries what became of that job', asyn
   expect(conversation).toContain('— rejected')
   expect(conversation).not.toContain('still running')
 })
+
+test('Escape in the message box hands the keyboard back and keeps the panel and the draft', async ({
+  page,
+}) => {
+  await openArticle(page)
+  const agentHandle = page.getByRole('button', { name: 'Agent', exact: true })
+  await agentHandle.focus()
+  await page.keyboard.press('Enter')
+  await expect(agent(page)).toBeVisible()
+  await expect(agentHandle).toBeFocused()
+
+  await message(page).focus()
+  await page.keyboard.type('half a thought')
+  await page.keyboard.press('Escape')
+  await expect(agentHandle).toBeFocused()
+  await expect(agent(page)).toBeVisible()
+  await expect(message(page)).toHaveValue('half a thought')
+})
