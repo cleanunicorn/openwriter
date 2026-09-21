@@ -12,7 +12,7 @@
   --del-bg: #f9dede;
   --code-bg: #f1efea;
   --column: 680px;
-  /* Edge panel widths; keep in step with src/client/shell/layout.ts. */
+  /* Edge panel widths; src/client/shell/layout.test.ts checks they match layout.ts. */
   --left-panel: 280px;
   --right-panel: 380px;
   color-scheme: light;
