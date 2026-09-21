@@ -312,7 +312,7 @@ src/client/           Vite + React
                         layout (pure: dock/stack/overlay), keys (pure: global key precedence), state
   palette/              Palette, commands (the command registry), group (the command taxonomy)
   jobs/                 PromptPill, selection, GhostDiff, Tray (the agent transcript), Composer,
-                        ResearchPanel, commands
+                        ResearchPanel, commands, instruction (the pure `/skill` parser)
   settings/             Settings, commands
   export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article

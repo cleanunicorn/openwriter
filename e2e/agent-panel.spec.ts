@@ -194,3 +194,19 @@ test('the draft starters stay one click away once the conversation has turns', a
   await expect(brief).toBeVisible()
   await expect(agent(page).getByRole('button', { name: 'Draft article from brief' })).toBeVisible()
 })
+
+test('a /skill message from the agent panel runs that skill with its own scope', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await say(page, '/diagram draw the pipeline')
+  const id = await expectOneWaiting(app)
+  const instruction = readFileSync(jobFile(app, id, 'instruction.md'), 'utf8')
+  expect(instruction).toContain('## Skill: diagram')
+  expect(instruction).toContain('draw the pipeline')
+  // diagram is a blocks-scope skill: the composer's "whole article" does not override it.
+  expect(JSON.parse(readFileSync(jobFile(app, id, 'targets.json'), 'utf8')).scope).toBe('blocks')
+  await expect(tray(page)).toContainText('/diagram')
+})

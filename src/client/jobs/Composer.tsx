@@ -12,7 +12,7 @@ import {
   useJobs,
 } from '../state/jobs.ts'
 import { targetsFor } from './commands.ts'
-import { parseInstruction } from './PromptPill.tsx'
+import { parseInstruction } from './instruction.ts'
 
 /**
  * The right panel's message box: whole-article instructions and research questions, `/name` for
