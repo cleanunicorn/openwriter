@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { BlockList } from './blocks/BlockList.tsx'
 import { useGhosts } from './jobs/GhostDiff.tsx'
 import { PromptPill } from './jobs/PromptPill.tsx'
-import { ResearchPanel } from './jobs/ResearchPanel.tsx'
 import { useSelectionPill } from './jobs/selection.ts'
 import { Tray } from './jobs/Tray.tsx'
 import './jobs/commands.ts'
@@ -28,6 +27,7 @@ import {
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
 import { routeKey } from './shell/keys.ts'
 import { LeftPanel } from './shell/LeftPanel.tsx'
+import { RightPanel } from './shell/RightPanel.tsx'
 import { Shell } from './shell/Shell.tsx'
 import { toggleLeft, toggleRight } from './shell/state.ts'
 
@@ -104,7 +104,7 @@ export function App() {
 
   return (
     <>
-      <Shell left={<LeftPanel />} right={null}>
+      <Shell left={<LeftPanel />} right={<RightPanel />}>
         <main className="column" data-doc-status={doc?.status ?? 'none'}>
           {doc !== null && doc.notice !== null && (
             <p className="notice" role="status" aria-label="Document notice">
@@ -190,7 +190,6 @@ export function App() {
           )}
         </main>
       </Shell>
-      <ResearchPanel />
       <Tray />
       {panel === 'settings' && <Settings />}
       {palette !== null && <Palette mode={palette} />}

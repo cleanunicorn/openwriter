@@ -23,6 +23,7 @@ import {
   store,
 } from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
+import { setRightOpen } from '../shell/state.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
 /** A request the scheduler holds back until the jobs ahead of it are settled. */
@@ -34,17 +35,21 @@ export type JobsState = {
   held: HeldRequest[]
   /** jobId → op index → IDs of the blocks that op inserted (keeps result order across accepts). */
   inserted: Record<string, Record<number, string[]>>
-  trayOpen: boolean
   researchJobId: string | null
+  /** The right panel's unsent message: it survives closing the panel. */
+  composer: ComposerDraft
 }
+
+export type ComposerDraft = { text: string; scope: 'article' | 'research' }
+const EMPTY_COMPOSER: ComposerDraft = { text: '', scope: 'article' }
 
 const jobsStore = createStore<JobsState>({
   jobs: {},
   order: [],
   held: [],
   inserted: {},
-  trayOpen: false,
   researchJobId: null,
+  composer: EMPTY_COMPOSER,
 })
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
@@ -82,16 +87,16 @@ function upsert(job: Job): void {
   // The POST response can arrive after newer SSE events for the same job; never go backwards.
   const known = jobsStore.get().jobs[job.id]
   if (known !== undefined && known.revision >= job.revision && known !== job) return
+  const answered = job.scope === 'research' && job.state === 'ready' && known?.state !== 'ready'
   jobsStore.set((state) => ({
     ...state,
     jobs: { ...state.jobs, [job.id]: job },
     order: state.order.includes(job.id) ? state.order : [...state.order, job.id],
     // A research answer opens its panel when it arrives; nothing steals the keyboard focus.
-    researchJobId:
-      job.scope === 'research' && job.state === 'ready' && state.jobs[job.id]?.state !== 'ready'
-        ? job.id
-        : state.researchJobId,
+    researchJobId: answered ? job.id : state.researchJobId,
   }))
+  // The answer shows in the agent panel, opened for it; the keyboard stays where the writer is.
+  if (answered) setRightOpen(true)
 }
 
 /** Post a request with a fresh snapshot of the live document, focused editor included. */
@@ -313,7 +318,8 @@ export function insertNote(job: Job, markdown: string): void {
   dispatchDoc(job.doc, { type: 'insert', index, markdown })
 }
 
-export const setTrayOpen = (trayOpen: boolean) => jobsStore.set((state) => ({ ...state, trayOpen }))
+export const setComposer = (patch: Partial<ComposerDraft>) =>
+  jobsStore.set((state) => ({ ...state, composer: { ...state.composer, ...patch } }))
 export const setResearchJob = (researchJobId: string | null) =>
   jobsStore.set((state) => ({ ...state, researchJobId }))
 
@@ -394,7 +400,7 @@ async function sync(): Promise<void> {
 
 /**
  * Forget this workspace's jobs and load the other one's. Everything keyed by job id has to go:
- * the tray, the held requests, the decisions on their way to the server, and the module state
+ * the transcript, the held requests, the decisions on their way to the server, and the module state
  * beside the store. `firstSync` goes back to true for the same reason a page reload sets it —
  * the client holds no block IDs for the new workspace's documents, so a job found unsettled
  * there cannot be applied and is marked stale with its output kept.
@@ -405,8 +411,8 @@ export async function resetJobs(): Promise<void> {
     order: [],
     held: [],
     inserted: {},
-    trayOpen: false,
     researchJobId: null,
+    composer: EMPTY_COMPOSER,
   }))
   createdHere.clear()
   inFlight.clear()

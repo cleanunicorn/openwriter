@@ -64,23 +64,31 @@ export function setRightOpen(open: boolean): void {
   void saveUi({ rightPanel: open })
 }
 
+/**
+ * Give the keyboard to an element that mounts on a coming render: look for it for a few frames
+ * rather than guessing when React commits.
+ */
+export function focusWhenMounted(find: () => HTMLElement | null, frames = 10): void {
+  const attempt = () => {
+    const element = find()
+    if (element !== null) element.focus()
+    else if (--frames > 0) requestAnimationFrame(attempt)
+  }
+  requestAnimationFrame(attempt)
+}
+
 /** "Go to …": open the panel, bring it into view, and give its first control the keyboard. */
 export function goToPanel(id: 'left-panel' | 'right-panel'): void {
   if (id === 'left-panel') setLeftOpen(true)
   else setRightOpen(true)
-  // The panel mounts on the next render; look for it for a few frames rather than guessing when.
-  let frames = 10
-  const focus = () => {
+  focusWhenMounted(() => {
     const panel = document.getElementById(id)
-    if (panel === null) {
-      if (--frames > 0) requestAnimationFrame(focus)
-      return
-    }
+    if (panel === null) return null
     panel.scrollIntoView({ block: 'nearest' })
-    const first = panel.querySelector<HTMLElement>(
-      'button, a[href], input, textarea, select, summary, [tabindex="0"]',
+    return (
+      panel.querySelector<HTMLElement>(
+        'button, a[href], input, textarea, select, summary, [tabindex="0"]',
+      ) ?? panel
     )
-    ;(first ?? panel).focus()
-  }
-  requestAnimationFrame(focus)
+  })
 }

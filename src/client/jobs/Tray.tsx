@@ -4,13 +4,30 @@ import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
 import { openDoc } from '../state/app.ts'
 import {
+  type HeldRequest,
   cancelJob,
   dismissJob,
   dropHeld,
   setResearchJob,
-  setTrayOpen,
   useJobs,
 } from '../state/jobs.ts'
+import { focusWhenMounted, layoutOf, setRightOpen, useShell } from '../shell/state.ts'
+
+const SCOPES: Record<Job['scope'], string> = {
+  blocks: 'selection',
+  article: 'whole article',
+  research: 'research',
+}
+
+/** What a turn was about, at a glance: its scope and, when there is one, its skill. */
+function Chips({ scope, skill }: { scope: Job['scope']; skill: string | null | undefined }) {
+  return (
+    <span className="turn-chips">
+      <span className="chip">{SCOPES[scope]}</span>
+      {skill != null && <span className="chip">/{skill}</span>}
+    </span>
+  )
+}
 
 const LABELS: Record<Job['state'], string> = {
   queued: 'waiting for a free slot',
@@ -64,6 +81,9 @@ function JobRow({ job }: { job: Job }) {
     <li className="tray-job" data-state={job.state}>
       <div className="tray-line">
         <span className="tray-instruction">{job.instruction}</span>
+        <Chips scope={job.scope} skill={job.skill} />
+      </div>
+      <div className="tray-line">
         <span className="tray-state">
           {LABELS[job.state]}
           {job.reason !== null && ` · ${REASONS[job.reason]}`}
@@ -107,15 +127,31 @@ function JobRow({ job }: { job: Job }) {
   )
 }
 
-/** Unobtrusive: exists only while there is a job, and shows a count until it is opened. */
-export function Tray() {
+function HeldRow({ request }: { request: HeldRequest }) {
+  return (
+    <li className="tray-job" data-state="held">
+      <div className="tray-line">
+        <span className="tray-instruction">{request.request.instruction}</span>
+        <Chips scope={request.request.scope} skill={request.request.skill} />
+      </div>
+      <div className="tray-line">
+        <span className="tray-state">queued behind another job</span>
+      </div>
+      <div className="tray-actions">
+        <button type="button" className="link" onClick={() => dropHeld(request.id)}>
+          Cancel
+        </button>
+      </div>
+    </li>
+  )
+}
+
+/** Every job of this workspace, oldest first, and the one-line count that sums them up. */
+function useTranscript() {
   const jobs = useJobs((state) => state.jobs)
   const order = useJobs((state) => state.order)
   const held = useJobs((state) => state.held)
-  const open = useJobs((state) => state.trayOpen)
   const list = order.flatMap((id) => (jobs[id] === undefined ? [] : [jobs[id]]))
-  if (list.length === 0 && held.length === 0) return null
-
   const running = list.filter((job) => isActive(job.state)).length + held.length
   const review = list.filter((job) => job.state === 'ready').length
   const failed = list.filter((job) => job.state === 'failed' || job.state === 'stale').length
@@ -127,34 +163,43 @@ export function Tray() {
     ]
       .filter(Boolean)
       .join(' · ') || `${list.length} done`
+  return { list, held, label, empty: list.length === 0 && held.length === 0 }
+}
+
+/**
+ * The agent conversation: each job is a turn — what the writer asked, then what came of it. It
+ * lives in the right panel. While the panel is closed only its one-line count shows, bottom right,
+ * and clicking it opens the panel. It exists only while there is a job.
+ */
+export function Tray({ inPanel = false }: { inPanel?: boolean }) {
+  const { list, held, label, empty } = useTranscript()
+  const panelOpen = useShell((state) => layoutOf(state).right !== 'closed')
+  if (empty || panelOpen !== inPanel) return null
 
   return (
-    <section className="tray" aria-label="Agent jobs">
+    <section className={inPanel ? 'tray transcript' : 'tray'} aria-label="Agent jobs">
       <button
         type="button"
         className="tray-toggle"
-        aria-expanded={open}
-        onClick={() => setTrayOpen(!open)}
+        aria-expanded={inPanel}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={(event) => {
+          // The count moves between the corner and the panel; a keyboard user keeps holding it.
+          const hadFocus = document.activeElement === event.currentTarget
+          setRightOpen(!inPanel)
+          const other = inPanel ? '.tray:not(.transcript)' : '.transcript'
+          if (hadFocus) focusWhenMounted(() => document.querySelector(`${other} > .tray-toggle`))
+        }}
       >
         {label}
       </button>
-      {open && (
+      {inPanel && (
         <ul className="tray-list">
-          {held.map((request) => (
-            <li key={request.id} className="tray-job" data-state="held">
-              <div className="tray-line">
-                <span className="tray-instruction">{request.request.instruction}</span>
-                <span className="tray-state">queued behind another job</span>
-              </div>
-              <div className="tray-actions">
-                <button type="button" className="link" onClick={() => dropHeld(request.id)}>
-                  Cancel
-                </button>
-              </div>
-            </li>
-          ))}
-          {[...list].reverse().map((job) => (
+          {list.map((job) => (
             <JobRow key={job.id} job={job} />
+          ))}
+          {held.map((request) => (
+            <HeldRow key={request.id} request={request} />
           ))}
         </ul>
       )}

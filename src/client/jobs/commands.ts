@@ -2,7 +2,7 @@ import type { DocRef } from '../../shared/api-types.ts'
 import type { Scope } from '../../shared/jobs/job-types.ts'
 import { registerCommands } from '../palette/commands.ts'
 import { currentDoc, setPalette } from '../state/app.ts'
-import { requestJob, setTrayOpen } from '../state/jobs.ts'
+import { requestJob } from '../state/jobs.ts'
 
 /** Ask for an instruction in the palette, then start an ordinary job with it. */
 function askInPalette(options: {
@@ -29,7 +29,7 @@ function askInPalette(options: {
 }
 
 /** What a palette-started skill works on: the selection if there is one, else by scope. */
-function targetsFor(scope: Scope, selectedIds: string[], content: string[]): string[] {
+export function targetsFor(scope: Scope, selectedIds: string[], content: string[]): string[] {
   if (scope === 'research') return []
   if (selectedIds.length > 0) return selectedIds
   if (scope === 'article') return content
@@ -70,7 +70,6 @@ registerCommands((state) => {
           scope: 'research',
         }),
     },
-    { id: 'show-jobs', title: 'Show agent jobs', group: 'agent', run: () => setTrayOpen(true) },
     // One command per skill file. A new media type adds a file to skills/, never code here.
     ...state.skills
       .filter((skill) => skill.document === 'current')
