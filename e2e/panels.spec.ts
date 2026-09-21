@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
@@ -452,4 +452,24 @@ test('the left panel shows no hint it would have to cut short, and keeps the res
   ).toBeVisible()
   await expect(actions.getByRole('button', { name: 'Settings…', exact: true })).toBeVisible()
   await expect(leftPanel(page).getByTitle('brief for hello-openwrite')).toBeVisible()
+})
+
+test('with an invalid config.json a toggle still works and the file is never overwritten', async ({
+  page,
+  app,
+}) => {
+  const broken = '{ "concurrency": "many" }'
+  writeFileSync(configPath(app), broken)
+  let puts = 0
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().endsWith('/api/config')) puts += 1
+  })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await expect(leftPanel(page)).toBeVisible()
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await expect(rightPanel(page)).toBeVisible()
+  // The server would refuse with 409 anyway; the toggle must not even try.
+  expect(puts).toBe(0)
+  expect(readFileSync(configPath(app), 'utf8')).toBe(broken)
 })
