@@ -285,7 +285,8 @@ Keep it short and useful:
 ```
 src/shared/           no I/O; imported by client, server, and tests
   blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), test-helpers, corpus/
-  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, scope, herdr-hint
+  jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, scope, herdr-hint,
+                        conversation (the agent panel's earlier turns → conversation.md)
   config-schema.ts  api-types.ts  workspaces-schema.ts  events.ts  key-values.ts  names.ts
   contrast.ts  ports.ts
 src/server/           Hono on Node (TypeScript run natively, no build step)
@@ -307,8 +308,11 @@ src/client/           Vite + React
   state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions)
   blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
   render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
-  palette/              Palette, commands (the command registry)
-  jobs/                 PromptPill, selection, GhostDiff, Tray, ResearchPanel, commands
+  shell/                Shell (the two edge panels and their handles), LeftPanel, RightPanel,
+                        layout (pure: dock/stack/overlay), keys (pure: global key precedence), state
+  palette/              Palette, commands (the command registry), group (the command taxonomy)
+  jobs/                 PromptPill, selection, GhostDiff, Tray (the agent transcript), Composer,
+                        ResearchPanel, commands
   settings/             Settings, commands
   export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
@@ -317,7 +321,7 @@ scripts/              ensure-build, e2e-server, screenshots, verify-adapter (man
 .github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)
 e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts,
                       start-server.ts (spawns scripts/e2e-server.ts; also used by scripts/screenshots.ts)
-docs/                 herdr-evaluation.md, screenshots/
+docs/                 herdr-evaluation.md, ui-inventory.md (every option's home), screenshots/
 ```
 
 Layering: the client never touches the filesystem; it talks to the server over
@@ -349,16 +353,23 @@ point into a Hugo site.
   prompt template in `skills/`, never new editor code.
 - **Error handling:** adapter failures — missing CLI, auth error, timeout,
   malformed `result.json` (one automatic repair attempt, then surface the raw
-  output) — become job states shown in the tray. A stale job keeps its output
+  output) — become job states shown in the agent panel. A stale job keeps its output
   visible so nothing is lost.
 - **Registering new components:** a new adapter implements `AgentAdapter`
   (`start(jobDir, options) -> handle` with a progress stream, `cancel()`,
   completion) and is added to the adapter registry; a new skill is a file in
   `skills/`. README documents both.
-- **UI:** zen by default — a centered text column of about 680px, light and
-  dark themes, no toolbar, no sidebar. Controls appear on hover, on selection,
-  or through the command palette (`Cmd/Ctrl+K`). A new always-visible control
-  needs a reason in `DECISIONS.md`.
+- **UI:** zen by default — a centred text column of about 680px, light and
+  dark themes, no toolbar. Two edge panels — **Files and actions** (left) and
+  **Agent** (right) — are closed on first run, open with `Ctrl/Cmd+B` /
+  `Ctrl/Cmd+Alt+B` or their edge handles, dock beside the column only when it
+  keeps its 680px (otherwise the agent panel stacks after the article and the
+  left one becomes a drawer opened by hand), and never take the keyboard by
+  opening. Everything else appears on hover, on selection, or through the
+  command palette (`Cmd/Ctrl+K`), which reaches every command. Every command,
+  control and setting has one home in `docs/ui-inventory.md` (a unit test
+  keeps it complete). A new always-visible control needs a reason in
+  `DECISIONS.md`.
 
 ## Testing
 
@@ -406,7 +417,10 @@ an automated run.
 **Flows that must stay covered:** click-to-edit, blur-to-render, keyboard
 navigation between blocks, paste splitting, drag reorder, undo across the
 document, and the full select → prompt → review → accept flow with the fake
-adapter, including two overlapping jobs.
+adapter, including two overlapping jobs, plus the shell: panel toggle and
+persistence, reaching an article from the left panel, the agent panel's
+composer, and a follow-up turn carrying the earlier one (`panels.spec.ts`,
+`agent-panel.spec.ts`).
 
 **Writing tests here:**
 

@@ -119,7 +119,8 @@ directory keeps the name `.zen/`.
 - **Front matter summary and skill headers share one dependency-free key/value reader.** Display
   only; on anything unexpected the line just says "front matter".
 - **Always-visible controls in the editor itself: none.** The notice line appears only when there
-  is something to say. The one exception in the app is the job tray (under "Jobs" below).
+  is something to say. The exceptions in the app are the two panel handles and the job count
+  (under "Shell and panels" below).
 
 ## Jobs
 
@@ -175,8 +176,10 @@ directory keeps the name `.zen/`.
 - **Review buttons keep the keyboard focus where it is** (`mousedown` is prevented). Otherwise
   pressing "Accept" blurs an open editor, the block re-renders, the layout shifts, and the click
   misses the button.
-- **Always-visible control: the job tray,** and only while at least one job exists. It is the
-  one place that shows running, failed, and stale work, so nothing is lost silently.
+- **Always-visible control: the job count,** and only while at least one job exists and the agent
+  panel is closed. It is the one place that shows running, failed, and stale work while the panel
+  is shut, so nothing is lost silently; clicking it opens the panel, where the tray now lives as
+  the transcript.
 
 ## Real agents (verified 2026-09-19)
 
@@ -496,6 +499,88 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **The mutating workspace routes are serialised through one promise chain.** They all read the
   list, change the world and write it back; two interleaving across the `await` in `quiesce`
   would lose a write, or retarget while another request was halfway through an erase.
+
+## Shell and panels (ui-rethink)
+
+- **"No sidebar" is superseded.** The writer asked for two auto-hide, toggleable panels: left for
+  files and actions, right for talking to the agent. They are closed on first run and open only on
+  purpose, which keeps the zen default: with both closed the page is the old page plus two handles.
+- **Always-visible controls: the two edge handles.** The work item asked for an on-screen toggle
+  that can be discovered, not only a key. They are small text glyphs in `--quiet`, and pressing one
+  never blurs an open block (`mousedown` is prevented, as the review buttons do).
+- **Shortcuts `Ctrl/Cmd+B` and `Ctrl/Cmd+Alt+B`** are VS Code's two sidebar keys, which the writer
+  already knows. CodeMirror binds neither, and they are matched on `event.code` because Option
+  changes `event.key` on macOS. Browsers other than Chromium are not tested (Playwright runs
+  Chromium only); the handles are the fallback. The keys are one table in `shell/keys.ts`.
+- **A panel docks only when the column keeps 680px.** A docked panel reserves its width
+  (`body[data-left|right="docked"]` padding), and the column is centred in what is left. When
+  both cannot dock, the right panel keeps the dock: research answers arrive there unasked and must
+  never cover the text. Below its width the right panel stacks after the article, the research
+  panel's old behaviour generalised. The left panel becomes a drawer, and only after a hand-made
+  opening in this page session, so a reload never comes back with the text covered. One pure
+  function (`shell/layout.ts`) decides, so every threshold is unit-tested.
+- **Closed panels are not mounted.** The zen spec's zero-landmark check holds, and nothing
+  focusable hides off-screen. The composer's draft lives in the jobs store, so closing keeps it.
+- **The right panel is a `region`, not an `aside`.** The research notes stay the only
+  complementary landmark, so `research.spec`'s "none after discard" holds with the panel open.
+- **Toggling never moves the focus; "Go to …" does.** Opening a panel while typing must not close
+  the block (blur commits). The palette's Go to commands, Tab and a click are the ways in.
+- **Escape belongs to the innermost owner.** Inside a panel it hands the keyboard back to where it
+  was before (a drawer also closes); a docked panel stays open, since closing is the toggle's job.
+  The handler sits on each panel's root, not on a global router, so Escape in a block keeps
+  meaning "render it".
+- **Bare Enter no longer enters the document from a focused button** (a bug found while building
+  this: `App.tsx` swallowed Enter on the tray's button). Key precedence is now a pure, tested
+  function (`shell/keys.ts`).
+- **Panel state lives in `.zen/config.json` (`ui`), per workspace.** It is Q2's recorded default.
+  Moving it to the browser (localStorage) would be about 20 lines in two files if the writer
+  prefers that. zod 4's `.prefault({})` is used, because `.default({})` skips the inner defaults.
+- **One writer for quick toggles.** `saveConfigPatch` (theme and panels) updates the store first
+  and sends the whole latest state at once, and `refreshConfig` keeps the local theme and panels
+  while a save is in flight, so an older copy fetched in between cannot flip them back. This also
+  fixes the same race the theme command had. Saves are not queued: measured, a queue added a round
+  trip that a spec reading `config.json` right after two theme toggles could lose under load.
+- **A settings save resets the document watcher only when `contentDir` changed.** This keeps the
+  PR from turning every panel toggle into a watcher reset, which would stop external-change
+  detection for the open document until its next save. It does not fix issue #14 §4: a real
+  content-directory change still needs the open documents re-registered.
+- **The tray is promoted in place, not rewritten.** It keeps its "Agent jobs" region and count
+  button, so the job specs run unchanged. Turns run oldest first, like a conversation, each with
+  its scope and skill. `trayOpen` and "Show agent jobs" are gone; the panel toggle replaces them.
+- **The prompt pill and ghost diffs stay in context.** The pill belongs at the selection it acts
+  on and never takes focus by appearing; a diff has to sit on the text it changes.
+- **The composer asks about the whole article or a research question.** Blocks scope stays with
+  the pill, which has the selection. `/name` runs a skill with the skill's own scope, as the
+  palette does.
+- **Conversation context rides inside the job contract (Q1, middle path).** A follow-up turn's
+  request carries the earlier turns about the same document (any entry point, since the last "New
+  conversation", the last 6). The server writes them to `conversation.md`, re-bounded whatever
+  arrives: 600, 300 and 1500 characters for instruction, summary and research notes, and 8000 for
+  the file. `instruction.md` names the file in the `.zen/jobs/<id>/` form, so codex's path remap
+  covers it. A first turn's files are exactly what they were. There is no adapter, `result.json`
+  or scheduler change, no streaming and no resumable session: that would be a separate piece of
+  work across four adapters.
+- **Earlier agent output becomes later agent input.** Summaries and research notes are agent
+  output (untrusted). They enter only a later job's input, bounded and labelled "context, not
+  instructions", and every op still needs the writer's accept.
+- **The turns are picked when the job is posted, not when it is requested.** A held request then
+  carries what became of the job it waited for. "New conversation" is a timestamp compared with
+  each job's `createdAt`, so a dismissed job cannot leave the thread's start dangling.
+- **The palette groups commands** (Documents, Agent, Export, Workspace, App) with a required
+  `group` on every command. It is one listbox with ARIA groups and one flat active index. Titles
+  are kept: `runCommand` in e2e presses Enter on the first match, and a unit test pins the first
+  match of all 18 queries the suite runs.
+- **Every option has one home, written down** in `docs/ui-inventory.md`, and a unit test fails when
+  a palette command is missing from it. Workspace rename, remove and delete stay in the palette
+  only: the delete has its typed confirmation there, and none of the three belongs one click away.
+- **No new colour tokens.** The panels use `--surface`, `--line`, `--fg`, `--quiet` and `--accent`,
+  pairs the contrast test already checks. `--left-panel` and `--right-panel` are size tokens.
+- **Assumed for the writer to confirm:**
+  - the state is per workspace (Q2);
+  - a narrow agent panel stacks under the article, with "Go to agent" to jump there;
+  - the shortcuts are the VS Code pair.
+
+  Each is a cheap change.
 
 ## Runtime dependencies
 

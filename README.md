@@ -35,7 +35,20 @@ The server binds `127.0.0.1` only.
   arrows, `Space`).
 - `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` undo and redo across the whole document, reorders included.
 - Paste or drop an image: it is saved next to the article and referenced with a relative path.
-- `Ctrl/Cmd+K` opens the command palette: switch article, new article, theme, and more.
+- Two edge panels, both closed at first: **Files and actions** on the left (`Ctrl/Cmd+B` or the
+  handle at the left edge) and **Agent** on the right (`Ctrl/Cmd+Alt+B` or the right handle).
+  The left one lists the workspace, every article (the open one marked), New article,
+  `strategy.md`, the article's brief, export, theme and settings. Opening or closing a panel
+  never takes the keyboard from the block you are typing in. Their open/closed state is kept in
+  `.zen/config.json`.
+- A panel docks beside the text only when the text keeps its full width. On a narrower window
+  the agent panel follows the article, and the left panel slides over the page as a drawer that
+  a pick, `Esc` or a click elsewhere closes.
+- `Esc` inside a panel gives the keyboard back to where it was. Elsewhere it does what it always
+  did: render the open block, close the pill, the palette or the settings.
+- `Ctrl/Cmd+K` opens the command palette, grouped by Documents, Agent, Export, Workspace and App.
+  It reaches every command, including the ones the panels show. Every command, control and setting
+  has one home, listed in [docs/ui-inventory.md](docs/ui-inventory.md).
 - Changes are saved automatically. If the file changes on disk, the editor reloads it and keeps
   the block you are typing in.
 
@@ -44,8 +57,16 @@ The server binds `127.0.0.1` only.
 - Select text in a block, or select whole blocks (click the left margin, shift-click or drag to
   extend), and a small prompt pill appears. Start typing (or press `Ctrl/Cmd+I` from inside an
   editor), press `Enter`, and carry on writing. `/skill-name` at the start runs a skill.
+- The **Agent** panel on the right is the conversation. It has:
+  - a message box for the whole article or a research question (`Enter` sends, `Shift+Enter`
+    starts a new line, `/name` runs a skill);
+  - every job as a turn, oldest first, with its scope, progress, result and actions.
+
+  Each message is an ordinary job, reviewed like one from the pill. A follow-up ("make it
+  shorter") carries the earlier turns about the same document to the agent. The panel says how
+  many, and **New conversation** starts clean.
 - A job's scope is `selection` (the target blocks), `whole article`, or `research` (no edits; the
-  answer opens in a side panel where any note can be inserted as a block).
+  answer opens at the top of the agent panel, where any note can be inserted as a block).
 - Results arrive as ghost diffs in place: replacements as inline diffs, insertions as ghost
   blocks, deletions struck through. Accept or reject per change or for the whole job — by mouse,
   or focus a change and press `Enter` / `Backspace` (`Ctrl/Cmd+Enter` / `Ctrl/Cmd+Backspace` for
@@ -56,8 +77,9 @@ The server binds `127.0.0.1` only.
   text and marked "changed since request".
 - If a save fails, a notice stays in view and the save is retried by itself; leaving the tab
   saves at once.
-- The tray in the bottom-right corner appears while there are jobs: status, streamed progress,
-  cancel, and the raw output of failed or stale jobs.
+- While the agent panel is closed, a job count in the bottom-right corner shows running, review
+  and failed work; clicking it opens the panel. There each job shows its status, streamed
+  progress, cancel, and the raw output of failed or stale jobs.
 
 ## Workspace layout
 
@@ -81,7 +103,8 @@ wants them and `hugo server` is the true preview.
 You can work on more than one workspace without restarting the server. The editor opens
 another one, creates one, and remembers the ones you have opened.
 
-Everything is reached from the command palette (`Cmd/Ctrl+K`) — there is no new toolbar:
+Switching, opening and creating are in the left panel's Workspace section and in the command
+palette (`Cmd/Ctrl+K`). Renaming, removing and deleting are in the palette only:
 
 | Command | What it does |
 | --- | --- |
@@ -168,7 +191,7 @@ node scripts/verify-adapter.ts codex
 [herdr](https://herdr.dev) is a terminal multiplexer for coding agents. With `mainAgent: "herdr"`
 a job runs as an interactive `claude` in a pane of the named herdr session `openwrite-jobs`
 (`adapters.herdr.session` changes the name), confined exactly like the direct adapter. You can
-attach while it runs — the tray shows `herdr session attach openwrite-jobs` — watch sub-agents,
+attach while it runs — the agent panel shows `herdr session attach openwrite-jobs` — watch sub-agents,
 and step in when the agent blocks; the job still completes through the file contract. It needs
 `herdr` on `PATH`, has no spend cap, and supports claude only. What was tried and why it was
 adopted: [docs/herdr-evaluation.md](docs/herdr-evaluation.md).
@@ -195,8 +218,8 @@ An adapter only launches a process and relays progress; the file contract does t
 
 Media types are agent skills, not editor features: the editor only knows that a job can return
 assets plus blocks that reference them. A skill is a prompt template in `skills/` that any
-adapter can run. Run one from the palette (`Run skill: <name>`) or start an instruction with
-`/name`.
+adapter can run. Run one from the palette (`Run skill: <name>`), from its `/name` chip in the agent panel, or
+start an instruction with `/name`.
 
 | Skill | What it does |
 | --- | --- |
@@ -204,7 +227,7 @@ adapter can run. Run one from the palette (`Run skill: <name>`) or start an inst
 | `terminal-recording` | writes a script, records it with `asciinema`, converts it to a gif with `agg`, returns the cast and the gif. Needs both tools on `PATH`; when one is missing the job fails at once with "Missing on PATH: …" and no agent is started. openwrite never installs them. |
 | `image` | runs on the agent configured for image tasks in settings (`taskAgents.image`), otherwise on the main agent |
 | `video` | **a stub.** It is listed and refuses to run. A real one would be a prompt like `image`, an agent or tool that can produce video, and an `.mp4`/`.webm` asset referenced from a Hugo `video` shortcode or a `<video>` tag. |
-| `draft-brief`, `draft-article` | behind the palette's "Draft brief from my notes" and "Draft article from brief" |
+| `draft-brief`, `draft-article` | behind "Draft brief from my notes" and "Draft article from brief", in the palette and as starters in the empty agent panel |
 
 ## Adding a skill
 
@@ -232,7 +255,8 @@ format to the contract.
 
 ## Export
 
-From the palette, for the article on screen; each produces a zip download:
+From the left panel's Actions or the palette, for the article on screen; each produces a zip
+download:
 
 - **Export: markdown + assets** — the leaf bundle as is: exact markdown bytes and every file next
   to it.
@@ -255,6 +279,7 @@ the server creates `<workspace>/.zen/jobs/<id>/`:
 | `article.md` | server | a snapshot of the document, each block wrapped in `<!-- zen:block id=bN -->` … `<!-- /zen:block -->`; targets carry `target`. Markers exist only here, never in the article. An empty document has the virtual block `b0`. |
 | `targets.json` | server | `{ "scope", "blockIds", "selection" }` — `selection` has the selected text and, for a selection made in edit mode, `from`/`to` offsets into the block |
 | `strategy.md`, `brief.md` | server | copies of the workspace strategy and the article's brief |
+| `conversation.md` | server | only on a follow-up turn: the earlier turns about the same document, oldest first, with what came of each. At most 6 turns: 600, 300 and 1500 characters for instruction, summary and research notes, 8000 for the file. Named in `instruction.md`'s Context list; absent on a first turn. |
 | `job.json`, `progress.log` | server | lifecycle state (`version: 1`), the settings the job was launched with, bounded progress log |
 | `result.json` | agent | the proposal (below) |
 | `assets/` | agent | generated files, referenced from markdown as `assets/<file>` |
@@ -283,7 +308,7 @@ else.
 The file is validated with zod (unknown ops or keys reject it) and then against the job: for
 `blocks` scope, ops may only touch the target blocks or insert next to them; `research` must have
 no ops; asset paths must stay inside `assets/` and exist. A rejected result gets one automatic
-repair attempt; after that the job fails and the raw output is shown in the tray.
+repair attempt; after that the job fails and the raw output is shown in the agent panel.
 
 Job states: `queued → running → validating → (repairing →) ready → settled`, or `failed`
 (`missing-cli`, `missing-tool`, `auth`, `timeout`, `invalid-result`, `exit`), `cancelled`,
