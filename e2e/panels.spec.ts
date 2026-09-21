@@ -440,3 +440,16 @@ test("the edge handles are 24px targets that never sit on a block's drag handle"
     }
   }
 })
+
+test('the left panel shows no hint it would have to cut short, and keeps the rest readable', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  const actions = leftPanel(page).getByRole('region', { name: 'Actions' })
+  await expect(
+    actions.getByRole('button', { name: 'Export: markdown + assets (zip)', exact: true }),
+  ).toBeVisible()
+  await expect(actions.getByRole('button', { name: 'Settings…', exact: true })).toBeVisible()
+  await expect(leftPanel(page).getByTitle('brief for hello-openwrite')).toBeVisible()
+})

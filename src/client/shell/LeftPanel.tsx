@@ -34,7 +34,12 @@ function Item({
         onClick={pick(onClick)}
       >
         <span>{children}</span>
-        {hint !== undefined && <span className="quiet">{hint}</span>}
+        {/* A hint may be cut short with an ellipsis; the tooltip keeps all of it. */}
+        {hint !== undefined && (
+          <span className="quiet" title={hint}>
+            {hint}
+          </span>
+        )}
       </button>
     </li>
   )
@@ -87,6 +92,7 @@ export function LeftPanel() {
                 <summary>Switch workspace</summary>
                 <ul className="panel-list">
                   {switches.map((c) => (
+                    // The path tells two workspaces with the same name apart.
                     <Item key={c.id} hint={c.hint} onClick={c.run}>
                       {c.title.replace(/^Switch to workspace: /, '')}
                     </Item>
@@ -140,7 +146,8 @@ export function LeftPanel() {
       <Section id="left-actions" title="Actions">
         <ul className="panel-list">
           {actions.map((c) => (
-            <Item key={c.id} hint={c.hint} onClick={c.run}>
+            // No hint here: they were written for the wide palette, and the titles say enough.
+            <Item key={c.id} onClick={c.run}>
               {c.title}
             </Item>
           ))}

@@ -87,7 +87,9 @@ function JobRow({ job }: { job: Job }) {
   return (
     <li className="tray-job" data-state={job.state}>
       <div className="tray-line">
-        <span className="tray-instruction">{job.instruction}</span>
+        <span className="tray-instruction" title={job.instruction}>
+          {job.instruction}
+        </span>
         <Chips scope={job.scope} skill={job.skill} />
       </div>
       <div className="tray-line">
@@ -138,7 +140,9 @@ function HeldRow({ request }: { request: HeldRequest }) {
   return (
     <li className="tray-job" data-state="held">
       <div className="tray-line">
-        <span className="tray-instruction">{request.request.instruction}</span>
+        <span className="tray-instruction" title={request.request.instruction}>
+          {request.request.instruction}
+        </span>
         <Chips scope={request.request.scope} skill={request.request.skill} />
       </div>
       <div className="tray-line">
