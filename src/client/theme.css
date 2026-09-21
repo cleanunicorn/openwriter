@@ -496,7 +496,8 @@ body[data-right="stacked"] .column {
   position: fixed;
   top: 50%;
   z-index: 17;
-  width: 20px;
+  /* 24px: the WCAG 2.5.8 minimum target, with no need to count on the space around it. */
+  width: 24px;
   height: 48px;
   padding: 0;
   border: 0;
@@ -534,6 +535,17 @@ body[data-left="overlay"] .edge-handle-left {
 
 body[data-right="docked"] .edge-handle-right {
   right: var(--right-panel);
+}
+
+/* Narrower than the column plus its gutters (680 + 96): the block gutter reaches the window's left
+   edge, and a handle fixed there would sit on some block's drag handle. The left handle moves into
+   the page's top padding, where no block is; Ctrl/Cmd+B and the palette still reach the panel. */
+@media (max-width: 775px) {
+  .edge-handle-left {
+    position: absolute;
+    top: 24px;
+    transform: none;
+  }
 }
 
 @keyframes panel-in-left {

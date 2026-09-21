@@ -506,8 +506,11 @@ codex exec --json --skip-git-repo-check --ephemeral
   files and actions, right for talking to the agent. They are closed on first run and open only on
   purpose, which keeps the zen default: with both closed the page is the old page plus two handles.
 - **Always-visible controls: the two edge handles.** The work item asked for an on-screen toggle
-  that can be discovered, not only a key. They are small text glyphs in `--quiet`, and pressing one
-  never blurs an open block (`mousedown` is prevented, as the review buttons do).
+  that can be discovered, not only a key. They are small text glyphs in `--quiet` on a 24×48 target
+  (WCAG 2.5.8's minimum, without relying on spacing), and pressing one never blurs an open block
+  (`mousedown` is prevented, as the review buttons do). Below 776px the block gutter reaches the
+  window's edge, so the left handle leaves its fixed spot for the page's top padding, where it can
+  never cover a block's drag handle; the key and the palette still reach the panel from anywhere.
 - **Shortcuts `Ctrl/Cmd+B` and `Ctrl/Cmd+Alt+B`** are VS Code's two sidebar keys, which the writer
   already knows. CodeMirror binds neither, and they are matched on `event.code` because Option
   changes `event.key` on macOS. Browsers other than Chromium are not tested (Playwright runs

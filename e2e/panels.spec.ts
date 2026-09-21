@@ -406,3 +406,37 @@ test('each workspace keeps its own panels across a switch', async ({ page, app }
     rmSync(base, { recursive: true, force: true })
   }
 })
+
+test("the edge handles are 24px targets that never sit on a block's drag handle", async ({
+  page,
+}) => {
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 })
+    await openArticle(page)
+    const left = await boundingBox(handle(page, 'Files and actions'))
+    const right = await boundingBox(handle(page, 'Agent'))
+    for (const box of [left, right]) {
+      expect(box.width).toBeGreaterThanOrEqual(24)
+      expect(box.height).toBeGreaterThanOrEqual(24)
+    }
+    // Scroll through the article: no drag handle may ever lie under the left handle.
+    for (const y of [0, 300, 600, 900]) {
+      await page.evaluate((top) => window.scrollTo(0, top), y)
+      const handleBox = await boundingBox(handle(page, 'Files and actions'))
+      const grips = await page.getByTestId('drag-handle').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const r = node.getBoundingClientRect()
+          return { x: r.x, y: r.y, width: r.width, height: r.height }
+        }),
+      )
+      for (const grip of grips) {
+        const overlaps =
+          grip.x < handleBox.x + handleBox.width &&
+          handleBox.x < grip.x + grip.width &&
+          grip.y < handleBox.y + handleBox.height &&
+          handleBox.y < grip.y + grip.height
+        expect(overlaps).toBe(false)
+      }
+    }
+  }
+})
