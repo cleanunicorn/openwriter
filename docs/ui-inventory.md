@@ -66,7 +66,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | control | home | reason |
 |---|---|---|
 | Left and right edge handles | C (screen edges) | the discoverable toggles; the only always-visible chrome the shell adds |
-| Job count ("1 running · 2 to review") | C bottom-right while the agent panel is closed; heads the transcript when it is open | the same element; clicking it opens the panel |
+| Job count ("1 running · 2 to review") | C bottom-right while the agent panel is closed or stacked below the article; heads the transcript when the panel is open | running and failed work stays in sight; clicking it opens the panel or scrolls to it |
 | Transcript rows: Cancel, Open notes, Review in …, Dismiss / Reject and dismiss, the agent's output, herdr Copy, a held request's Cancel | R | the conversation: what was asked and what came of it |
 | Scope and skill chips on each turn | R | what each turn was about, at a glance |
 | Research notes: Insert as block, Close, Discard these notes | R, above the transcript | a research answer is part of the conversation |

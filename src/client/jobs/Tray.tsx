@@ -11,7 +11,13 @@ import {
   setResearchJob,
   useJobs,
 } from '../state/jobs.ts'
-import { focusWhenMounted, layoutOf, setRightOpen, useShell } from '../shell/state.ts'
+import {
+  focusWhenMounted,
+  layoutOf,
+  revealRightIfStacked,
+  setRightOpen,
+  useShell,
+} from '../shell/state.ts'
 
 const SCOPES: Record<Job['scope'], string> = {
   blocks: 'selection',
@@ -168,32 +174,32 @@ function useTranscript() {
 
 /**
  * The agent conversation: each job is a turn — what the writer asked, then what came of it. It
- * lives in the right panel. While the panel is closed only its one-line count shows, bottom right,
- * and clicking it opens the panel. It exists only while there is a job.
+ * lives in the right panel. Wherever the panel is not beside the text — closed, or stacked after
+ * the article on a narrow window — its one-line count also shows bottom right, so running, failed
+ * and stale work never leaves the writer's sight. It exists only while there is a job.
  */
 export function Tray({ inPanel = false }: { inPanel?: boolean }) {
   const { list, held, label, empty } = useTranscript()
-  const panelOpen = useShell((state) => layoutOf(state).right !== 'closed')
-  if (empty || panelOpen !== inPanel) return null
-
-  return (
-    <section className={inPanel ? 'tray transcript' : 'tray'} aria-label="Agent jobs">
-      <button
-        type="button"
-        className="tray-toggle"
-        aria-expanded={inPanel}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={(event) => {
-          // The count moves between the corner and the panel; a keyboard user keeps holding it.
-          const hadFocus = document.activeElement === event.currentTarget
-          setRightOpen(!inPanel)
-          const other = inPanel ? '.tray:not(.transcript)' : '.transcript'
-          if (hadFocus) focusWhenMounted(() => document.querySelector(`${other} > .tray-toggle`))
-        }}
-      >
-        {label}
-      </button>
-      {inPanel && (
+  const layout = useShell((state) => layoutOf(state).right)
+  if (empty) return null
+  if (inPanel) {
+    return (
+      <section className="tray transcript" aria-label="Agent jobs">
+        <button
+          type="button"
+          className="tray-toggle"
+          aria-expanded={true}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            const hadFocus = document.activeElement === event.currentTarget
+            setRightOpen(false)
+            // The count moves to the corner; a keyboard user keeps holding it.
+            if (hadFocus)
+              focusWhenMounted(() => document.querySelector('.tray-corner > .tray-toggle'))
+          }}
+        >
+          {label}
+        </button>
         <ul className="tray-list">
           {list.map((job) => (
             <JobRow key={job.id} job={job} />
@@ -202,7 +208,34 @@ export function Tray({ inPanel = false }: { inPanel?: boolean }) {
             <HeldRow key={request.id} request={request} />
           ))}
         </ul>
-      )}
+      </section>
+    )
+  }
+  if (layout === 'docked') return null
+  const count = (
+    <button
+      type="button"
+      className="tray-toggle"
+      aria-expanded={false}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        const hadFocus = document.activeElement === event.currentTarget
+        if (layout === 'closed') setRightOpen(true)
+        revealRightIfStacked()
+        // The count moves into the panel when it docks; a keyboard user keeps holding it.
+        if (hadFocus && layout === 'closed')
+          focusWhenMounted(() => document.querySelector('.transcript > .tray-toggle'))
+      }}
+    >
+      {label}
+    </button>
+  )
+  // While the transcript is mounted (stacked), the corner copy is not a second "Agent jobs" region.
+  return layout === 'closed' ? (
+    <section className="tray tray-corner" aria-label="Agent jobs">
+      {count}
     </section>
+  ) : (
+    <div className="tray tray-corner">{count}</div>
   )
 }

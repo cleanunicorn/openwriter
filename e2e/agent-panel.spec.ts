@@ -120,3 +120,36 @@ test('a follow-up carries the earlier turn; a new conversation starts clean', as
   const third = await expectOneWaiting(app)
   expect(existsSync(jobFile(app, third, 'conversation.md'))).toBe(false)
 })
+
+test('on a narrow window the job count stays in sight while the agent panel is below the article', async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await expect(agent(page)).toHaveAttribute('data-layout', 'stacked')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await say(page, 'fake:upper make it louder')
+  await expectOneWaiting(app)
+
+  await page.evaluate(() => window.scrollTo(0, 0))
+  // Two copies of the count while stacked: the transcript's, then the corner's (last in the page).
+  const count = page.getByRole('button', { name: '1 running' }).last()
+  await expect(count).toBeInViewport()
+  await expect(page.getByRole('region', { name: 'Agent jobs' })).toHaveCount(1)
+  await count.click()
+  await expect(agent(page)).toBeInViewport()
+})
+
+test('opening the agent panel by hand on a narrow window brings it into view, keyboard kept', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 })
+  await openArticle(page)
+  await page.getByText('This is a sample article.').click()
+  await expect(editor(page)).toBeFocused()
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await expect(agent(page)).toBeInViewport()
+  await expect(editor(page)).toBeFocused()
+})

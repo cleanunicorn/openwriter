@@ -53,9 +53,23 @@ export function setLeftOpen(open: boolean): void {
   if ((currentLayout().left !== 'closed') !== open) toggleLeft()
 }
 
-/** Open or close the right panel. Opening it never pushes the left one over the text. */
+/**
+ * Open or close the right panel by hand. Opening it never pushes the left one over the text. On a
+ * narrow window the panel opens after the article: bring it into view, or the toggle would seem
+ * to do nothing. The keyboard stays where it is.
+ */
 export function toggleRight(): void {
-  setRightOpen(currentLayout().right === 'closed')
+  const open = currentLayout().right === 'closed'
+  setRightOpen(open)
+  if (open) revealRightIfStacked()
+}
+
+/** Scroll a stacked agent panel into view once it has mounted; never moves the focus. */
+export function revealRightIfStacked(): void {
+  whenMounted(
+    () => (currentLayout().right === 'stacked' ? document.getElementById('right-panel') : null),
+    (panel) => panel.scrollIntoView({ block: 'start' }),
+  )
 }
 
 export function setRightOpen(open: boolean): void {
@@ -65,17 +79,22 @@ export function setRightOpen(open: boolean): void {
 }
 
 /**
- * Give the keyboard to an element that mounts on a coming render: look for it for a few frames
- * rather than guessing when React commits.
+ * Act on an element that mounts on a coming render: look for it for a few frames rather than
+ * guessing when React commits.
  */
-export function focusWhenMounted(find: () => HTMLElement | null, frames = 10): void {
+function whenMounted(find: () => HTMLElement | null, act: (element: HTMLElement) => void): void {
+  let frames = 10
   const attempt = () => {
     const element = find()
-    if (element !== null) element.focus()
+    if (element !== null) act(element)
     else if (--frames > 0) requestAnimationFrame(attempt)
   }
   requestAnimationFrame(attempt)
 }
+
+/** Give the keyboard to an element that mounts on a coming render. */
+export const focusWhenMounted = (find: () => HTMLElement | null): void =>
+  whenMounted(find, (element) => element.focus())
 
 /** "Go to …": open the panel, bring it into view, and give its first control the keyboard. */
 export function goToPanel(id: 'left-panel' | 'right-panel'): void {

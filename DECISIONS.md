@@ -177,9 +177,9 @@ directory keeps the name `.zen/`.
   pressing "Accept" blurs an open editor, the block re-renders, the layout shifts, and the click
   misses the button.
 - **Always-visible control: the job count,** and only while at least one job exists and the agent
-  panel is closed. It is the one place that shows running, failed, and stale work while the panel
-  is shut, so nothing is lost silently; clicking it opens the panel, where the tray now lives as
-  the transcript.
+  panel is not beside the text: closed, or stacked after the article on a narrow window. It is the
+  one place that shows running, failed, and stale work there, so nothing is lost silently; clicking
+  it opens the panel (or scrolls to it), where the tray now lives as the transcript.
 
 ## Real agents (verified 2026-09-19)
 
