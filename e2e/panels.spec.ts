@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { type App, expect, test } from './fixtures.ts'
 import {
@@ -372,4 +374,35 @@ test('a prompt pill goes away when the left panel opens another document', async
   await leftPanel(page).getByRole('button', { name: 'Hello, openwrite' }).click()
   await expect(articleHeading(page)).toBeVisible()
   await expect(pill(page)).toHaveCount(0)
+})
+
+test('each workspace keeps its own panels across a switch', async ({ page, app }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await expect(leftPanel(page)).toBeVisible()
+  await expectFile(configPath(app), (text) => expect(JSON.parse(text).ui.leftPanel).toBe(true))
+
+  // A second workspace starts with both panels closed, whatever the first one had.
+  const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-panels-'))
+  try {
+    const second = path.join(base, 'second')
+    await runCommand(page, 'new workspace')
+    await answer(page, 'New workspace path', second)
+    await expect(page.getByText('No article yet')).toBeVisible()
+    await expect(leftPanel(page)).toHaveCount(0)
+    await page.keyboard.press(`${mod}+Alt+b`)
+    await expect(rightPanel(page)).toBeVisible()
+    await expectFile(path.join(second, '.zen', 'config.json'), (text) =>
+      expect(JSON.parse(text).ui).toEqual({ leftPanel: false, rightPanel: true }),
+    )
+
+    await runCommand(page, `switch to workspace: ${path.basename(app.workspace)}`)
+    await expect(articleHeading(page)).toBeVisible()
+    await expect(leftPanel(page)).toBeVisible()
+    await expect(rightPanel(page)).toHaveCount(0)
+    expect(savedUi(app)).toEqual({ leftPanel: true, rightPanel: false })
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
 })
