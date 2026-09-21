@@ -12,6 +12,9 @@
   --del-bg: #f9dede;
   --code-bg: #f1efea;
   --column: 680px;
+  /* Edge panel widths; keep in step with src/client/shell/layout.ts. */
+  --left-panel: 280px;
+  --right-panel: 380px;
   color-scheme: light;
 }
 
@@ -423,6 +426,135 @@ body {
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* ── shell: the two edge panels ─────────────────────────────────────────── */
+
+/* A docked panel reserves its width; the column stays 680px, centred in what is left. */
+body[data-left="docked"] {
+  padding-left: var(--left-panel);
+}
+
+body[data-right="docked"] {
+  padding-right: var(--right-panel);
+}
+
+.shell-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 12;
+  overflow-y: auto;
+  padding: 24px 20px 80px;
+  background: var(--surface);
+  font:
+    14px / 1.5 system-ui,
+    sans-serif;
+}
+
+.shell-panel:focus {
+  outline: none;
+}
+
+.shell-left {
+  left: 0;
+  width: var(--left-panel);
+  border-right: 1px solid var(--line);
+  animation: panel-in-left 160ms ease-out;
+}
+
+/* Narrow window, opened by hand: a drawer over the page, closed by a pick, Escape or a click away. */
+.shell-left[data-layout="overlay"] {
+  z-index: 16;
+  box-shadow: 12px 0 40px rgb(0 0 0 / 16%);
+}
+
+.shell-right {
+  right: 0;
+  width: var(--right-panel);
+  border-left: 1px solid var(--line);
+  animation: panel-in-right 160ms ease-out;
+}
+
+/* No room beside the text: the agent panel follows the article instead of lying over it. */
+.shell-right[data-layout="stacked"] {
+  position: static;
+  width: min(var(--column), 100% - 96px);
+  margin: 0 auto;
+  padding: 24px 0 96px;
+  overflow: visible;
+  border-left: 0;
+  border-top: 1px solid var(--line);
+  animation: none;
+}
+
+body[data-right="stacked"] .column {
+  padding-bottom: 48px;
+}
+
+.edge-handle {
+  position: fixed;
+  top: 50%;
+  z-index: 17;
+  width: 20px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--quiet);
+  font:
+    18px / 1 system-ui,
+    sans-serif;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.edge-handle:hover,
+.edge-handle:focus-visible {
+  color: var(--fg);
+}
+
+.edge-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.edge-handle-left {
+  left: 0;
+}
+
+.edge-handle-right {
+  right: 0;
+}
+
+body[data-left="docked"] .edge-handle-left,
+body[data-left="overlay"] .edge-handle-left {
+  left: var(--left-panel);
+}
+
+body[data-right="docked"] .edge-handle-right {
+  right: var(--right-panel);
+}
+
+@keyframes panel-in-left {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+}
+
+@keyframes panel-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-left,
+  .shell-right {
+    animation: none;
+  }
 }
 
 /* ── jobs: pill, pending marks, ghosts, tray, research ──────────────────── */

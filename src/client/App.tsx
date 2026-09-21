@@ -26,6 +26,8 @@ import {
 } from './state/app.ts'
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
 import { routeKey } from './shell/keys.ts'
+import { Shell } from './shell/Shell.tsx'
+import { toggleLeft, toggleRight } from './shell/state.ts'
 
 const inTextField = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -76,6 +78,11 @@ export function App() {
       if (action === 'palette') {
         event.preventDefault()
         setPalette(state.palette === null ? { kind: 'commands' } : null)
+      } else if (action === 'toggle-left' || action === 'toggle-right') {
+        // Toggling never moves the focus: the writer keeps typing where they were.
+        event.preventDefault()
+        if (action === 'toggle-left') toggleLeft()
+        else toggleRight()
       } else if (action === 'undo' || action === 'redo') {
         // Document-level undo and redo when no editor has the keyboard.
         event.preventDefault()
@@ -95,73 +102,75 @@ export function App() {
 
   return (
     <>
-      <main className="column" data-doc-status={doc?.status ?? 'none'}>
-        {doc !== null && doc.notice !== null && (
-          <p className="notice" role="status" aria-label="Document notice">
-            {doc.notice}{' '}
-            <button
-              type="button"
-              className="link"
-              onClick={() => dispatch({ type: 'notice', notice: null })}
-            >
-              Dismiss
-            </button>
-          </p>
-        )}
-        {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
-        {typeof boot === 'object' && (
-          <p className="notice" role="alert">
-            openwrite could not load the workspace: {boot.error}{' '}
-            <button type="button" className="link" onClick={() => void start()}>
-              Retry
-            </button>
-          </p>
-        )}
-        {boot === 'ready' && doc === null && (
-          <p className="quiet">No article yet. Press Ctrl/Cmd+K and choose “New article…”.</p>
-        )}
-        {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
-        {doc?.status === 'error' && (
-          <p className="notice" role="alert">
-            {doc.error}
-          </p>
-        )}
-        {doc?.status === 'missing' && doc.notice === null && (
-          <p className="notice" role="alert">
-            This document does not exist on disk.
-          </p>
-        )}
-        {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
-          <>
-            {doc.ref.kind !== 'article' && (
-              <p className="quiet doc-label">
-                {doc.ref.kind === 'strategy' ? 'strategy.md' : `brief · ${doc.ref.slug}`}
-              </p>
-            )}
-            <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
-            {!doc.doc.blocks.some((block) => block.kind === 'content') &&
-              doc.focusedId !== NEW_BLOCK_ID && (
-                <button
-                  type="button"
-                  className="link quiet"
-                  onClick={() => dispatch({ type: 'append' })}
-                >
-                  Start writing
-                </button>
+      <Shell left={null} right={null}>
+        <main className="column" data-doc-status={doc?.status ?? 'none'}>
+          {doc !== null && doc.notice !== null && (
+            <p className="notice" role="status" aria-label="Document notice">
+              {doc.notice}{' '}
+              <button
+                type="button"
+                className="link"
+                onClick={() => dispatch({ type: 'notice', notice: null })}
+              >
+                Dismiss
+              </button>
+            </p>
+          )}
+          {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
+          {typeof boot === 'object' && (
+            <p className="notice" role="alert">
+              openwrite could not load the workspace: {boot.error}{' '}
+              <button type="button" className="link" onClick={() => void start()}>
+                Retry
+              </button>
+            </p>
+          )}
+          {boot === 'ready' && doc === null && (
+            <p className="quiet">No article yet. Press Ctrl/Cmd+K and choose “New article…”.</p>
+          )}
+          {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
+          {doc?.status === 'error' && (
+            <p className="notice" role="alert">
+              {doc.error}
+            </p>
+          )}
+          {doc?.status === 'missing' && doc.notice === null && (
+            <p className="notice" role="alert">
+              This document does not exist on disk.
+            </p>
+          )}
+          {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
+            <>
+              {doc.ref.kind !== 'article' && (
+                <p className="quiet doc-label">
+                  {doc.ref.kind === 'strategy' ? 'strategy.md' : `brief · ${doc.ref.slug}`}
+                </p>
               )}
-          </>
-        )}
-        {pill !== null && (
-          // No key: extending the selection updates the pill in place and keeps what was typed.
-          <PromptPill
-            target={pill}
-            onClose={() => {
-              setPill(null)
-              dispatch({ type: 'select', ids: [] })
-            }}
-          />
-        )}
-      </main>
+              <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
+              {!doc.doc.blocks.some((block) => block.kind === 'content') &&
+                doc.focusedId !== NEW_BLOCK_ID && (
+                  <button
+                    type="button"
+                    className="link quiet"
+                    onClick={() => dispatch({ type: 'append' })}
+                  >
+                    Start writing
+                  </button>
+                )}
+            </>
+          )}
+          {pill !== null && (
+            // No key: extending the selection updates the pill in place and keeps what was typed.
+            <PromptPill
+              target={pill}
+              onClose={() => {
+                setPill(null)
+                dispatch({ type: 'select', ids: [] })
+              }}
+            />
+          )}
+        </main>
+      </Shell>
       <ResearchPanel />
       <Tray />
       {panel === 'settings' && <Settings />}

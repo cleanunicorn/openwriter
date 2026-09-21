@@ -86,7 +86,8 @@ export function useSelectionPill(): [PillTarget | null, (target: PillTarget | nu
     const update = (event: Event) => {
       if (
         event.target instanceof Element &&
-        event.target.closest('.pill, .palette, .tray, .research') !== null
+        event.target.closest('.pill, .palette, .tray, .research, .shell-panel, .edge-handle') !==
+          null
       )
         return
       // Let the click that ends a gesture settle (selection state, block selection) first.
@@ -110,7 +111,9 @@ export function useSelectionPill(): [PillTarget | null, (target: PillTarget | nu
       }
       const typing =
         event.target instanceof HTMLElement &&
-        event.target.closest('input, textarea, select, [contenteditable="true"], .ghost') !== null
+        event.target.closest(
+          'input, textarea, select, [contenteditable="true"], .ghost, .shell-panel',
+        ) !== null
       if (!mod && !event.altKey && event.key.length === 1 && !typing) {
         // Outside an editor, just start typing: the character lands in the pill.
         focusPill()

@@ -7,6 +7,8 @@ import {
   setPalette,
 } from '../state/app.ts'
 
+import { PANEL_KEYS } from '../shell/keys.ts'
+import { goToPanel, toggleLeft, toggleRight } from '../shell/state.ts'
 import type { Command } from './group.ts'
 
 export { type Command, type CommandGroup, filterCommands } from './group.ts'
@@ -62,6 +64,28 @@ registerCommands((state) => {
       group: 'app',
       run: () => setTheme(nextTheme),
     },
+    // Toggling keeps the focus where it is; "Go to" is the explicit way into a panel.
+    {
+      id: 'toggle-left',
+      title: 'Toggle files and actions',
+      hint: PANEL_KEYS.left,
+      group: 'app',
+      run: toggleLeft,
+    },
+    {
+      id: 'toggle-right',
+      title: 'Toggle agent panel',
+      hint: PANEL_KEYS.right,
+      group: 'app',
+      run: toggleRight,
+    },
+    {
+      id: 'go-left',
+      title: 'Go to files and actions',
+      group: 'app',
+      run: () => goToPanel('left-panel'),
+    },
+    { id: 'go-right', title: 'Go to agent', group: 'app', run: () => goToPanel('right-panel') },
   ]
 })
 

@@ -255,36 +255,33 @@ export async function refreshWorkspaces(): Promise<void> {
 /** The quick toggles `saveConfigPatch` owns; Settings saves the rest through its own form. */
 type ConfigPatch = Partial<Pick<Config, 'theme' | 'ui'>>
 
-let configSaves: Promise<void> = Promise.resolve()
 let configSavesInFlight = 0
 
 /**
  * The one writer for quick toggles (theme, panels). The store changes first, so the next toggle
- * sees this one; the saves run one after another and each sends the latest state, so two quick
- * toggles can never land on disk in the wrong order. An invalid config file is never overwritten:
- * the toggle then holds for this session only.
+ * sees this one, and each save sends the whole latest state at once (no queue: a toggle reaches
+ * disk as fast as it did before). While any save is in flight, `refreshConfig` keeps the local
+ * theme and panels, so an older copy fetched in between can never flip them back. An invalid
+ * config file is never overwritten: the toggle then holds for this session only.
  */
-export function saveConfigPatch(patch: ConfigPatch, failure: string): Promise<void> {
+export async function saveConfigPatch(patch: ConfigPatch, failure: string): Promise<void> {
   const current = store.get().config
-  if (current === null) return Promise.resolve()
+  if (current === null) return
   store.set((state) =>
     state.config === null
       ? state
       : { ...state, config: { ...state.config, config: { ...state.config.config, ...patch } } },
   )
-  if (current.error !== null) return Promise.resolve()
+  const latest = store.get().config
+  if (current.error !== null || latest === null) return
   configSavesInFlight += 1
-  configSaves = configSaves.then(async () => {
-    try {
-      const latest = store.get().config
-      if (latest !== null) await api.saveConfig(latest.config)
-    } catch (error) {
-      notifyFailure(failure, error)
-    } finally {
-      configSavesInFlight -= 1
-    }
-  })
-  return configSaves
+  try {
+    await api.saveConfig(latest.config)
+  } catch (error) {
+    notifyFailure(failure, error)
+  } finally {
+    configSavesInFlight -= 1
+  }
 }
 
 export async function refreshConfig(): Promise<void> {
