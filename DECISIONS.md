@@ -538,11 +538,12 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **Panel state lives in `.zen/config.json` (`ui`), per workspace.** It is Q2's recorded default.
   Moving it to the browser (localStorage) would be about 20 lines in two files if the writer
   prefers that. zod 4's `.prefault({})` is used, because `.default({})` skips the inner defaults.
-- **One writer for quick toggles.** `saveConfigPatch` (theme and panels) updates the store first
-  and sends the whole latest state at once, and `refreshConfig` keeps the local theme and panels
-  while a save is in flight, so an older copy fetched in between cannot flip them back. This also
-  fixes the same race the theme command had. Saves are not queued: measured, a queue added a round
-  trip that a spec reading `config.json` right after two theme toggles could lose under load.
+- **Every config write goes through one queue.** The quick toggles (`saveConfigPatch`: theme,
+  panels) and the Settings form (`saveSettings`) share it. Each write builds its body when its
+  turn comes, and toggles made while one waits share a single write. The server replaces the
+  whole file on each PUT, so without the queue an earlier write could land last, or a background
+  toggle could undo a Settings save. `refreshConfig` keeps the local theme and panels while a write
+  is queued. This also fixes the same race the theme command had.
 - **A settings save resets the document watcher only when `contentDir` changed.** This keeps the
   PR from turning every panel toggle into a watcher reset, which would stop external-change
   detection for the open document until its next save. It does not fix issue #14 §4: a real
