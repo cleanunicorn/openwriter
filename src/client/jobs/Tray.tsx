@@ -26,13 +26,26 @@ const SCOPES: Record<Job['scope'], string> = {
   research: 'research',
 }
 
-/** What a turn was about, at a glance: its scope and, when there is one, its skill. */
-function Chips({ scope, skill }: { scope: Job['scope']; skill: string | null | undefined }) {
+/** A turn's first line: what the writer asked, and at a glance its scope and skill. */
+function TurnHeader({
+  instruction,
+  scope,
+  skill,
+}: {
+  instruction: string
+  scope: Job['scope']
+  skill: string | null | undefined
+}) {
   return (
-    <span className="turn-chips">
-      <span className="chip">{SCOPES[scope]}</span>
-      {skill != null && <span className="chip">/{skill}</span>}
-    </span>
+    <div className="tray-line">
+      <span className="tray-instruction" title={instruction}>
+        {instruction}
+      </span>
+      <span className="turn-chips">
+        <span className="chip">{SCOPES[scope]}</span>
+        {skill != null && <span className="chip">/{skill}</span>}
+      </span>
+    </div>
   )
 }
 
@@ -87,12 +100,7 @@ function JobRow({ job }: { job: Job }) {
   const last = job.progress[job.progress.length - 1]
   return (
     <li className="tray-job" data-state={job.state}>
-      <div className="tray-line">
-        <span className="tray-instruction" title={job.instruction}>
-          {job.instruction}
-        </span>
-        <Chips scope={job.scope} skill={job.skill} />
-      </div>
+      <TurnHeader instruction={job.instruction} scope={job.scope} skill={job.skill} />
       <div className="tray-line">
         <span className="tray-state">
           {LABELS[job.state]}
@@ -140,12 +148,11 @@ function JobRow({ job }: { job: Job }) {
 function HeldRow({ request }: { request: HeldRequest }) {
   return (
     <li className="tray-job" data-state="held">
-      <div className="tray-line">
-        <span className="tray-instruction" title={request.request.instruction}>
-          {request.request.instruction}
-        </span>
-        <Chips scope={request.request.scope} skill={request.request.skill} />
-      </div>
+      <TurnHeader
+        instruction={request.request.instruction}
+        scope={request.request.scope}
+        skill={request.request.skill}
+      />
       <div className="tray-line">
         <span className="tray-state">queued behind another job</span>
       </div>
