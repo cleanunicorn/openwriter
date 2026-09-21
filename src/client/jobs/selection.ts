@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { currentDoc, dispatch, store } from '../state/app.ts'
+import { currentDoc, dispatch, dispatchDoc, store } from '../state/app.ts'
 import type { PillTarget } from './PromptPill.tsx'
 
 /** The focused editor publishes its selection here; the DOM selection knows no source offsets. */
@@ -132,6 +132,22 @@ export function useSelectionPill(): [PillTarget | null, (target: PillTarget | nu
       document.removeEventListener('keyup', onKeyUp)
       document.removeEventListener('keydown', onKeyDown)
     }
+  }, [])
+
+  // A pill belongs to the document it was made on: switching documents (from the left panel, the
+  // palette, anywhere) takes it away, with the old document's block selection.
+  useEffect(() => {
+    let current = store.get().current
+    return store.subscribe(() => {
+      const next = store.get().current
+      if (next === current) return
+      const previous = current
+      current = next
+      setTarget(null)
+      // Not from inside this notification: a store change made while it is being announced.
+      if (previous !== null)
+        queueMicrotask(() => dispatchDoc(previous, { type: 'select', ids: [] }))
+    })
   }, [])
 
   return [target, setTarget]

@@ -18,6 +18,7 @@ import {
   keyboardMove,
   mod,
   openArticle,
+  pill,
   release,
   runCommand,
   selectWord,
@@ -357,4 +358,18 @@ test('config writes land in order even when an earlier one is slow', async ({ pa
   // Both saves have landed; the older one must not have landed last.
   await expect.poll(() => answered).toBe(2)
   expect(savedUi(app)).toEqual({ leftPanel: true, rightPanel: true })
+})
+
+test('a prompt pill goes away when the left panel opens another document', async ({ page }) => {
+  await openArticle(page)
+  await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
+  await page.keyboard.press(`${mod}+b`)
+  await leftPanel(page).getByRole('button', { name: 'strategy.md' }).click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  await expect(pill(page)).toHaveCount(0)
+
+  // Back on the article, the old pill does not come back.
+  await leftPanel(page).getByRole('button', { name: 'Hello, openwrite' }).click()
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(pill(page)).toHaveCount(0)
 })
