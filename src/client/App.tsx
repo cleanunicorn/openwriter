@@ -16,6 +16,7 @@ import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
 import {
   connectEvents,
+  createArticle,
   currentDoc,
   dispatch,
   setPalette,
@@ -26,6 +27,7 @@ import {
 } from './state/app.ts'
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
 import { routeKey } from './shell/keys.ts'
+import { LeftPanel } from './shell/LeftPanel.tsx'
 import { Shell } from './shell/Shell.tsx'
 import { toggleLeft, toggleRight } from './shell/state.ts'
 
@@ -102,7 +104,7 @@ export function App() {
 
   return (
     <>
-      <Shell left={null} right={null}>
+      <Shell left={<LeftPanel />} right={null}>
         <main className="column" data-doc-status={doc?.status ?? 'none'}>
           {doc !== null && doc.notice !== null && (
             <p className="notice" role="status" aria-label="Document notice">
@@ -126,7 +128,24 @@ export function App() {
             </p>
           )}
           {boot === 'ready' && doc === null && (
-            <p className="quiet">No article yet. Press Ctrl/Cmd+K and choose “New article…”.</p>
+            <p className="quiet">
+              No article yet.{' '}
+              <button
+                type="button"
+                className="link"
+                onClick={() =>
+                  setPalette({
+                    kind: 'input',
+                    label: 'Article title',
+                    placeholder: 'Title of the new article',
+                    submit: (title) => void createArticle(title),
+                  })
+                }
+              >
+                New article
+              </button>{' '}
+              · your files are under Ctrl/Cmd+B
+            </p>
           )}
           {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
           {doc?.status === 'error' && (

@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { type App, expect, test } from './fixtures.ts'
 import {
+  answer,
   articleHeading,
   ask,
   blockEnd,
@@ -154,4 +155,62 @@ test('a block still moves by drag with the left panel docked', async ({ page }) 
   const after = await blockTexts(page)
   expect(after).not.toEqual(before)
   expect([...after].sort()).toEqual([...before].sort())
+})
+
+test('the left panel lists the articles, opens and creates one, and marks the current', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  const panel = leftPanel(page)
+  const hello = panel.getByRole('button', { name: 'Hello, openwrite' })
+  await expect(hello).toHaveAttribute('aria-current', 'page')
+
+  await panel.getByRole('button', { name: 'New article…' }).click()
+  await answer(page, 'Article title', 'Panels and Palettes')
+  await expect(articleHeading(page, 'Panels and Palettes')).toBeVisible()
+  expect(existsSync(app.articlePath('panels-and-palettes'))).toBe(true)
+  const created = panel.getByRole('button', { name: 'Panels and Palettes' })
+  await expect(created).toHaveAttribute('aria-current', 'page')
+  await expect(hello).not.toHaveAttribute('aria-current', 'page')
+
+  await hello.click()
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(hello).toHaveAttribute('aria-current', 'page')
+
+  await panel.getByRole('button', { name: 'strategy.md' }).click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  await panel.getByRole('button', { name: /^Brief/ }).click()
+  await expect(page.getByText('brief · hello-openwrite')).toBeVisible()
+})
+
+test('the left panel runs actions from the command registry', async ({ page }) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  const actions = leftPanel(page).getByRole('region', { name: 'Actions' })
+  await expect(actions.getByRole('button', { name: /^Export: standalone HTML/ })).toBeVisible()
+  await actions.getByRole('button', { name: 'Settings…' }).click()
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await actions.getByRole('button', { name: 'All commands' }).click()
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+})
+
+test('the palette shows its commands in labelled groups and the arrows cross them', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+k`)
+  const list = page.getByRole('listbox', { name: 'Commands' })
+  for (const name of ['Documents', 'Agent', 'Export', 'Workspace', 'App']) {
+    await expect(list.getByRole('group', { name })).toBeVisible()
+  }
+  const input = page.getByRole('combobox', { name: 'Command palette' })
+  const documents = await list.getByRole('group', { name: 'Documents' }).getByRole('option').count()
+  for (let i = 0; i < documents; i++) await page.keyboard.press('ArrowDown')
+  const active = await input.getAttribute('aria-activedescendant')
+  await expect(
+    list.getByRole('group', { name: 'Agent' }).getByRole('option').first(),
+  ).toHaveAttribute('id', active ?? '')
 })

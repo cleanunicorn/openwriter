@@ -557,6 +557,76 @@ body[data-right="docked"] .edge-handle-right {
   }
 }
 
+.panel-section + .panel-section {
+  margin-top: 22px;
+}
+
+.panel-heading {
+  margin: 0 0 6px;
+  color: var(--quiet);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel-current {
+  margin: 0 0 4px;
+}
+
+.panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.panel-list + .panel-list {
+  margin-top: 8px;
+}
+
+.panel-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.panel-item[aria-current="page"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.panel-item:focus-visible,
+.panel-switch > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel-item .quiet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.panel-switch > summary {
+  padding: 4px 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
 /* ── jobs: pill, pending marks, ghosts, tray, research ──────────────────── */
 
 .column {
