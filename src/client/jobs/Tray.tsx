@@ -158,6 +158,14 @@ function HeldRow({ request }: { request: HeldRequest }) {
   )
 }
 
+/**
+ * The count moves between the panel and the corner when the panel opens or closes: a keyboard user
+ * holding it keeps holding it, in its new place. Call before the change that moves it.
+ */
+function handOverFocus(from: EventTarget, to: string): void {
+  if (document.activeElement === from) focusWhenMounted(() => document.querySelector(to))
+}
+
 /** Every job of this workspace, oldest first, and the one-line count that sums them up. */
 function useTranscript() {
   const jobs = useJobs((state) => state.jobs)
@@ -193,11 +201,8 @@ export function Transcript() {
         aria-expanded={true}
         onMouseDown={keepFocus}
         onClick={(event) => {
-          const hadFocus = document.activeElement === event.currentTarget
+          handOverFocus(event.currentTarget, '.tray-corner > .tray-toggle')
           setRightOpen(false)
-          // The count moves to the corner; a keyboard user keeps holding it.
-          if (hadFocus)
-            focusWhenMounted(() => document.querySelector('.tray-corner > .tray-toggle'))
         }}
       >
         {label}
@@ -230,12 +235,11 @@ export function JobCount() {
       aria-expanded={false}
       onMouseDown={keepFocus}
       onClick={(event) => {
-        const hadFocus = document.activeElement === event.currentTarget
-        if (layout === 'closed') setRightOpen(true)
+        if (layout === 'closed') {
+          handOverFocus(event.currentTarget, '.transcript > .tray-toggle')
+          setRightOpen(true)
+        }
         revealRightIfStacked()
-        // The count moves into the panel when it docks; a keyboard user keeps holding it.
-        if (hadFocus && layout === 'closed')
-          focusWhenMounted(() => document.querySelector('.transcript > .tray-toggle'))
       }}
     >
       {label}
