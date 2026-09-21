@@ -817,17 +817,11 @@ body[data-right="docked"] .edge-handle-right {
   cursor: pointer;
 }
 
+/* The transcript's turns (the list lives only in the agent panel). */
 .tray-list {
   list-style: none;
-  margin: 0;
-  padding: 8px;
-  width: min(420px, 100vw - 40px);
-  max-height: 60vh;
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 16%);
+  margin: 8px 0 0;
+  padding: 0;
 }
 
 /* In the agent panel the count heads the transcript, and the list is always shown. */
@@ -835,17 +829,6 @@ body[data-right="docked"] .edge-handle-right {
   position: static;
   display: block;
   margin-bottom: 16px;
-}
-
-.tray.transcript .tray-list {
-  width: auto;
-  max-height: none;
-  overflow: visible;
-  margin-top: 8px;
-  padding: 0;
-  border: 0;
-  box-shadow: none;
-  background: none;
 }
 
 .turn-chips {
