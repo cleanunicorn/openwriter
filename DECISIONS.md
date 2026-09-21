@@ -564,7 +564,7 @@ codex exec --json --skip-git-repo-check --ephemeral
   palette does.
 - **Conversation context rides inside the job contract (Q1, middle path).** A follow-up turn's
   request carries the earlier turns about the same document (any entry point, since the last "New
-  conversation", a few turns). The server writes them to `conversation.md`, re-bounded whatever
+  conversation" about that document, a few turns). The server writes them to `conversation.md`, re-bounded whatever
   arrives, to the limits in `CONVERSATION_LIMITS` (`src/shared/jobs/conversation.ts`; README lists
   them). `instruction.md` names the file in the `.zen/jobs/<id>/` form, so codex's path remap
   covers it. A first turn's files are exactly what they were. There is no adapter, `result.json`

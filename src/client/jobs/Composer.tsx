@@ -128,7 +128,11 @@ export function Composer() {
         {carried > 0 && (
           <p className="composer-thread quiet">
             Carries the last {carried} {carried === 1 ? 'turn' : 'turns'} about this document.{' '}
-            <button type="button" className="link" onClick={startNewConversation}>
+            <button
+              type="button"
+              className="link"
+              onClick={() => doc !== null && startNewConversation(doc.ref)}
+            >
               New conversation
             </button>
           </p>

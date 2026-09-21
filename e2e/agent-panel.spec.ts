@@ -274,3 +274,31 @@ test('Escape in the message box hands the keyboard back and keeps the panel and 
   await expect(agent(page)).toBeVisible()
   await expect(message(page)).toHaveValue('half a thought')
 })
+
+test("a new conversation about one document leaves another document's conversation alone", async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  const files = page.getByRole('navigation', { name: 'Files and actions' })
+
+  await say(page, 'fake:upper rewrite the intro')
+  await release(app, await expectOneWaiting(app))
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  await expect(agent(page)).toContainText('Carries the last 1 turn about this document.')
+
+  await files.getByRole('button', { name: 'strategy.md' }).click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  await say(page, 'fake:upper tighten the strategy')
+  await release(app, await expectOneWaiting(app))
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  await agent(page).getByRole('button', { name: 'New conversation' }).click()
+  await expect(agent(page).getByRole('button', { name: 'New conversation' })).toHaveCount(0)
+
+  await files.getByRole('button', { name: 'Hello, openwrite' }).click()
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(agent(page)).toContainText('Carries the last 1 turn about this document.')
+})

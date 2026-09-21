@@ -41,8 +41,11 @@ export type JobsState = {
    * and a message written about one document is never sent against another.
    */
   drafts: Record<string, ComposerDraft>
-  /** When the writer last started a new conversation (ISO time); earlier jobs are not carried. */
-  threadStart: string | null
+  /**
+   * docKey → when the writer last started a new conversation about that document (ISO time);
+   * that document's earlier jobs are not carried. Each document's conversation is its own.
+   */
+  threadStarts: Record<string, string>
 }
 
 export type ComposerDraft = { text: string; scope: 'article' | 'research' }
@@ -55,7 +58,7 @@ const jobsStore = createStore<JobsState>({
   inserted: {},
   researchJobId: null,
   drafts: {},
-  threadStart: null,
+  threadStarts: {},
 })
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
@@ -124,8 +127,9 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   const targets = effectiveTargets(request.scope, request.targets, snapshot)
   // Picked now, not when the request was made: a held request then carries what became of the
   // job it waited for. A conversation's first turn sends no field at all.
-  const { jobs, order, threadStart } = jobsStore.get()
-  const conversation = threadFor(docKey(request.doc), jobs, order, threadStart)
+  const { jobs, order, threadStarts } = jobsStore.get()
+  const key = docKey(request.doc)
+  const conversation = threadFor(key, jobs, order, threadStarts[key] ?? null)
   try {
     const job = await api.createJob({
       ...request,
@@ -331,13 +335,18 @@ export function insertNote(job: Job, markdown: string): void {
   dispatchDoc(job.doc, { type: 'insert', index, markdown })
 }
 
-/** "New conversation": the next message carries none of the turns before it. */
-export const startNewConversation = () =>
-  jobsStore.set((state) => ({ ...state, threadStart: new Date().toISOString() }))
+/** "New conversation" about `ref`: its next message carries none of its turns before it. */
+export const startNewConversation = (ref: DocRef) =>
+  jobsStore.set((state) => ({
+    ...state,
+    threadStarts: { ...state.threadStarts, [docKey(ref)]: new Date().toISOString() },
+  }))
 
 /** The turns the next message about `ref` would carry. */
-export const threadOf = (state: JobsState, ref: DocRef) =>
-  threadFor(docKey(ref), state.jobs, state.order, state.threadStart)
+export const threadOf = (state: JobsState, ref: DocRef) => {
+  const key = docKey(ref)
+  return threadFor(key, state.jobs, state.order, state.threadStarts[key] ?? null)
+}
 
 export const setDraft = (ref: DocRef, patch: Partial<ComposerDraft>) =>
   jobsStore.set((state) => {
@@ -440,7 +449,7 @@ export async function resetJobs(): Promise<void> {
     inserted: {},
     researchJobId: null,
     drafts: {},
-    threadStart: null,
+    threadStarts: {},
   }))
   createdHere.clear()
   inFlight.clear()
