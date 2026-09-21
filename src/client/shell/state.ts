@@ -112,8 +112,10 @@ export function goToPanel(id: 'left-panel' | 'right-panel'): void {
     if (panel === null) return null
     panel.scrollIntoView({ block: 'nearest' })
     return (
+      // A disabled control cannot take the keyboard (an empty workspace disables the whole
+      // composer): then the panel itself does.
       panel.querySelector<HTMLElement>(
-        'button, a[href], input, textarea, select, summary, [tabindex="0"]',
+        ':is(button, input, textarea, select):not(:disabled), a[href], summary, [tabindex="0"]',
       ) ?? panel
     )
   })

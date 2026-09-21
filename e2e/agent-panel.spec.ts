@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import {
@@ -13,6 +15,7 @@ import {
   mod,
   openArticle,
   release,
+  runCommand,
   tray,
   waitingJobs,
 } from './helpers.ts'
@@ -320,4 +323,21 @@ test('Shift+Enter in the message box starts a new line; Enter sends it once', as
   await expect(message(page)).toHaveValue('')
   await expectOneWaiting(app)
   await expect(tray(page).getByRole('listitem')).toHaveCount(1)
+})
+
+test('"Go to agent" gives the keyboard to the agent panel even in an empty workspace', async ({
+  page,
+}) => {
+  await openArticle(page)
+  const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-agent-'))
+  try {
+    await runCommand(page, 'new workspace')
+    await answer(page, 'New workspace path', path.join(base, 'empty'))
+    await expect(page.getByText('No article yet')).toBeVisible()
+    // Every control in the panel is disabled here: the panel itself takes the keyboard.
+    await runCommand(page, 'go to agent')
+    await expect(agent(page)).toBeFocused()
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
 })
