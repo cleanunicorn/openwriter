@@ -22,6 +22,10 @@ export type Command = {
   run: () => void | Promise<void>
 }
 
+/** A provider whose commands all belong to one group says so once. */
+export const inGroup = (group: CommandGroup, commands: Omit<Command, 'group'>[]): Command[] =>
+  commands.map((command) => ({ ...command, group }))
+
 export type CommandSection = { group: CommandGroup; label: string; commands: Command[] }
 
 /** Every word of the query must appear in the title or the hint, in any order. */

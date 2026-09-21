@@ -1,6 +1,7 @@
 import type { DocRef } from '../../shared/api-types.ts'
 import type { Scope } from '../../shared/jobs/job-types.ts'
 import { registerCommands } from '../palette/commands.ts'
+import { inGroup } from '../palette/group.ts'
 import { currentDoc, setPalette } from '../state/app.ts'
 import { requestJob } from '../state/jobs.ts'
 
@@ -42,11 +43,10 @@ registerCommands((state) => {
   const content = doc.doc.blocks
     .filter((block) => block.kind === 'content')
     .map((block) => block.id)
-  return [
+  return inGroup('agent', [
     {
       id: 'ask-article',
       title: 'Instruct the agent: whole article…',
-      group: 'agent' as const,
       hint: 'article scope',
       run: () =>
         askInPalette({
@@ -60,7 +60,6 @@ registerCommands((state) => {
     {
       id: 'ask-research',
       title: 'Research question…',
-      group: 'agent' as const,
       hint: 'no edits; answer goes to notes',
       run: () =>
         askInPalette({
@@ -76,7 +75,6 @@ registerCommands((state) => {
       .map((skill) => ({
         id: `skill:${skill.name}`,
         title: `Run skill: ${skill.name}`,
-        group: 'agent' as const,
         hint: skill.stub ? `${skill.description} — stub` : skill.description,
         run: () =>
           askInPalette({
@@ -88,5 +86,5 @@ registerCommands((state) => {
             targets: targetsFor(skill.scope, doc.selectedIds, content),
           }),
       })),
-  ]
+  ])
 })

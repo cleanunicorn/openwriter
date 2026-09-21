@@ -1,5 +1,6 @@
 import type { WorkspaceEntry } from '../../shared/workspaces-schema.ts'
 import { registerCommands } from '../palette/commands.ts'
+import { inGroup } from '../palette/group.ts'
 import { notifyFailure, setPalette } from '../state/app.ts'
 import {
   createWorkspace,
@@ -26,18 +27,16 @@ registerCommands((state) => {
   const others = workspaces.entries.filter((entry) => entry.path !== workspaces.active.root)
   const known = (entry: WorkspaceEntry) => entry.path
 
-  return [
+  return inGroup('workspace', [
     ...others.map((entry) => ({
       id: `workspace-open:${entry.id}`,
       title: `Switch to workspace: ${entry.label}`,
-      group: 'workspace' as const,
       hint: known(entry),
       run: report('Could not open that workspace', () => openWorkspace(entry.path)),
     })),
     {
       id: 'workspace-open-path',
       title: 'Open workspace…',
-      group: 'workspace' as const,
       hint: 'by its path on disk',
       run: () =>
         askForPath('Workspace path', 'Absolute path of the workspace to open', (path) =>
@@ -47,7 +46,6 @@ registerCommands((state) => {
     {
       id: 'workspace-new',
       title: 'New workspace…',
-      group: 'workspace' as const,
       hint: 'scaffold and open it',
       run: () =>
         askForPath('New workspace path', 'Absolute path of a new or empty directory', (path) =>
@@ -57,7 +55,6 @@ registerCommands((state) => {
     ...workspaces.entries.map((entry) => ({
       id: `workspace-rename:${entry.id}`,
       title: `Rename workspace: ${entry.label}`,
-      group: 'workspace' as const,
       hint: known(entry),
       run: () =>
         setPalette({
@@ -71,14 +68,12 @@ registerCommands((state) => {
     ...others.map((entry) => ({
       id: `workspace-forget:${entry.id}`,
       title: `Remove workspace from the list: ${entry.label}`,
-      group: 'workspace' as const,
       hint: 'keeps every file on disk',
       run: report('Could not remove that workspace', () => forgetWorkspace(entry.id)),
     })),
     ...others.map((entry) => ({
       id: `workspace-erase:${entry.id}`,
       title: `Delete workspace from disk: ${entry.label}`,
-      group: 'workspace' as const,
       hint: 'irreversible',
       run: () =>
         setPalette({
@@ -91,5 +86,5 @@ registerCommands((state) => {
           ),
         }),
     })),
-  ]
+  ])
 })
