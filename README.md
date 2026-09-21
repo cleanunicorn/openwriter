@@ -79,8 +79,9 @@ The server binds `127.0.0.1` only.
   text and marked "changed since request".
 - If a save fails, a notice stays in view and the save is retried by itself; leaving the tab
   saves at once.
-- While the agent panel is closed, a job count in the bottom-right corner shows running, review
-  and failed work; clicking it opens the panel. There each job shows its status, streamed
+- While the agent panel is not beside the text (closed, or below the article on a narrow
+  window), a job count in the bottom-right corner shows running, review and failed work.
+  Clicking it opens the panel, or scrolls to it. There each job shows its status, streamed
   progress, cancel, and the raw output of failed or stale jobs.
 
 ## Workspace layout
