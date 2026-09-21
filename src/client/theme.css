@@ -458,6 +458,12 @@ body[data-right="docked"] {
   outline: none;
 }
 
+/* The keyboard landed on the panel itself ("Go to" with nothing enabled inside): show it. */
+.shell-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .shell-left {
   left: 0;
   width: var(--left-panel);

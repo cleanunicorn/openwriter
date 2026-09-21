@@ -338,6 +338,8 @@ test('"Go to agent" gives the keyboard to the agent panel even in an empty works
     // Every control in the panel is disabled here: the panel itself takes the keyboard.
     await runCommand(page, 'go to agent')
     await expect(agent(page)).toBeFocused()
+    // …and a keyboard user can see where it went.
+    await expect(agent(page)).not.toHaveCSS('outline-style', 'none')
   } finally {
     rmSync(base, { recursive: true, force: true })
   }
