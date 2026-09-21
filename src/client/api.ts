@@ -10,6 +10,7 @@ import {
   OkResponseSchema,
   SaveResponseSchema,
   SkillsResponseSchema,
+  encodeWorkspaceHeader,
   WORKSPACE_HEADER,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
@@ -93,7 +94,7 @@ export const api = {
     request(ConfigResponseSchema, '/api/config', {
       method: 'PUT',
       body: config,
-      headers: root === undefined ? undefined : { [WORKSPACE_HEADER]: root },
+      headers: root === undefined ? undefined : { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) },
     }),
   workspaces: () => request(WorkspacesResponseSchema, '/api/workspaces'),
   openWorkspace: (path: string) =>

@@ -18,6 +18,20 @@ export type DocRef = z.infer<typeof DocRefSchema>
  */
 export const WORKSPACE_HEADER = 'x-openwrite-workspace'
 
+/**
+ * The header carries the root URI-encoded: a header value must be ASCII-safe (a ByteString), and a
+ * workspace path may hold any character (`ț`, CJK, an emoji). A value that does not decode names
+ * no workspace, so it can never match the one that is open.
+ */
+export const encodeWorkspaceHeader = (root: string): string => encodeURIComponent(root)
+export function decodeWorkspaceHeader(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
 export const docKey = (ref: DocRef): string =>
   ref.kind === 'strategy' ? 'strategy' : `${ref.kind}:${ref.slug}`
 

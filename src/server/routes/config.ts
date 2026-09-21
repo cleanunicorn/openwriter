@@ -1,5 +1,5 @@
 import type { Hono } from 'hono'
-import { WORKSPACE_HEADER } from '../../shared/api-types.ts'
+import { decodeWorkspaceHeader, WORKSPACE_HEADER } from '../../shared/api-types.ts'
 import { ConfigSchema } from '../../shared/config-schema.ts'
 import { InvalidConfigError, saveConfig } from '../config.ts'
 import type { ServerContext } from '../context.ts'
@@ -28,8 +28,8 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     const config = await parseBody(c, ConfigSchema)
     // From here to the write there is no await, so no switch can fall in between: a write meant for
     // the workspace that was open before a switch is refused, never saved into the new one.
-    const intended = c.req.header(WORKSPACE_HEADER)
-    if (intended !== undefined && intended !== workspace.root) {
+    const header = c.req.header(WORKSPACE_HEADER)
+    if (header !== undefined && decodeWorkspaceHeader(header) !== workspace.root) {
       throw new HttpError(409, 'The workspace changed before these settings were saved.')
     }
     // Validate what the value resolves to BEFORE it is written: a saved bad value would make
