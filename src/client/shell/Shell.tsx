@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect } from 'react'
+import { type FocusEvent, type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { PANEL_KEYS } from './keys.ts'
-import { layoutOf, setShellWidth, toggleLeft, toggleRight, useShell } from './state.ts'
+import { layoutOf, setLeftOpen, setShellWidth, toggleLeft, toggleRight, useShell } from './state.ts'
 
 /** A click must never take the keyboard from an open block (blur commits it). */
 const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault()
@@ -35,6 +35,29 @@ function EdgeHandle({
 }
 
 /**
+ * Escape inside a panel hands the keyboard back to where it was before it entered the panel (or
+ * lets go of it); an overlay drawer also closes. A docked panel stays open: closing it is the
+ * toggle's job. A key something inside already handled (a palette prompt, a pill) is left alone.
+ */
+function usePanelKeyboard(onEscape?: () => void) {
+  const cameFrom = useRef<HTMLElement | null>(null)
+  const onFocus = (event: FocusEvent<HTMLElement>) => {
+    const from = event.relatedTarget
+    if (from instanceof HTMLElement && !event.currentTarget.contains(from)) cameFrom.current = from
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return
+    event.preventDefault()
+    const back = cameFrom.current
+    cameFrom.current = null
+    if (back?.isConnected) back.focus()
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    onEscape?.()
+  }
+  return { onFocus, onKeyDown }
+}
+
+/**
  * The frame around the writing column: two edge panels, closed on first run and opened only on
  * purpose (a handle or Ctrl/Cmd+B, Ctrl/Cmd+Alt+B). Closed panels are not mounted at all. The
  * shell owns placement; what is inside a panel knows nothing about where it is shown.
@@ -53,6 +76,25 @@ export function Shell({
     left: useShell((state) => layoutOf(state).left),
     right: useShell((state) => layoutOf(state).right),
   }
+
+  const leftKeys = usePanelKeyboard(() => {
+    if (layout.left === 'overlay') setLeftOpen(false)
+  })
+  const rightKeys = usePanelKeyboard()
+
+  // A drawer over the page closes when the writer clicks anywhere else. The handles are not
+  // "elsewhere": they toggle their own panel, and closing the right one may let the left dock.
+  useEffect(() => {
+    if (layout.left !== 'overlay') return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('#left-panel, .edge-handle, .palette-backdrop') !== null) return
+      setLeftOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [layout.left])
 
   useEffect(() => {
     const onResize = () => setShellWidth(window.innerWidth)
@@ -82,6 +124,7 @@ export function Shell({
           data-layout={layout.left}
           aria-label="Files and actions"
           tabIndex={-1}
+          {...leftKeys}
         >
           {left}
         </nav>
@@ -94,6 +137,7 @@ export function Shell({
           data-layout={layout.right}
           aria-label="Agent"
           tabIndex={-1}
+          {...rightKeys}
         >
           {right}
         </section>

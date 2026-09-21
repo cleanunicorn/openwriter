@@ -19,6 +19,7 @@ import {
   mod,
   openArticle,
   release,
+  runCommand,
   selectWord,
   tray,
   waitingJobs,
@@ -213,4 +214,118 @@ test('the palette shows its commands in labelled groups and the arrows cross the
   await expect(
     list.getByRole('group', { name: 'Agent' }).getByRole('option').first(),
   ).toHaveAttribute('id', active ?? '')
+})
+
+test('the keyboard reaches a panel and Escape hands it back without closing a docked panel', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await handle(page, 'Files and actions').focus()
+  await page.keyboard.press('Enter')
+  await expect(leftPanel(page)).toBeVisible()
+  await expect(handle(page, 'Files and actions')).toBeFocused()
+
+  await page.keyboard.press('Tab')
+  await expect(leftPanel(page).getByRole('button').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(handle(page, 'Files and actions')).toBeFocused()
+  await expect(leftPanel(page)).toBeVisible()
+})
+
+test('Escape in a block commits it and leaves the panels alone; in Settings it closes only Settings', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await page.getByText('This is a sample article.').click()
+  await expect(editor(page)).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(editor(page)).toHaveCount(0)
+  await expect(leftPanel(page)).toBeVisible()
+  await expect(rightPanel(page)).toBeVisible()
+
+  await leftPanel(page).getByRole('button', { name: 'Settings…' }).click()
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0)
+  await expect(leftPanel(page)).toBeVisible()
+  await expect(rightPanel(page)).toBeVisible()
+})
+
+test('on a narrow window the left panel is a drawer that Escape, a pick or a click away closes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 900 })
+  await openArticle(page)
+  await runCommand(page, 'go to files and actions')
+  await expect(leftPanel(page)).toHaveAttribute('data-layout', 'overlay')
+  await expect(leftPanel(page).getByRole('button').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(leftPanel(page)).toHaveCount(0)
+
+  await page.keyboard.press(`${mod}+b`)
+  await expect(leftPanel(page)).toBeVisible()
+  await page.getByRole('main').click({ position: { x: 600, y: 10 } })
+  await expect(leftPanel(page)).toHaveCount(0)
+
+  await page.keyboard.press(`${mod}+b`)
+  await leftPanel(page).getByRole('button', { name: 'strategy.md' }).click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  await expect(leftPanel(page)).toHaveCount(0)
+})
+
+test('a panel restored in a narrow window never comes back over the text', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await expectFile(configPath(app), (text) => expect(JSON.parse(text).ui.leftPanel).toBe(true))
+  await page.setViewportSize({ width: 900, height: 900 })
+  await page.reload()
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(leftPanel(page)).toHaveCount(0)
+  await expect(handle(page, 'Files and actions')).toHaveAttribute('aria-expanded', 'false')
+})
+
+for (const width of [1500, 1280, 900, 390]) {
+  test(`with both panels open at ${width}px the column keeps its width and nothing docked covers it`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await openArticle(page)
+    await page.keyboard.press(`${mod}+Alt+b`)
+    await page.keyboard.press(`${mod}+b`)
+    await expect(rightPanel(page)).toBeVisible()
+    const column = await boundingBox(page.getByRole('main'))
+    expect(column.width).toBeGreaterThanOrEqual(Math.min(680, width - 96))
+
+    const right = await boundingBox(rightPanel(page))
+    const beside = column.x + column.width <= right.x
+    const below = column.y + column.height <= right.y
+    expect(beside || below).toBe(true)
+    expect(await rightPanel(page).getAttribute('data-layout')).toBe(
+      width >= 1156 ? 'docked' : 'stacked',
+    )
+    const left = leftPanel(page)
+    const layout = await left.getAttribute('data-layout')
+    expect(layout).toBe(width >= 1436 ? 'docked' : 'overlay')
+    if (layout === 'docked') {
+      const box = await boundingBox(left)
+      expect(box.x + box.width).toBeLessThanOrEqual(column.x)
+    }
+  })
+}
+
+test('"Go to agent" brings a stacked agent panel into view and into the keyboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 700 })
+  await openArticle(page)
+  await runCommand(page, 'go to agent')
+  await expect(rightPanel(page)).toHaveAttribute('data-layout', 'stacked')
+  await expect(rightPanel(page)).toBeInViewport()
+  await expect(page.getByRole('button', { name: /Draft brief from my notes/ })).toBeFocused()
 })
