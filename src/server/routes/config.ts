@@ -29,6 +29,7 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
     // every later load fail.
     const problem = Workspace.contentDirProblemFor(workspace.root, config.contentDir)
     if (problem !== null) throw new HttpError(400, problem)
+    const contentDirBefore = workspace.config().config.contentDir
     try {
       saveConfig(workspace.root, config)
     } catch (error) {
@@ -37,7 +38,10 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
       if (error instanceof InvalidConfigError) throw new HttpError(409, error.message)
       throw error
     }
-    context.watcher.reset()
+    // Only a moved content directory invalidates what the watcher tracks. Resetting on every save
+    // would make each panel toggle or theme switch blind the watcher to outside changes until the
+    // open document is saved again (issue #14 §4 is the remaining case: a real contentDir change).
+    if (config.contentDir !== contentDirBefore) context.watcher.reset()
     events.emit({ type: 'config.changed' })
     return c.json(configBody())
   })

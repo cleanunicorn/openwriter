@@ -5,6 +5,7 @@ import {
   docKey,
   type SkillInfo,
 } from '../../shared/api-types.ts'
+import type { Config } from '../../shared/config-schema.ts'
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
 import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
@@ -251,9 +252,53 @@ export async function refreshWorkspaces(): Promise<void> {
   store.set((state) => ({ ...state, workspaces }))
 }
 
+/** The quick toggles `saveConfigPatch` owns; Settings saves the rest through its own form. */
+type ConfigPatch = Partial<Pick<Config, 'theme' | 'ui'>>
+
+let configSaves: Promise<void> = Promise.resolve()
+let configSavesInFlight = 0
+
+/**
+ * The one writer for quick toggles (theme, panels). The store changes first, so the next toggle
+ * sees this one; the saves run one after another and each sends the latest state, so two quick
+ * toggles can never land on disk in the wrong order. An invalid config file is never overwritten:
+ * the toggle then holds for this session only.
+ */
+export function saveConfigPatch(patch: ConfigPatch, failure: string): Promise<void> {
+  const current = store.get().config
+  if (current === null) return Promise.resolve()
+  store.set((state) =>
+    state.config === null
+      ? state
+      : { ...state, config: { ...state.config, config: { ...state.config.config, ...patch } } },
+  )
+  if (current.error !== null) return Promise.resolve()
+  configSavesInFlight += 1
+  configSaves = configSaves.then(async () => {
+    try {
+      const latest = store.get().config
+      if (latest !== null) await api.saveConfig(latest.config)
+    } catch (error) {
+      notifyFailure(failure, error)
+    } finally {
+      configSavesInFlight -= 1
+    }
+  })
+  return configSaves
+}
+
 export async function refreshConfig(): Promise<void> {
   const config = await api.config()
-  store.set((state) => ({ ...state, config }))
+  store.set((state) => {
+    const local = state.config?.config
+    // While a toggle is still on its way to disk, the server's copy is older than the screen.
+    if (configSavesInFlight === 0 || local === undefined || config.error !== null)
+      return { ...state, config }
+    return {
+      ...state,
+      config: { ...config, config: { ...config.config, theme: local.theme, ui: local.ui } },
+    }
+  })
 }
 
 async function refreshSkills(): Promise<void> {

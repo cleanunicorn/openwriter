@@ -1,12 +1,10 @@
-import { api } from '../api.ts'
 import {
   type AppState,
   bumpThemeEpoch,
   createArticle,
-  notifyFailure,
   openDoc,
+  saveConfigPatch,
   setPalette,
-  store,
 } from '../state/app.ts'
 
 import type { Command } from './group.ts'
@@ -29,18 +27,9 @@ export function applyTheme(theme: (typeof THEMES)[number]): void {
   bumpThemeEpoch()
 }
 
-async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
+function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
   applyTheme(theme)
-  const current = store.get().config
-  if (current === null || current.error !== null) return
-  // Update the store first: the next toggle must see this theme even if the save is still in flight.
-  const config = { ...current.config, theme }
-  store.set((state) => ({ ...state, config: { ...current, config } }))
-  try {
-    await api.saveConfig(config)
-  } catch (error) {
-    notifyFailure('The theme is set for now, but could not be saved', error)
-  }
+  return saveConfigPatch({ theme }, 'The theme is set for now, but could not be saved')
 }
 
 registerCommands((state) => {

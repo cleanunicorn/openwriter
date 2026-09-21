@@ -25,10 +25,16 @@ import {
   bumpThemeEpoch,
 } from './state/app.ts'
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
+import { routeKey } from './shell/keys.ts'
 
 const inTextField = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, [contenteditable="true"], .cm-editor') !== null
+
+/** Enter activates these itself; the document must not take it from them. */
+const onControl = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  target.closest('button, a[href], summary, select, [role="button"], [role="option"]') !== null
 
 export function App() {
   const doc = useApp(currentDoc)
@@ -60,27 +66,23 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const mod = event.metaKey || event.ctrlKey
-      if (mod && event.key.toLowerCase() === 'k') {
+      const state = store.get()
+      const action = routeKey(event, {
+        modalOpen: state.panel !== null,
+        paletteOpen: state.palette !== null,
+        inTextField: inTextField(event.target),
+        onControl: onControl(event.target),
+      })
+      if (action === 'palette') {
         event.preventDefault()
-        setPalette(store.get().palette === null ? { kind: 'commands' } : null)
-        return
-      }
-      // A modal panel owns the keyboard: no document undo or block focus behind it.
-      if (store.get().panel !== null) return
-      // A key that another control already handled (a ghost's Enter/Backspace) is not ours.
-      if (event.defaultPrevented) return
-      if (inTextField(event.target)) return
-      // Document-level undo and redo when no editor has the keyboard.
-      if (mod && event.key.toLowerCase() === 'z') {
+        setPalette(state.palette === null ? { kind: 'commands' } : null)
+      } else if (action === 'undo' || action === 'redo') {
+        // Document-level undo and redo when no editor has the keyboard.
         event.preventDefault()
-        dispatch({ type: event.shiftKey ? 'redo' : 'undo' })
-      } else if (mod && event.key.toLowerCase() === 'y') {
-        event.preventDefault()
-        dispatch({ type: 'redo' })
-      } else if (event.key === 'Enter' && !mod && store.get().palette === null) {
+        dispatch({ type: action })
+      } else if (action === 'enter-document') {
         // Keyboard entry into the document: edit the first content block.
-        const first = currentDoc(store.get())?.doc.blocks.find((block) => block.kind === 'content')
+        const first = currentDoc(state)?.doc.blocks.find((block) => block.kind === 'content')
         if (first !== undefined) {
           event.preventDefault()
           dispatch({ type: 'focus', id: first.id, cursor: 'end' })

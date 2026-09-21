@@ -2,7 +2,7 @@ import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 
 import type { Config } from '../../shared/config-schema.ts'
 import { ApiError, api } from '../api.ts'
 import { applyTheme } from '../palette/commands.ts'
-import { refreshArticles, refreshConfig, setPanel, useApp } from '../state/app.ts'
+import { refreshArticles, refreshConfig, setPanel, store, useApp } from '../state/app.ts'
 import { useRestoreFocus } from '../use-restore-focus.ts'
 
 const TASKS = ['image'] as const
@@ -43,7 +43,8 @@ export function Settings() {
   const save = async (event: FormEvent) => {
     event.preventDefault()
     try {
-      await api.saveConfig(draft)
+      // The panels are toggles, not form fields: keep whatever they are now, not when the form opened.
+      await api.saveConfig({ ...draft, ui: store.get().config?.config.ui ?? draft.ui })
       applyTheme(draft.theme)
       await Promise.all([refreshConfig(), refreshArticles()])
       setMessage('Saved.')
