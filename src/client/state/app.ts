@@ -285,7 +285,7 @@ function queueConfigWrite<T>(write: () => Promise<T>): Promise<T> {
  * in between can never flip them back. An invalid config file is never overwritten: the toggle
  * then holds for this session only.
  */
-export async function saveConfigPatch(patch: ConfigPatch, failure: string): Promise<void> {
+export async function saveConfigPatch(patch: ConfigPatch, what: string): Promise<void> {
   const current = store.get().config
   if (current === null) return
   store.set((state) =>
@@ -302,7 +302,7 @@ export async function saveConfigPatch(patch: ConfigPatch, failure: string): Prom
     try {
       await api.saveConfig(latest.config)
     } catch (error) {
-      notifyFailure(failure, error)
+      notifyFailure(what, error)
     }
   })
 }
