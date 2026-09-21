@@ -51,7 +51,11 @@ function TurnHeader({
         {instruction}
       </span>
       <span className="turn-chips">
-        {other !== null && <span className="chip">{other}</span>}
+        {other !== null && (
+          <span className="chip chip-doc" title={other}>
+            {other}
+          </span>
+        )}
         <span className="chip">{SCOPES[scope]}</span>
         {skill != null && <span className="chip">/{skill}</span>}
       </span>

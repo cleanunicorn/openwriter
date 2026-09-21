@@ -6,6 +6,7 @@ import { expect, test } from './fixtures.ts'
 import {
   answer,
   articleHeading,
+  boundingBox,
   editor,
   expectFile,
   expectOneWaiting,
@@ -359,4 +360,32 @@ test('a turn about another document says which one', async ({ page, app }) => {
     .click()
   await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
   await expect(tray(page).getByRole('listitem')).toContainText('Hello, openwrite')
+})
+
+test('a long document title in a turn is cut short, never crowding out the instruction', async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  const files = page.getByRole('navigation', { name: 'Files and actions' })
+  const title = `A very long title ${'that keeps on going '.repeat(8)}end`
+  await files.getByRole('button', { name: 'New article…' }).click()
+  await answer(page, 'Article title', title)
+  await expect(articleHeading(page, title)).toBeVisible()
+  await say(page, 'fake:upper tidy')
+  await release(app, await expectOneWaiting(app))
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+
+  await files.getByRole('button', { name: 'strategy.md' }).click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  const chip = tray(page).getByTitle(title)
+  await expect(chip).toBeVisible()
+  const panel = await boundingBox(agent(page))
+  const chipBox = await boundingBox(chip)
+  expect(chipBox.x + chipBox.width).toBeLessThanOrEqual(panel.x + panel.width)
+  const instruction = await boundingBox(tray(page).getByText('fake:upper tidy'))
+  expect(instruction.width).toBeGreaterThan(40)
 })

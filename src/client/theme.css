@@ -848,6 +848,13 @@ body[data-right="docked"] .edge-handle-right {
   white-space: nowrap;
 }
 
+/* A document's title can be long (up to 200 characters): the chip keeps the instruction readable. */
+.chip-doc {
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 button.chip {
   cursor: pointer;
 }
