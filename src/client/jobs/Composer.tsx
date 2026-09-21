@@ -1,7 +1,16 @@
+import { docKey } from '../../shared/api-types.ts'
 import { type FormEvent, type KeyboardEvent, useRef } from 'react'
 import { allCommands } from '../palette/commands.ts'
 import { currentDoc, store, useApp } from '../state/app.ts'
-import { requestJob, setComposer, startNewConversation, threadOf, useJobs } from '../state/jobs.ts'
+import {
+  type ComposerDraft,
+  EMPTY_DRAFT,
+  requestJob,
+  setDraft,
+  startNewConversation,
+  threadOf,
+  useJobs,
+} from '../state/jobs.ts'
 import { targetsFor } from './commands.ts'
 import { parseInstruction } from './PromptPill.tsx'
 
@@ -11,9 +20,16 @@ import { parseInstruction } from './PromptPill.tsx'
  * message is an ordinary job, so it queues, runs and is reviewed exactly like one from the pill.
  */
 export function Composer() {
-  const draft = useJobs((state) => state.composer)
   const empty = useJobs((state) => state.order.length === 0 && state.held.length === 0)
   const doc = useApp(currentDoc)
+  const key = doc === null ? null : docKey(doc.ref)
+  // One draft per document: switching documents shows that document's own unsent message.
+  const draft = useJobs((state) =>
+    key === null ? EMPTY_DRAFT : (state.drafts[key] ?? EMPTY_DRAFT),
+  )
+  const setComposer = (patch: Partial<ComposerDraft>) => {
+    if (doc !== null) setDraft(doc.ref, patch)
+  }
   const skills = useApp((state) => state.skills)
   const input = useRef<HTMLTextAreaElement>(null)
   // How many earlier turns the next message carries to the agent (a number: a stable snapshot).

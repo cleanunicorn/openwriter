@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import {
+  answer,
+  articleHeading,
   editor,
   expectFile,
   expectOneWaiting,
@@ -152,4 +154,28 @@ test('opening the agent panel by hand on a narrow window brings it into view, ke
   await page.keyboard.press(`${mod}+Alt+b`)
   await expect(agent(page)).toBeInViewport()
   await expect(editor(page)).toBeFocused()
+})
+
+test('an unsent message belongs to its document and is sent against it', async ({ page, app }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await message(page).fill('fake:upper for the first article')
+
+  const files = page.getByRole('navigation', { name: 'Files and actions' })
+  await files.getByRole('button', { name: 'New article…' }).click()
+  await answer(page, 'Article title', 'Second Thoughts')
+  await expect(articleHeading(page, 'Second Thoughts')).toBeVisible()
+  await expect(message(page)).toHaveValue('')
+
+  await files.getByRole('button', { name: 'Hello, openwrite' }).click()
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(message(page)).toHaveValue('fake:upper for the first article')
+  await message(page).press('Enter')
+  const id = await expectOneWaiting(app)
+  const job = (await (await fetch(`${app.url}/api/jobs/${id}`)).json()) as {
+    doc: { slug: string }
+  }
+  expect(job.doc.slug).toBe('hello-openwrite')
 })

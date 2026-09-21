@@ -36,14 +36,17 @@ export type JobsState = {
   /** jobId → op index → IDs of the blocks that op inserted (keeps result order across accepts). */
   inserted: Record<string, Record<number, string[]>>
   researchJobId: string | null
-  /** The right panel's unsent message: it survives closing the panel. */
-  composer: ComposerDraft
+  /**
+   * The right panel's unsent message, one per document (docKey): it survives closing the panel,
+   * and a message written about one document is never sent against another.
+   */
+  drafts: Record<string, ComposerDraft>
   /** When the writer last started a new conversation (ISO time); earlier jobs are not carried. */
   threadStart: string | null
 }
 
 export type ComposerDraft = { text: string; scope: 'article' | 'research' }
-const EMPTY_COMPOSER: ComposerDraft = { text: '', scope: 'article' }
+export const EMPTY_DRAFT: ComposerDraft = { text: '', scope: 'article' }
 
 const jobsStore = createStore<JobsState>({
   jobs: {},
@@ -51,7 +54,7 @@ const jobsStore = createStore<JobsState>({
   held: [],
   inserted: {},
   researchJobId: null,
-  composer: EMPTY_COMPOSER,
+  drafts: {},
   threadStart: null,
 })
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
@@ -336,8 +339,14 @@ export const startNewConversation = () =>
 export const threadOf = (state: JobsState, ref: DocRef) =>
   threadFor(docKey(ref), state.jobs, state.order, state.threadStart)
 
-export const setComposer = (patch: Partial<ComposerDraft>) =>
-  jobsStore.set((state) => ({ ...state, composer: { ...state.composer, ...patch } }))
+export const setDraft = (ref: DocRef, patch: Partial<ComposerDraft>) =>
+  jobsStore.set((state) => {
+    const key = docKey(ref)
+    return {
+      ...state,
+      drafts: { ...state.drafts, [key]: { ...(state.drafts[key] ?? EMPTY_DRAFT), ...patch } },
+    }
+  })
 export const setResearchJob = (researchJobId: string | null) =>
   jobsStore.set((state) => ({ ...state, researchJobId }))
 
@@ -430,7 +439,7 @@ export async function resetJobs(): Promise<void> {
     held: [],
     inserted: {},
     researchJobId: null,
-    composer: EMPTY_COMPOSER,
+    drafts: {},
     threadStart: null,
   }))
   createdHere.clear()
