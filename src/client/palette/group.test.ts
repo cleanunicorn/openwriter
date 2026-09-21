@@ -1,69 +1,93 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  type Command,
-  type CommandGroup,
-  filterCommands,
-  GROUP_ORDER,
-  groupCommands,
-  orderCommands,
-} from './group.ts'
+import { docKey, type SkillInfo, SkillInfoSchema } from '../../shared/api-types.ts'
+import { DEFAULT_CONFIG } from '../../shared/config-schema.ts'
+import { splitHeader } from '../../shared/key-values.ts'
+import { docReducer, initialDocState } from '../state/doc-reducer.ts'
+import { type Command, filterCommands, GROUP_ORDER, groupCommands, orderCommands } from './group.ts'
 
-const run = () => {}
-const command = (id: string, group: CommandGroup, title: string, hint?: string): Command => ({
-  id,
-  group,
-  title,
-  ...(hint === undefined ? {} : { hint }),
-  run,
-})
+// The real providers, registered in App.tsx's order: palette/commands.ts first (jobs/commands.ts
+// imports it), then jobs, export, settings, workspaces. They are loaded by a computed URL, not a
+// static import: statically, their React types would reach tsconfig.server.json (which checks this
+// test without the DOM library) and break its server files' fetch types.
+const load = (spec: string): Promise<unknown> => import(new URL(spec, import.meta.url).href)
+for (const spec of [
+  './commands.ts',
+  '../jobs/commands.ts',
+  '../export.ts',
+  '../settings/commands.ts',
+  '../workspaces/commands.ts',
+])
+  await load(spec)
+const { allCommands } = (await load('./commands.ts')) as {
+  allCommands: (state: SampleState) => Command[]
+}
 
 /**
- * The registry as the sample workspace shows it with the article open, in registration order
- * (palette, jobs, export, settings, workspaces — the import order in App.tsx). Titles and hints are
- * copied from the providers; if one changes, change it here too, or the contract below proves nothing.
+ * The registry exactly as the providers build it for the sample workspace with its article open,
+ * plus three remembered workspaces named like the ones the e2e suite creates. Nothing is copied:
+ * a changed title or hint changes what these tests see.
  */
-const REGISTRY: Command[] = [
-  command('open:hello-openwrite', 'documents', 'Open article: Hello, openwrite', 'hello-openwrite'),
-  command('new-article', 'documents', 'New article…'),
-  command('theme', 'app', 'Theme: switch to light', 'now system'),
-  command('toggle-left', 'app', 'Toggle files and actions', 'Ctrl/Cmd+B'),
-  command('toggle-right', 'app', 'Toggle agent panel', 'Ctrl/Cmd+Alt+B'),
-  command('go-left', 'app', 'Go to files and actions'),
-  command('go-right', 'app', 'Go to agent'),
-  command('ask-article', 'agent', 'Instruct the agent: whole article…', 'article scope'),
-  command('ask-research', 'agent', 'Research question…', 'no edits; answer goes to notes'),
-  command(
-    'skill:diagram',
-    'agent',
-    'Run skill: diagram',
-    'Produce a mermaid diagram as a fenced code block',
-  ),
-  command(
-    'skill:image',
-    'agent',
-    'Run skill: image',
-    'Generate an image with the agent configured for image tasks',
-  ),
-  command('export-markdown', 'export', 'Export: markdown + assets (zip)', 'the bundle as is'),
-  command('export-html', 'export', 'Export: standalone HTML + assets (zip)', 'diagrams rendered'),
-  command('settings', 'app', 'Settings…', 'agents, content directory, theme'),
-  command('edit-strategy', 'documents', 'Edit strategy', 'strategy.md'),
-  command('edit-brief', 'documents', 'Edit brief', 'brief for hello-openwrite'),
-  command('draft-brief', 'agent', 'Draft brief from my notes', 'a job; you review the result'),
-  command('draft-article', 'agent', 'Draft article from brief', 'a job; you review the result'),
-  command('workspace-open:1', 'workspace', 'Switch to workspace: From Hugo', '/tmp/hugo'),
-  command('workspace-open:2', 'workspace', 'Switch to workspace: doomed', '/tmp/doomed'),
-  command('workspace-open-path', 'workspace', 'Open workspace…', 'by its path on disk'),
-  command('workspace-new', 'workspace', 'New workspace…', 'scaffold and open it'),
-  command('workspace-rename:1', 'workspace', 'Rename workspace: The first one', '/tmp/first'),
-  command(
-    'workspace-forget:1',
-    'workspace',
-    'Remove workspace from the list: The first one',
-    'keeps every file on disk',
-  ),
-  command('workspace-erase:2', 'workspace', 'Delete workspace from disk: doomed', 'irreversible'),
-]
+/** The slice of AppState the providers read (AppState itself would pull React's types in too). */
+type SampleState = Record<string, unknown>
+
+function sampleState(): SampleState {
+  const ref = { kind: 'article', slug: 'hello-openwrite' } as const
+  const text = readFileSync(
+    path.join(root, 'sample-workspace', 'content', 'posts', 'hello-openwrite', 'index.md'),
+    'utf8',
+  )
+  const doc = docReducer(initialDocState(ref), { type: 'loaded', text, hash: null, exists: true })
+  const skills = readdirSync(path.join(root, 'skills'))
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => skillInfo(readFileSync(path.join(root, 'skills', file), 'utf8')))
+  const entry = (id: string, label: string) => ({ id, label, path: `/tmp/${id}` })
+  return {
+    boot: 'ready',
+    current: ref,
+    docs: { [docKey(ref)]: doc },
+    articles: [{ slug: 'hello-openwrite', title: 'Hello, openwrite' }],
+    config: {
+      config: DEFAULT_CONFIG,
+      error: null,
+      contentDirError: null,
+      contentOutsideWorkspace: false,
+      adapters: ['fake'],
+      adapterOverride: null,
+    },
+    skills,
+    workspaces: {
+      active: { root: '/tmp/active', label: 'sample' },
+      entries: [
+        entry('aaaaaaaaaaaa', 'From Hugo'),
+        entry('bbbbbbbbbbbb', 'doomed'),
+        entry('cccccccccccc', 'The first one'),
+      ],
+    },
+    palette: null,
+    panel: null,
+    themeEpoch: 0,
+  }
+}
+
+const root = path.resolve(import.meta.dirname, '..', '..', '..')
+
+/** A skill file's header as /api/skills lists it (the defaults are the server's). */
+function skillInfo(text: string): SkillInfo {
+  const { header } = splitHeader(text)
+  const list = (value: string | string[] | undefined) =>
+    value === undefined ? [] : Array.isArray(value) ? value : [value]
+  return SkillInfoSchema.parse({
+    name: header.name,
+    description: header.description,
+    scope: header.scope ?? 'blocks',
+    stub: header.stub === 'true',
+    requires: list(header.requires),
+    document: header.document ?? 'current',
+  })
+}
+const REGISTRY = allCommands(sampleState())
 
 describe('groupCommands', () => {
   it('orders sections by GROUP_ORDER and keeps registration order inside each', () => {
@@ -107,7 +131,7 @@ describe('the first match of every palette query the e2e suite runs', () => {
   const cases: [string, string][] = [
     ['theme', 'theme'],
     ['new workspace', 'workspace-new'],
-    ['delete workspace from disk: doomed', 'workspace-erase:2'],
+    ['delete workspace from disk: doomed', 'workspace-erase:bbbbbbbbbbbb'],
     ['research', 'ask-research'],
     ['whole article', 'ask-article'],
     ['new article', 'new-article'],
@@ -116,13 +140,13 @@ describe('the first match of every palette query the e2e suite runs', () => {
     ['draft article', 'draft-article'],
     ['edit brief', 'edit-brief'],
     ['export html', 'export-html'],
-    ['From Hugo', 'workspace-open:1'],
+    ['From Hugo', 'workspace-open:aaaaaaaaaaaa'],
     ['open article hello', 'open:hello-openwrite'],
     ['open hello', 'open:hello-openwrite'],
-    ['remove workspace from the list: The first one', 'workspace-forget:1'],
+    ['remove workspace from the list: The first one', 'workspace-forget:cccccccccccc'],
     ['run skill diagram', 'skill:diagram'],
     ['settings', 'settings'],
-    ['switch to workspace', 'workspace-open:1'],
+    ['switch to workspace', 'workspace-open:aaaaaaaaaaaa'],
   ]
   for (const [query, id] of cases) {
     it(`"${query}" → ${id}`, () => {
