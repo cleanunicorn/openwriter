@@ -25,12 +25,14 @@ registerCommands((state) => {
     {
       id: 'settings',
       title: 'Settings…',
+      group: 'app' as const,
       hint: 'agents, content directory, theme',
       run: () => setPanel('settings'),
     },
     {
       id: 'edit-strategy',
       title: 'Edit strategy',
+      group: 'documents' as const,
       hint: 'strategy.md',
       run: () => openDoc({ kind: 'strategy' }),
     },
@@ -41,12 +43,14 @@ registerCommands((state) => {
     {
       id: 'edit-brief',
       title: 'Edit brief',
+      group: 'documents' as const,
       hint: `brief for ${slug}`,
       run: () => openDoc({ kind: 'brief', slug }),
     },
     {
       id: 'draft-brief',
       title: 'Draft brief from my notes',
+      group: 'agent' as const,
       hint: 'a job; you review the result',
       run: () =>
         draft(
@@ -58,6 +62,7 @@ registerCommands((state) => {
     {
       id: 'draft-article',
       title: 'Draft article from brief',
+      group: 'agent' as const,
       hint: 'a job; you review the result',
       run: () =>
         draft({ kind: 'article', slug }, 'draft-article', 'Draft the article from its brief.'),

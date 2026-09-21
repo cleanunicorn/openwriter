@@ -56,12 +56,14 @@ registerCommands((state) => {
     {
       id: 'export-markdown',
       title: 'Export: markdown + assets (zip)',
+      group: 'export' as const,
       hint: 'the bundle as is',
       run: () => exportArticle('markdown'),
     },
     {
       id: 'export-html',
       title: 'Export: standalone HTML + assets (zip)',
+      group: 'export' as const,
       hint: 'diagrams rendered',
       run: () => exportArticle('html'),
     },

@@ -1,7 +1,8 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { type PaletteMode, setPalette, store, useApp } from '../state/app.ts'
 import { useRestoreFocus } from '../use-restore-focus.ts'
-import { allCommands, filterCommands } from './commands.ts'
+import { allCommands } from './commands.ts'
+import { filterCommands, groupCommands } from './group.ts'
 
 /** `Cmd/Ctrl+K`: a filtered list of commands, or a one-line input a command asked for. */
 export function Palette({ mode }: { mode: PaletteMode }) {
@@ -15,10 +16,15 @@ export function Palette({ mode }: { mode: PaletteMode }) {
   const workspaces = useApp((state) => state.workspaces)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the list depends on app state slices
-  const commands = useMemo(
-    () => (mode.kind === 'commands' ? filterCommands(allCommands(store.get()), query) : []),
+  const sections = useMemo(
+    () =>
+      mode.kind === 'commands'
+        ? groupCommands(filterCommands(allCommands(store.get()), query))
+        : [],
     [mode, query, articles, config, skills, workspaces],
   )
+  // One flat index across the sections: the arrows walk every command, headers are skipped.
+  const commands = sections.flatMap((section) => section.commands)
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the mode changes
   useEffect(() => {
@@ -98,23 +104,43 @@ export function Palette({ mode }: { mode: PaletteMode }) {
         />
         {mode.kind === 'commands' && (
           <div id="palette-list" role="listbox" aria-label="Commands" className="palette-list">
-            {commands.map((command, index) => (
+            {sections.map((section) => (
+              // biome-ignore lint/a11y/useSemanticElements: a listbox's sections are ARIA groups; a fieldset is not a valid listbox child
               <div
-                key={command.id}
-                id={`palette-option-${index}`}
-                role="option"
-                tabIndex={-1}
-                aria-selected={index === active}
-                className={`palette-item ${index === active ? 'is-active' : ''}`}
-                onMouseEnter={() => setActive(index)}
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  close()
-                  void command.run()
-                }}
+                key={section.group}
+                role="group"
+                aria-labelledby={`palette-group-${section.group}`}
+                className="palette-group"
               >
-                <span>{command.title}</span>
-                {command.hint !== undefined && <span className="quiet">{command.hint}</span>}
+                <div
+                  id={`palette-group-${section.group}`}
+                  role="presentation"
+                  className="palette-group-label quiet"
+                >
+                  {section.label}
+                </div>
+                {section.commands.map((command) => {
+                  const index = commands.indexOf(command)
+                  return (
+                    <div
+                      key={command.id}
+                      id={`palette-option-${index}`}
+                      role="option"
+                      tabIndex={-1}
+                      aria-selected={index === active}
+                      className={`palette-item ${index === active ? 'is-active' : ''}`}
+                      onMouseEnter={() => setActive(index)}
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        close()
+                        void command.run()
+                      }}
+                    >
+                      <span>{command.title}</span>
+                      {command.hint !== undefined && <span className="quiet">{command.hint}</span>}
+                    </div>
+                  )
+                })}
               </div>
             ))}
             {commands.length === 0 && <div className="palette-item quiet">No matching command</div>}

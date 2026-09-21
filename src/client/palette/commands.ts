@@ -9,7 +9,9 @@ import {
   store,
 } from '../state/app.ts'
 
-export type Command = { id: string; title: string; hint?: string; run: () => void | Promise<void> }
+import type { Command } from './group.ts'
+
+export { type Command, type CommandGroup, filterCommands } from './group.ts'
 
 type Provider = (state: AppState) => Command[]
 const providers: Provider[] = []
@@ -49,11 +51,13 @@ registerCommands((state) => {
       id: `open:${article.slug}`,
       title: `Open article: ${article.title}`,
       hint: article.slug,
+      group: 'documents' as const,
       run: () => openDoc({ kind: 'article', slug: article.slug }),
     })),
     {
       id: 'new-article',
       title: 'New article…',
+      group: 'documents',
       run: () =>
         setPalette({
           kind: 'input',
@@ -66,6 +70,7 @@ registerCommands((state) => {
       id: 'theme',
       title: `Theme: switch to ${nextTheme}`,
       hint: `now ${theme}`,
+      group: 'app',
       run: () => setTheme(nextTheme),
     },
   ]
@@ -73,12 +78,3 @@ registerCommands((state) => {
 
 export const allCommands = (state: AppState): Command[] =>
   providers.flatMap((provider) => provider(state))
-
-/** Every word of the query must appear in the title or the hint, in any order. */
-export function filterCommands(commands: Command[], query: string): Command[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  return commands.filter((command) => {
-    const haystack = `${command.title} ${command.hint ?? ''}`.toLowerCase()
-    return words.every((word) => haystack.includes(word))
-  })
-}

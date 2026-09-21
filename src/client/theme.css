@@ -414,6 +414,17 @@ body {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.palette-group + .palette-group {
+  margin-top: 4px;
+}
+
+.palette-group-label {
+  padding: 6px 10px 2px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ── jobs: pill, pending marks, ghosts, tray, research ──────────────────── */
 
 .column {

@@ -46,6 +46,7 @@ registerCommands((state) => {
     {
       id: 'ask-article',
       title: 'Instruct the agent: whole article…',
+      group: 'agent' as const,
       hint: 'article scope',
       run: () =>
         askInPalette({
@@ -59,6 +60,7 @@ registerCommands((state) => {
     {
       id: 'ask-research',
       title: 'Research question…',
+      group: 'agent' as const,
       hint: 'no edits; answer goes to notes',
       run: () =>
         askInPalette({
@@ -68,13 +70,14 @@ registerCommands((state) => {
           scope: 'research',
         }),
     },
-    { id: 'show-jobs', title: 'Show agent jobs', run: () => setTrayOpen(true) },
+    { id: 'show-jobs', title: 'Show agent jobs', group: 'agent', run: () => setTrayOpen(true) },
     // One command per skill file. A new media type adds a file to skills/, never code here.
     ...state.skills
       .filter((skill) => skill.document === 'current')
       .map((skill) => ({
         id: `skill:${skill.name}`,
         title: `Run skill: ${skill.name}`,
+        group: 'agent' as const,
         hint: skill.stub ? `${skill.description} — stub` : skill.description,
         run: () =>
           askInPalette({
