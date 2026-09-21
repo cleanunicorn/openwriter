@@ -40,7 +40,9 @@ The server binds `127.0.0.1` only.
   The left one lists the workspace, every article (the open one marked), New article,
   `strategy.md`, the article's brief, export, theme and settings. Opening or closing a panel
   never takes the keyboard from the block you are typing in. Their open/closed state is kept in
-  `.zen/config.json`.
+  `.zen/config.json`, per workspace — with one exception on purpose: in a window too narrow for
+  it to sit beside the text, a remembered left panel stays closed after a reload until you open
+  it again, so it never comes back over the article.
 - A panel docks beside the text only when the text keeps its full width. On a narrower window
   the agent panel follows the article, and the left panel slides over the page as a drawer that
   a pick, `Esc` or a click elsewhere closes.

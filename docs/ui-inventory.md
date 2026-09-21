@@ -112,7 +112,8 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 - Save, Close, and the saved/error status ("Settings status")
 
 They are the form over `.zen/config.json` and change rarely. The panels' open/closed state is kept
-in the same file (`ui`), but it is a toggle, not a setting, so the form does not show it.
+in the same file (`ui`), but it is a toggle, not a setting, so the form does not show it. In a
+narrow window a remembered left panel stays closed after a reload until opened by hand.
 
 ## Removed or merged
 
