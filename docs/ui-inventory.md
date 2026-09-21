@@ -2,7 +2,8 @@
 
 Every command, control and setting in openwrite, each with exactly one home and the reason it is
 there, including the ones deliberately left where they were. `src/client/ui-inventory.test.ts`
-fails when a palette command exists that this page does not name. Update this page in the same
+fails when a palette command, a labelled control or a button's text in the app's surfaces is
+missing from this page. Update this page in the same
 PR as any new command, control or setting.
 
 **The shape.** A centred 680px writing column, and two edge panels that are closed on first run.
@@ -67,23 +68,24 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 |---|---|---|
 | Left and right edge handles | C (screen edges) | the discoverable toggles; the only always-visible chrome the shell adds |
 | Job count ("1 running · 2 to review") | C bottom-right while the agent panel is closed or stacked below the article; heads the transcript when the panel is open | running and failed work stays in sight; clicking it opens the panel or scrolls to it |
-| Transcript rows: Cancel, Open notes, Review in …, Dismiss / Reject and dismiss, the agent's output, herdr Copy, a held request's Cancel | R | the conversation: what was asked and what came of it |
+| Transcript rows: Cancel, Open notes, Review in …, Dismiss / Reject and dismiss, the agent's output, herdr Copy (with its "Copy result" status), a held request's Cancel | R | the conversation: what was asked and what came of it |
 | Scope and skill chips on each turn | R | what each turn was about, at a glance |
 | Research notes: Insert as block, Close, Discard these notes | R, above the transcript | a research answer is part of the conversation |
 | Composer: "Message to the agent", "Ask about", Send, `/skill` chips, starters | R | whole-article requests and research questions get a home outside the palette |
 | "Carries the last N turns …" and New conversation | R, under the composer | shows what the next message sends the agent, and lets the writer start clean |
-| Prompt pill: instruction, scope, `/skill`, `Ctrl/Cmd+I`, type-to-pill, Escape | C at the selection | anchored to what is selected; it never takes focus by appearing |
+| Prompt pill ("Ask the agent"): "Instruction for the agent", scope, `/skill`, `Ctrl/Cmd+I`, type-to-pill, Escape | C at the selection | anchored to what is selected; it never takes focus by appearing |
 | Ghost diff: Accept, Reject, Accept all, Reject all; keys `Enter`/`a`, `Backspace`/`Delete`/`r`, with `Ctrl/Cmd` for the whole job | C on the text | a decision sits on the text it changes |
 | Pending and queued marks on blocks | C | spatial feedback; the transcript has the detail |
 | Margin selection, shift-click, the drag handle | C | the writing surface |
 | Click-to-edit, Escape or click away to render, arrows across blocks, Enter to split, Backspace to merge, paste or drop an image | C | the writing surface (not part of this redesign) |
 | Front-matter line | C | the writing surface |
 | Document notice + Dismiss | C | failures stay where the writer is |
-| Loading…, the load error + Retry, "does not exist on disk" | C | the same |
+| Loading…, the load error + Retry, "This document does not exist on disk." | C | the same |
 | Empty workspace: "No article yet." + New article + the `Ctrl/Cmd+B` hint | C | the first step, in place |
 | Start writing | C | belongs to the empty document |
 | `strategy.md` / `brief · <slug>` label | C; the left panel marks the same document as current | which document this is, next to its text |
 | Palette: query, arrows, Enter, Escape, "No matching command", text prompts, typed confirmation | P | the universal keyboard route |
+| "All commands" (bottom of the left panel's Actions, with its `Ctrl/Cmd+K` hint) | L·A | the palette's door from the panel, for a writer who reaches for the mouse |
 
 ## Keys
 
@@ -107,7 +109,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 - Job timeout
 - Per adapter: command, model, extra arguments
 - The invalid-config and `--adapter` notices
-- Save, Close, and the saved/error status
+- Save, Close, and the saved/error status ("Settings status")
 
 They are the form over `.zen/config.json` and change rarely. The panels' open/closed state is kept
 in the same file (`ui`), but it is a toggle, not a setting, so the form does not show it.
