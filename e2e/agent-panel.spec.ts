@@ -210,3 +210,26 @@ test('a /skill message from the agent panel runs that skill with its own scope',
   expect(JSON.parse(readFileSync(jobFile(app, id, 'targets.json'), 'utf8')).scope).toBe('blocks')
   await expect(tray(page)).toContainText('/diagram')
 })
+
+test('a ready turn offers "Review", naming the document only when it is another one', async ({
+  page,
+  app,
+}) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await say(page, 'fake:upper make it louder')
+  await expectOneWaiting(app)
+  await release(app)
+  await expect(tray(page).getByRole('button', { name: 'Review', exact: true })).toBeVisible()
+
+  await page.keyboard.press(`${mod}+b`)
+  await page
+    .getByRole('navigation', { name: 'Files and actions' })
+    .getByRole('button', { name: 'strategy.md' })
+    .click()
+  await expect(
+    tray(page).getByRole('button', { name: 'Review in Hello, openwrite', exact: true }),
+  ).toBeVisible()
+  await expect(tray(page)).not.toContainText('article:')
+})

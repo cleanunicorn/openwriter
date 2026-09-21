@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { docKey } from '../../shared/api-types.ts'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
-import { openDoc } from '../state/app.ts'
+import { reviewLabel } from '../doc-label.ts'
+import { openDoc, useApp } from '../state/app.ts'
 import {
   type HeldRequest,
   cancelJob,
@@ -82,6 +82,7 @@ function OpenInHerdr({ progress }: { progress: string[] }) {
 
 function JobRow({ job }: { job: Job }) {
   const active = isActive(job.state)
+  const review = useApp((state) => reviewLabel(job.doc, state.current, state.articles))
   const last = job.progress[job.progress.length - 1]
   return (
     <li className="tray-job" data-state={job.state}>
@@ -120,7 +121,7 @@ function JobRow({ job }: { job: Job }) {
         )}
         {job.state === 'ready' && job.scope !== 'research' && (
           <button type="button" className="link" onClick={() => void openDoc(job.doc)}>
-            Review in {docKey(job.doc)}
+            {review}
           </button>
         )}
         {!active && (

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BlockList } from './blocks/BlockList.tsx'
+import { docLabel } from './doc-label.ts'
 import { useGhosts } from './jobs/GhostDiff.tsx'
 import { PromptPill } from './jobs/PromptPill.tsx'
 import { useSelectionPill } from './jobs/selection.ts'
@@ -178,9 +179,7 @@ export function App() {
           {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
             <>
               {doc.ref.kind !== 'article' && (
-                <p className="quiet doc-label">
-                  {doc.ref.kind === 'strategy' ? 'strategy.md' : `brief · ${doc.ref.slug}`}
-                </p>
+                <p className="quiet doc-label">{docLabel(doc.ref, [])}</p>
               )}
               <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
               {!doc.doc.blocks.some((block) => block.kind === 'content') &&
