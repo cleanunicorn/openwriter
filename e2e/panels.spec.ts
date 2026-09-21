@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
+import { decodeWorkspaceHeader, WORKSPACE_HEADER } from '../src/shared/api-types.ts'
 import { type App, expect, test } from './fixtures.ts'
 import {
   answer,
@@ -19,6 +20,7 @@ import {
   jobState,
   keyboardMove,
   mod,
+  notice,
   openArticle,
   pill,
   release,
@@ -508,4 +510,75 @@ test('a panel toggle still on its way lands in its own workspace, never the next
   } finally {
     rmSync(base, { recursive: true, force: true })
   }
+})
+
+test('a toggle made before the page knows its workspace still says which workspace it is for', async ({
+  page,
+  app,
+}) => {
+  // The workspace list is slow to arrive; the config is not.
+  let releaseList = () => {}
+  const listHeld = new Promise<void>((resolve) => {
+    releaseList = resolve
+  })
+  let lists = 0
+  await page.route('**/api/workspaces', async (route) => {
+    if (++lists === 1) void listHeld.then(() => route.continue())
+    else await route.continue()
+  })
+  const put = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/config'),
+  )
+  const configLoaded = page.waitForResponse((response) => response.url().endsWith('/api/config'))
+  await page.goto('/')
+  await configLoaded
+  await expect(async () => {
+    await page.keyboard.press(`${mod}+b`)
+    await expect(leftPanel(page)).toBeVisible({ timeout: 500 })
+  }).toPass()
+  expect(decodeWorkspaceHeader((await put).headers()[WORKSPACE_HEADER] ?? '')).toBe(app.workspace)
+  releaseList()
+})
+
+test('a toggle the server refuses as meant for another workspace shows the settings in force', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await page.route('**/api/config', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue()
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'The workspace changed before these settings were saved.' }),
+    })
+  })
+  await page.keyboard.press(`${mod}+b`)
+  // Refused: the page re-reads the config, and the server's (panel closed) wins.
+  await expect(notice(page)).toContainText('The workspace changed')
+  await expect(leftPanel(page)).toHaveCount(0)
+})
+
+test('a Settings save refused as meant for another workspace re-reads the settings', async ({
+  page,
+}) => {
+  await openArticle(page)
+  await page.route('**/api/config', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue()
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'The workspace changed before these settings were saved.' }),
+    })
+  })
+  await runCommand(page, 'settings')
+  const dialog = page.getByRole('dialog', { name: 'Settings' })
+  await expect(dialog).toBeVisible()
+  const reread = page.waitForRequest(
+    (request) => request.method() === 'GET' && request.url().endsWith('/api/config'),
+  )
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await expect(dialog.getByRole('status', { name: 'Settings status' })).toContainText(
+    'The workspace changed',
+  )
+  await reread
 })
