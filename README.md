@@ -171,6 +171,7 @@ Settings are reachable from the palette (`Settings…`) and stored in `<workspac
 | `concurrency` | how many agent processes run at once (jobs waiting for review do not count) |
 | `jobTimeoutSec` | a job that produces no result in this time is stopped |
 | `adapters.<name>` | `command`, `model`, `extraArgs`, and `baseArgs` (replaces the verified default command line; `{jobDir}`, `{jobRel}`, `{workspace}` are substituted) |
+| `ui.leftPanel`, `ui.rightPanel` | whether the two edge panels are open; `false` by default. Set by the edge handles and `Ctrl/Cmd+B` / `Ctrl/Cmd+Alt+B`, not by the Settings form. Kept per workspace; in a narrow window a remembered left panel stays closed after a reload until opened by hand |
 
 The agent CLIs use your own logins; openwrite stores no keys. Agents run with the narrowest
 permissions that work: `claude` may read the workspace and write only inside its job directory;
