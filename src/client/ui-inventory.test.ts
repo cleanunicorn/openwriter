@@ -21,9 +21,22 @@ function commandIds(source: string): string[] {
   return [...fixed, ...families]
 }
 
+/** The page between one `## ` heading and the next: only these parts count as live homes. */
+function section(markdown: string, heading: string): string {
+  const start = markdown.indexOf(`\n## ${heading}\n`)
+  if (start === -1) throw new Error(`no "## ${heading}" section`)
+  const end = markdown.indexOf('\n## ', start + 1)
+  return markdown.slice(start, end === -1 ? undefined : end)
+}
+
+/** The id in the first cell of each table row: `` `new-article` `` → `new-article`, `` `open:<slug>` `` → `open:<`. */
+const rowIds = (markdown: string): string[] =>
+  [...markdown.matchAll(/^\| `([a-z-]+(?::<)?)[^`]*` \|/gm)].map((match) => match[1] ?? '')
+
 describe('docs/ui-inventory.md', () => {
   const inventory = read('docs/ui-inventory.md')
   const ids = PROVIDERS.flatMap((file) => commandIds(read(file)))
+  const rows = rowIds(section(inventory, 'Commands'))
 
   it('finds the commands it checks', () => {
     // A guard on the extraction itself: if the providers change shape, this test must notice.
@@ -32,11 +45,12 @@ describe('docs/ui-inventory.md', () => {
     expect(ids.length).toBeGreaterThanOrEqual(20)
   })
 
-  for (const id of new Set(ids)) {
-    it(`names ${id}`, () => {
-      expect(inventory).toContain(`\`${id}`)
-    })
-  }
+  it('gives every palette command exactly one home, and no home to a command that is gone', () => {
+    // Both ways: a command without a row, and a row for a command that no longer exists.
+    expect([...rows].sort()).toEqual([...new Set(ids)].sort())
+    // Exactly one row each: one home, not two.
+    expect(rows.length).toBe(new Set(rows).size)
+  })
 })
 
 // Controls outside the palette: every labelled control and every button's text in the surfaces
@@ -63,7 +77,9 @@ function controlLabels(source: string): string[] {
 }
 
 describe('docs/ui-inventory.md, controls', () => {
-  const inventory = read('docs/ui-inventory.md').toLowerCase()
+  // The history of what was removed does not count as a home.
+  const page = read('docs/ui-inventory.md')
+  const inventory = page.slice(0, page.indexOf('\n## Removed or merged')).toLowerCase()
   const labels = SURFACES.flatMap((file) => controlLabels(read(file)))
 
   it('finds the controls it checks', () => {
