@@ -95,26 +95,22 @@ export function App() {
         inTextField: inTextField(event.target),
         onControl: onControl(event.target),
       })
-      if (action === 'palette') {
-        event.preventDefault()
-        setPalette(state.palette === null ? { kind: 'commands' } : null)
-      } else if (action === 'toggle-left' || action === 'toggle-right') {
-        // Toggling never moves the focus: the writer keeps typing where they were.
-        event.preventDefault()
-        if (action === 'toggle-left') toggleLeft()
-        else toggleRight()
-      } else if (action === 'undo' || action === 'redo') {
-        // Document-level undo and redo when no editor has the keyboard.
-        event.preventDefault()
-        dispatch({ type: action })
-      } else if (action === 'enter-document') {
+      if (action === null) return
+      if (action === 'enter-document') {
         // Keyboard entry into the document: edit the first content block.
         const first = currentDoc(state)?.doc.blocks.find((block) => block.kind === 'content')
-        if (first !== undefined) {
-          event.preventDefault()
-          dispatch({ type: 'focus', id: first.id, cursor: 'end' })
-        }
+        if (first === undefined) return
+        event.preventDefault()
+        dispatch({ type: 'focus', id: first.id, cursor: 'end' })
+        return
       }
+      event.preventDefault()
+      if (action === 'palette') setPalette(state.palette === null ? { kind: 'commands' } : null)
+      // Toggling never moves the focus: the writer keeps typing where they were.
+      else if (action === 'toggle-left') toggleLeft()
+      else if (action === 'toggle-right') toggleRight()
+      // Document-level undo and redo when no editor has the keyboard.
+      else dispatch({ type: action })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
