@@ -500,5 +500,9 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 - `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
 - `src/server/workspace-list.ts` — the known-workspace list; `src/server/routes/workspaces.ts` —
   the switch (quiesce, retarget, rebind) and the four guards on the delete
+- `src/client/shell/layout.ts` — where the edge panels dock, stack or overlay;
+  `shell/keys.ts` — the global key precedence; `src/shared/jobs/conversation.ts` — which earlier
+  turns a job carries in `conversation.md`, and their bounds
+- `docs/ui-inventory.md` — every command, control and setting, and its one home
 - `scripts/verify-adapter.ts` — the sentinel check for a real adapter's confinement
 - `docs/herdr-evaluation.md` — what was tried with herdr, and why it was adopted
