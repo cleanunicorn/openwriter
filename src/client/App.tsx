@@ -4,7 +4,7 @@ import { docLabel } from './doc-label.ts'
 import { useGhosts } from './jobs/GhostDiff.tsx'
 import { PromptPill } from './jobs/PromptPill.tsx'
 import { useSelectionPill } from './jobs/selection.ts'
-import { Tray } from './jobs/Tray.tsx'
+import { JobCount } from './jobs/Tray.tsx'
 import './jobs/commands.ts'
 import './export.ts'
 import './settings/commands.ts'
@@ -202,7 +202,7 @@ export function App() {
           )}
         </main>
       </Shell>
-      <Tray />
+      <JobCount />
       {panel === 'settings' && <Settings />}
       {palette !== null && <Palette mode={palette} />}
     </>

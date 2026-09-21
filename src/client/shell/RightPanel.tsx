@@ -1,6 +1,6 @@
 import { Composer } from '../jobs/Composer.tsx'
 import { ResearchPanel } from '../jobs/ResearchPanel.tsx'
-import { Tray } from '../jobs/Tray.tsx'
+import { Transcript } from '../jobs/Tray.tsx'
 
 /**
  * The agent conversation: research notes on top, the jobs as turns, and the message box. The
@@ -10,7 +10,7 @@ export function RightPanel() {
   return (
     <>
       <ResearchPanel />
-      <Tray inPanel />
+      <Transcript />
       <Composer />
     </>
   )

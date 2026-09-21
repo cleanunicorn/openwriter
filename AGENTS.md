@@ -311,7 +311,7 @@ src/client/           Vite + React
   shell/                Shell (the two edge panels and their handles), LeftPanel, RightPanel,
                         layout (pure: dock/stack/overlay), keys (pure: global key precedence), state
   palette/              Palette, commands (the command registry), group (the command taxonomy)
-  jobs/                 PromptPill, selection, GhostDiff, Tray (the agent transcript), Composer,
+  jobs/                 PromptPill, selection, GhostDiff, Tray (Transcript, and the corner JobCount), Composer,
                         ResearchPanel, commands, instruction (the pure `/skill` parser)
   settings/             Settings, commands
   export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)

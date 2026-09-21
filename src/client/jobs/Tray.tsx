@@ -179,45 +179,50 @@ function useTranscript() {
 }
 
 /**
- * The agent conversation: each job is a turn — what the writer asked, then what came of it. It
- * lives in the right panel. Wherever the panel is not beside the text — closed, or stacked after
- * the article on a narrow window — its one-line count also shows bottom right, so running, failed
- * and stale work never leaves the writer's sight. It exists only while there is a job.
+ * The agent conversation, in the right panel: each job is a turn — what the writer asked, then
+ * what came of it — under the one-line count. It exists only while there is a job.
  */
-export function Tray({ inPanel = false }: { inPanel?: boolean }) {
+export function Transcript() {
   const { list, held, label, empty } = useTranscript()
-  const layout = useShell((state) => layoutOf(state).right)
   if (empty) return null
-  if (inPanel) {
-    return (
-      <section className="tray transcript" aria-label="Agent jobs">
-        <button
-          type="button"
-          className="tray-toggle"
-          aria-expanded={true}
-          onMouseDown={keepFocus}
-          onClick={(event) => {
-            const hadFocus = document.activeElement === event.currentTarget
-            setRightOpen(false)
-            // The count moves to the corner; a keyboard user keeps holding it.
-            if (hadFocus)
-              focusWhenMounted(() => document.querySelector('.tray-corner > .tray-toggle'))
-          }}
-        >
-          {label}
-        </button>
-        <ul className="tray-list">
-          {list.map((job) => (
-            <JobRow key={job.id} job={job} />
-          ))}
-          {held.map((request) => (
-            <HeldRow key={request.id} request={request} />
-          ))}
-        </ul>
-      </section>
-    )
-  }
-  if (layout === 'docked') return null
+  return (
+    <section className="tray transcript" aria-label="Agent jobs">
+      <button
+        type="button"
+        className="tray-toggle"
+        aria-expanded={true}
+        onMouseDown={keepFocus}
+        onClick={(event) => {
+          const hadFocus = document.activeElement === event.currentTarget
+          setRightOpen(false)
+          // The count moves to the corner; a keyboard user keeps holding it.
+          if (hadFocus)
+            focusWhenMounted(() => document.querySelector('.tray-corner > .tray-toggle'))
+        }}
+      >
+        {label}
+      </button>
+      <ul className="tray-list">
+        {list.map((job) => (
+          <JobRow key={job.id} job={job} />
+        ))}
+        {held.map((request) => (
+          <HeldRow key={request.id} request={request} />
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/**
+ * The same count, bottom right, wherever the agent panel is not beside the text — closed, or
+ * stacked after the article on a narrow window — so running, failed and stale work never leaves
+ * the writer's sight. Clicking it opens the panel, or scrolls to it.
+ */
+export function JobCount() {
+  const { label, empty } = useTranscript()
+  const layout = useShell((state) => layoutOf(state).right)
+  if (empty || layout === 'docked') return null
   const count = (
     <button
       type="button"
