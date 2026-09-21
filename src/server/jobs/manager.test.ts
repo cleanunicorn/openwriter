@@ -107,6 +107,67 @@ describe('the job file contract', () => {
     expect(readFileSync(articlePath(), 'utf8')).not.toContain('zen:block')
   })
 
+  it('carries the earlier turns of a conversation as a bounded conversation.md', async () => {
+    const turn = {
+      scope: 'article' as const,
+      skill: null,
+      summary: 'Rewrote the intro.',
+      notes: null,
+      outcome: 'rejected' as const,
+    }
+    const job = await start(
+      request('Make it shorter', byText('## Why blocks'), {
+        conversation: [
+          { ...turn, instruction: 'rewrite the intro' },
+          { ...turn, instruction: 'now the ending', outcome: 'accepted' },
+        ],
+      }),
+    )
+    const dir = jobDir(job.id)
+    const conversation = readFileSync(path.join(dir, 'conversation.md'), 'utf8')
+    expect(conversation.indexOf('rewrite the intro')).toBeLessThan(
+      conversation.indexOf('now the ending'),
+    )
+    expect(conversation).toContain('— rejected')
+    expect(conversation).toContain('The result: Rewrote the intro.')
+    const instruction = readFileSync(path.join(dir, 'instruction.md'), 'utf8')
+    expect(instruction).toContain(`.zen/jobs/${job.id}/conversation.md`)
+  })
+
+  it('re-bounds an oversized conversation instead of writing it all', async () => {
+    const huge = 'z'.repeat(20000)
+    const job = await start(
+      request('Make it shorter', byText('## Why blocks'), {
+        conversation: Array.from({ length: 20 }, () => ({
+          instruction: huge,
+          scope: 'research' as const,
+          skill: null,
+          summary: huge,
+          notes: huge,
+          outcome: 'answered' as const,
+        })),
+      }),
+    )
+    const conversation = readFileSync(path.join(jobDir(job.id), 'conversation.md'), 'utf8')
+    expect(conversation.length).toBeLessThanOrEqual(8000)
+  })
+
+  it('gives a first turn exactly the files and instruction it always had', async () => {
+    const first = await start(request('Make it louder', byText('## Why blocks')))
+    const empty = await start(
+      request('Make it louder', byText('This is a sample'), { conversation: [] }),
+    )
+    for (const job of [first, empty]) {
+      expect(existsSync(path.join(jobDir(job.id), 'conversation.md'))).toBe(false)
+      const instruction = readFileSync(path.join(jobDir(job.id), 'instruction.md'), 'utf8')
+      expect(instruction).not.toContain('conversation.md')
+    }
+    // Same request but for the job id and targets: the same bytes, the conversation field aside.
+    const text = (job: Job) =>
+      readFileSync(path.join(jobDir(job.id), 'instruction.md'), 'utf8').replaceAll(job.id, 'ID')
+    expect(text(empty)).toBe(text(first))
+  })
+
   it('gives an empty document the virtual b0 anchor', async () => {
     const job = await start({
       doc: { kind: 'brief', slug: 'hello-openwrite' },

@@ -1,5 +1,6 @@
 import { type DocRef, docKey } from '../../shared/api-types.ts'
 import { applyOps } from '../../shared/jobs/apply-ops.ts'
+import { threadFor } from '../../shared/jobs/conversation.ts'
 import { rewriteAssetRefs } from '../../shared/jobs/asset-refs.ts'
 import {
   isActive,
@@ -38,6 +39,8 @@ export type JobsState = {
   researchJobId: string | null
   /** The right panel's unsent message: it survives closing the panel. */
   composer: ComposerDraft
+  /** When the writer last started a new conversation (ISO time); earlier jobs are not carried. */
+  threadStart: string | null
 }
 
 export type ComposerDraft = { text: string; scope: 'article' | 'research' }
@@ -50,6 +53,7 @@ const jobsStore = createStore<JobsState>({
   inserted: {},
   researchJobId: null,
   composer: EMPTY_COMPOSER,
+  threadStart: null,
 })
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
@@ -118,8 +122,17 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   const doc = liveDoc(docState)
   const snapshot = { blocks: doc.blocks, gaps: doc.gaps }
   const targets = effectiveTargets(request.scope, request.targets, snapshot)
+  // Picked now, not when the request was made: a held request then carries what became of the
+  // job it waited for. A conversation's first turn sends no field at all.
+  const { jobs, order, threadStart } = jobsStore.get()
+  const conversation = threadFor(docKey(request.doc), jobs, order, threadStart)
   try {
-    const job = await api.createJob({ ...request, targets, snapshot })
+    const job = await api.createJob({
+      ...request,
+      targets,
+      snapshot,
+      ...(conversation.length > 0 ? { conversation } : {}),
+    })
     createdHere.add(job.id)
     upsert(job)
   } catch (error) {
@@ -318,6 +331,14 @@ export function insertNote(job: Job, markdown: string): void {
   dispatchDoc(job.doc, { type: 'insert', index, markdown })
 }
 
+/** "New conversation": the next message carries none of the turns before it. */
+export const startNewConversation = () =>
+  jobsStore.set((state) => ({ ...state, threadStart: new Date().toISOString() }))
+
+/** The turns the next message about `ref` would carry. */
+export const threadOf = (state: JobsState, ref: DocRef) =>
+  threadFor(docKey(ref), state.jobs, state.order, state.threadStart)
+
 export const setComposer = (patch: Partial<ComposerDraft>) =>
   jobsStore.set((state) => ({ ...state, composer: { ...state.composer, ...patch } }))
 export const setResearchJob = (researchJobId: string | null) =>
@@ -413,6 +434,7 @@ export async function resetJobs(): Promise<void> {
     inserted: {},
     researchJobId: null,
     composer: EMPTY_COMPOSER,
+    threadStart: null,
   }))
   createdHere.clear()
   inFlight.clear()

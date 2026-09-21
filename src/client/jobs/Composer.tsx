@@ -1,7 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useRef } from 'react'
 import { allCommands } from '../palette/commands.ts'
 import { currentDoc, store, useApp } from '../state/app.ts'
-import { requestJob, setComposer, useJobs } from '../state/jobs.ts'
+import { requestJob, setComposer, startNewConversation, threadOf, useJobs } from '../state/jobs.ts'
 import { targetsFor } from './commands.ts'
 import { parseInstruction } from './PromptPill.tsx'
 
@@ -16,6 +16,8 @@ export function Composer() {
   const doc = useApp(currentDoc)
   const skills = useApp((state) => state.skills)
   const input = useRef<HTMLTextAreaElement>(null)
+  // How many earlier turns the next message carries to the agent (a number: a stable snapshot).
+  const carried = useJobs((state) => (doc === null ? 0 : threadOf(state, doc.ref).length))
   const ready = doc !== null && doc.status === 'ready'
   const currentSkills = skills.filter((skill) => skill.document === 'current')
   const starters = ready
@@ -107,6 +109,14 @@ export function Composer() {
             Send
           </button>
         </div>
+        {carried > 0 && (
+          <p className="composer-thread quiet">
+            Carries the last {carried} {carried === 1 ? 'turn' : 'turns'} about this document.{' '}
+            <button type="button" className="link" onClick={startNewConversation}>
+              New conversation
+            </button>
+          </p>
+        )}
         {ready && currentSkills.length > 0 && (
           <div className="composer-skills">
             {currentSkills.map((skill) => (

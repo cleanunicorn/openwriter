@@ -902,6 +902,11 @@ button.chip:focus-visible {
   border-radius: 6px;
 }
 
+.composer-thread {
+  margin: 0;
+  font-size: 12px;
+}
+
 .composer-skills {
   display: flex;
   flex-wrap: wrap;

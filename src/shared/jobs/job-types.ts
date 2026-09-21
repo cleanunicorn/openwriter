@@ -49,6 +49,35 @@ export const SnapshotSchema = z.object({
 })
 export type Snapshot = z.infer<typeof SnapshotSchema>
 
+/** How an earlier turn of the conversation ended, as the writer saw it. */
+export const TurnOutcomeSchema = z.enum([
+  'still running',
+  'awaiting review',
+  'accepted',
+  'rejected',
+  'partly accepted',
+  'answered',
+  'done',
+  'failed',
+  'cancelled',
+  'stale',
+])
+export type TurnOutcome = z.infer<typeof TurnOutcomeSchema>
+
+/**
+ * One earlier turn of the right panel's conversation. The caps are loose on purpose: the server
+ * re-bounds whatever arrives when it writes `conversation.md` (shared/jobs/conversation.ts).
+ */
+export const TurnSchema = z.object({
+  instruction: z.string().max(20000),
+  scope: ScopeSchema,
+  skill: z.string().max(200).nullable(),
+  summary: z.string().max(20000).nullable(),
+  notes: z.string().max(100000).nullable(),
+  outcome: TurnOutcomeSchema,
+})
+export type Turn = z.infer<typeof TurnSchema>
+
 /** What the client sends to start a job: the live document's snapshot plus the instruction. */
 export const JobRequestSchema = z.object({
   doc: DocRefSchema,
@@ -58,6 +87,8 @@ export const JobRequestSchema = z.object({
   targets: z.array(BlockIdSchema),
   selection: SelectionSchema.optional(),
   snapshot: SnapshotSchema,
+  /** Earlier turns about the same document, oldest first; absent on a conversation's first turn. */
+  conversation: z.array(TurnSchema).max(20).optional(),
 })
 export type JobRequest = z.infer<typeof JobRequestSchema>
 

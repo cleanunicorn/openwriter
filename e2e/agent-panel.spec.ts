@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import {
@@ -5,6 +6,7 @@ import {
   expectFile,
   expectOneWaiting,
   ghosts,
+  jobFile,
   mod,
   openArticle,
   release,
@@ -81,4 +83,40 @@ test('the message box keeps an unsent draft when the panel closes', async ({ pag
   await expect(agent(page)).toHaveCount(0)
   await page.keyboard.press(`${mod}+Alt+b`)
   await expect(message(page)).toHaveValue('half a thought')
+})
+
+test('a follow-up carries the earlier turn; a new conversation starts clean', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await say(page, 'fake:upper rewrite the intro')
+  const first = await expectOneWaiting(app)
+  await release(app, first)
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  await expect(ghosts(page)).toHaveCount(0)
+  await expect(agent(page)).toContainText('Carries the last 1 turn about this document.')
+
+  await say(page, 'make it shorter')
+  const second = await expectOneWaiting(app)
+  const conversation = readFileSync(jobFile(app, second, 'conversation.md'), 'utf8')
+  expect(conversation).toContain('rewrite the intro')
+  expect(conversation).toContain('rejected')
+  expect(readFileSync(jobFile(app, second, 'instruction.md'), 'utf8')).toContain(
+    `.zen/jobs/${second}/conversation.md`,
+  )
+  // The first turn's directory is exactly what a job always had.
+  expect(existsSync(jobFile(app, first, 'conversation.md'))).toBe(false)
+  expect(readFileSync(jobFile(app, first, 'instruction.md'), 'utf8')).not.toContain(
+    'conversation.md',
+  )
+
+  await release(app, second)
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  await agent(page).getByRole('button', { name: 'New conversation' }).click()
+  await expect(agent(page).getByRole('button', { name: 'New conversation' })).toHaveCount(0)
+  await say(page, 'start over')
+  const third = await expectOneWaiting(app)
+  expect(existsSync(jobFile(app, third, 'conversation.md'))).toBe(false)
 })
