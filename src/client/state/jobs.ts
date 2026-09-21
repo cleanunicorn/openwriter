@@ -24,7 +24,6 @@ import {
   store,
 } from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
-import { setRightOpen } from '../shell/state.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
 /** A request the scheduler holds back until the jobs ahead of it are settled. */
@@ -99,8 +98,6 @@ function upsert(job: Job): void {
     // A research answer opens its panel when it arrives; nothing steals the keyboard focus.
     researchJobId: answered ? job.id : state.researchJobId,
   }))
-  // The answer shows in the agent panel, opened for it; the keyboard stays where the writer is.
-  if (answered) setRightOpen(true)
 }
 
 /** Post a request with a fresh snapshot of the live document, focused editor included. */

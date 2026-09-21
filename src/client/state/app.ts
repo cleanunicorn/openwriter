@@ -252,17 +252,38 @@ export async function refreshWorkspaces(): Promise<void> {
   store.set((state) => ({ ...state, workspaces }))
 }
 
-/** The quick toggles `saveConfigPatch` owns; Settings saves the rest through its own form. */
+/** The quick toggles `saveConfigPatch` owns; Settings saves the rest through `saveSettings`. */
 type ConfigPatch = Partial<Pick<Config, 'theme' | 'ui'>>
 
+/**
+ * Every write of `.zen/config.json` from this page goes through one queue, so two writes can never
+ * land on disk in the wrong order: the server replaces the whole file on each PUT. Each write
+ * builds its body when its turn comes, from the state at that moment.
+ */
+let configWrites: Promise<unknown> = Promise.resolve()
 let configSavesInFlight = 0
+/** A quick-toggle write is waiting in the queue; it will send the latest state, so one is enough. */
+let quickWriteQueued = false
+
+function queueConfigWrite<T>(write: () => Promise<T>): Promise<T> {
+  configSavesInFlight += 1
+  const next = configWrites.then(async () => {
+    try {
+      return await write()
+    } finally {
+      configSavesInFlight -= 1
+    }
+  })
+  configWrites = next.catch(() => undefined)
+  return next
+}
 
 /**
- * The one writer for quick toggles (theme, panels). The store changes first, so the next toggle
- * sees this one, and each save sends the whole latest state at once (no queue: a toggle reaches
- * disk as fast as it did before). While any save is in flight, `refreshConfig` keeps the local
- * theme and panels, so an older copy fetched in between can never flip them back. An invalid
- * config file is never overwritten: the toggle then holds for this session only.
+ * The writer for quick toggles (theme, panels). The store changes first, so the next toggle sees
+ * this one; the write is queued behind any other, and toggles made while one waits share it. While
+ * any write is queued, `refreshConfig` keeps the local theme and panels, so an older copy fetched
+ * in between can never flip them back. An invalid config file is never overwritten: the toggle
+ * then holds for this session only.
  */
 export async function saveConfigPatch(patch: ConfigPatch, failure: string): Promise<void> {
   const current = store.get().config
@@ -272,16 +293,34 @@ export async function saveConfigPatch(patch: ConfigPatch, failure: string): Prom
       ? state
       : { ...state, config: { ...state.config, config: { ...state.config.config, ...patch } } },
   )
-  const latest = store.get().config
-  if (current.error !== null || latest === null) return
-  configSavesInFlight += 1
-  try {
-    await api.saveConfig(latest.config)
-  } catch (error) {
-    notifyFailure(failure, error)
-  } finally {
-    configSavesInFlight -= 1
-  }
+  if (current.error !== null || quickWriteQueued) return
+  quickWriteQueued = true
+  await queueConfigWrite(async () => {
+    quickWriteQueued = false
+    const latest = store.get().config
+    if (latest === null || latest.error !== null) return
+    try {
+      await api.saveConfig(latest.config)
+    } catch (error) {
+      notifyFailure(failure, error)
+    }
+  })
+}
+
+/**
+ * The Settings form's save, in the same queue. The panels are toggles, not form fields: the write
+ * keeps whatever they are when its turn comes. The store takes the saved file at once, so a toggle
+ * queued behind this save sends the new settings rather than the ones from before the form.
+ */
+export function saveSettings(draft: Config): Promise<void> {
+  return queueConfigWrite(async () => {
+    const ui = store.get().config?.config.ui ?? draft.ui
+    const saved = await api.saveConfig({ ...draft, ui })
+    store.set((state) => ({
+      ...state,
+      config: { ...saved, config: { ...saved.config, ui: state.config?.config.ui ?? ui } },
+    }))
+  })
 }
 
 export async function refreshConfig(): Promise<void> {

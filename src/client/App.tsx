@@ -9,7 +9,7 @@ import './export.ts'
 import './settings/commands.ts'
 import './workspaces/commands.ts'
 import { Settings } from './settings/Settings.tsx'
-import { startJobs } from './state/jobs.ts'
+import { startJobs, useJobs } from './state/jobs.ts'
 import { watchForWorkspaceChanges } from './workspaces/switch.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
@@ -29,7 +29,7 @@ import { routeKey } from './shell/keys.ts'
 import { LeftPanel } from './shell/LeftPanel.tsx'
 import { RightPanel } from './shell/RightPanel.tsx'
 import { Shell } from './shell/Shell.tsx'
-import { toggleLeft, toggleRight } from './shell/state.ts'
+import { setRightOpen, toggleLeft, toggleRight } from './shell/state.ts'
 
 const inTextField = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -60,6 +60,13 @@ export function App() {
   useEffect(() => {
     if (theme !== undefined) applyTheme(theme)
   }, [theme])
+
+  // A research answer shows in the agent panel, opened for it; the keyboard stays where it is.
+  // Here, not in the jobs store: the store knows jobs, the shell knows where things are shown.
+  const researchJobId = useJobs((state) => state.researchJobId)
+  useEffect(() => {
+    if (researchJobId !== null) setRightOpen(true)
+  }, [researchJobId])
 
   // With the "system" theme the OS can switch between light and dark at any time.
   useEffect(() => {

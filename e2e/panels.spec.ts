@@ -329,3 +329,32 @@ test('"Go to agent" brings a stacked agent panel into view and into the keyboard
   await expect(rightPanel(page)).toBeInViewport()
   await expect(page.getByRole('button', { name: /Draft brief from my notes/ })).toBeFocused()
 })
+
+test('config writes land in order even when an earlier one is slow', async ({ page, app }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  // Hold the first save on its way to the server; a second toggle happens meanwhile.
+  let releaseFirst = () => {}
+  const firstHeld = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+  let puts = 0
+  await page.route('**/api/config', async (route) => {
+    // Return from the handler at once: Playwright runs the next request's handler only then.
+    if (route.request().method() === 'PUT' && ++puts === 1)
+      void firstHeld.then(() => route.continue())
+    else await route.continue()
+  })
+  let answered = 0
+  page.on('response', (response) => {
+    if (response.url().endsWith('/api/config') && response.request().method() === 'PUT')
+      answered += 1
+  })
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await expect(rightPanel(page)).toBeVisible()
+  releaseFirst()
+  // Both saves have landed; the older one must not have landed last.
+  await expect.poll(() => answered).toBe(2)
+  expect(savedUi(app)).toEqual({ leftPanel: true, rightPanel: true })
+})
