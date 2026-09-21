@@ -12,7 +12,7 @@ import {
   useJobs,
 } from '../state/jobs.ts'
 import { targetsFor } from './commands.ts'
-import { parseInstruction } from './instruction.ts'
+import { parseInstruction, sendsMessage } from './instruction.ts'
 
 /**
  * The right panel's message box: whole-article instructions and research questions, `/name` for
@@ -65,7 +65,8 @@ export function Composer() {
   }
   // Enter sends, Shift+Enter starts a new line — the pill's Enter, with room to write more.
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+    const { key, shiftKey } = event
+    if (sendsMessage({ key, shiftKey, isComposing: event.nativeEvent.isComposing })) {
       event.preventDefault()
       send()
     }

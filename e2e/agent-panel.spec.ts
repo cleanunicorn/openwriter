@@ -14,6 +14,7 @@ import {
   openArticle,
   release,
   tray,
+  waitingJobs,
 } from './helpers.ts'
 
 const agent = (page: Page) => page.getByRole('region', { name: 'Agent', exact: true })
@@ -301,4 +302,22 @@ test("a new conversation about one document leaves another document's conversati
   await files.getByRole('button', { name: 'Hello, openwrite' }).click()
   await expect(articleHeading(page)).toBeVisible()
   await expect(agent(page)).toContainText('Carries the last 1 turn about this document.')
+})
+
+test('Shift+Enter in the message box starts a new line; Enter sends it once', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await message(page).fill('fake:upper first line')
+  await message(page).press('Shift+Enter')
+  await message(page).pressSequentially('second line')
+  await expect(message(page)).toHaveValue('fake:upper first line\nsecond line')
+  expect(await waitingJobs(app)).toEqual([])
+
+  await message(page).press('Enter')
+  await expect(message(page)).toHaveValue('')
+  await expectOneWaiting(app)
+  await expect(tray(page).getByRole('listitem')).toHaveCount(1)
 })

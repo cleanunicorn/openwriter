@@ -17,3 +17,10 @@ export function parseInstruction(
     skill,
   }
 }
+
+/**
+ * Whether a key in the message box sends the message: Enter does; Shift+Enter starts a new line,
+ * and an Enter that ends an IME composition (Japanese, Chinese, …) only confirms the characters.
+ */
+export const sendsMessage = (key: { key: string; shiftKey: boolean; isComposing: boolean }) =>
+  key.key === 'Enter' && !key.shiftKey && !key.isComposing

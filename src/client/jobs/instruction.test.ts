@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInstruction } from './instruction.ts'
+import { parseInstruction, sendsMessage } from './instruction.ts'
 
 describe('parseInstruction', () => {
   it('takes plain text as the instruction, with no skill', () => {
@@ -30,5 +30,30 @@ describe('parseInstruction', () => {
 
   it('leaves an empty message empty', () => {
     expect(parseInstruction('   ')).toEqual({ instruction: '', skill: undefined })
+  })
+})
+
+describe('sendsMessage', () => {
+  const key = (overrides: Partial<Parameters<typeof sendsMessage>[0]>) => ({
+    key: 'Enter',
+    shiftKey: false,
+    isComposing: false,
+    ...overrides,
+  })
+
+  it('sends on Enter', () => {
+    expect(sendsMessage(key({}))).toBe(true)
+  })
+
+  it('starts a new line on Shift+Enter', () => {
+    expect(sendsMessage(key({ shiftKey: true }))).toBe(false)
+  })
+
+  it('only confirms the characters on an Enter that ends an IME composition', () => {
+    expect(sendsMessage(key({ isComposing: true }))).toBe(false)
+  })
+
+  it('ignores other keys', () => {
+    expect(sendsMessage(key({ key: 'a' }))).toBe(false)
   })
 })
