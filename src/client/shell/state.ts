@@ -55,7 +55,8 @@ export function toggleLeft(): void {
 }
 
 export function setLeftOpen(open: boolean): void {
-  if ((currentLayout().left !== 'closed') !== open) toggleLeft()
+  const isOpen = currentLayout().left !== 'closed'
+  if (isOpen !== open) toggleLeft()
 }
 
 /**
@@ -78,7 +79,8 @@ export function revealRightIfStacked(): void {
 }
 
 export function setRightOpen(open: boolean): void {
-  if ((currentLayout().right !== 'closed') === open) return
+  const isOpen = currentLayout().right !== 'closed'
+  if (isOpen === open) return
   if (open) shellStore.set((state) => ({ ...state, leftDrawer: false }))
   void saveUi({ rightPanel: open })
 }
