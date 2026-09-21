@@ -341,3 +341,22 @@ test('"Go to agent" gives the keyboard to the agent panel even in an empty works
     rmSync(base, { recursive: true, force: true })
   }
 })
+
+test('a turn about another document says which one', async ({ page, app }) => {
+  await page.setViewportSize({ width: 1500, height: 900 })
+  await openArticle(page)
+  await page.keyboard.press(`${mod}+b`)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await say(page, 'fake:upper rewrite the intro')
+  await release(app, await expectOneWaiting(app))
+  await ghosts(page).first().getByRole('button', { name: 'Reject all' }).click()
+  // On its own document the turn needs no label.
+  await expect(tray(page)).not.toContainText('Hello, openwrite')
+
+  await page
+    .getByRole('navigation', { name: 'Files and actions' })
+    .getByRole('button', { name: 'strategy.md' })
+    .click()
+  await expect(page.getByRole('heading', { name: 'Writing strategy' })).toBeVisible()
+  await expect(tray(page).getByRole('listitem')).toContainText('Hello, openwrite')
+})

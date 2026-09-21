@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { type DocRef, docKey } from '../../shared/api-types.ts'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { isActive, type Job } from '../../shared/jobs/job-types.ts'
-import { reviewLabel } from '../doc-label.ts'
+import { docLabel, reviewLabel } from '../doc-label.ts'
 import { openDoc, useApp } from '../state/app.ts'
 import {
   type HeldRequest,
@@ -28,20 +29,29 @@ const SCOPES: Record<Job['scope'], string> = {
 
 /** A turn's first line: what the writer asked, and at a glance its scope and skill. */
 function TurnHeader({
+  doc,
   instruction,
   scope,
   skill,
 }: {
+  doc: DocRef
   instruction: string
   scope: Job['scope']
   skill: string | null | undefined
 }) {
+  // The transcript holds every document's turns; one about another document says which.
+  const other = useApp((state) =>
+    state.current !== null && docKey(state.current) === docKey(doc)
+      ? null
+      : docLabel(doc, state.articles),
+  )
   return (
     <div className="tray-line">
       <span className="tray-instruction" title={instruction}>
         {instruction}
       </span>
       <span className="turn-chips">
+        {other !== null && <span className="chip">{other}</span>}
         <span className="chip">{SCOPES[scope]}</span>
         {skill != null && <span className="chip">/{skill}</span>}
       </span>
@@ -100,7 +110,7 @@ function JobRow({ job }: { job: Job }) {
   const last = job.progress[job.progress.length - 1]
   return (
     <li className="tray-job" data-state={job.state}>
-      <TurnHeader instruction={job.instruction} scope={job.scope} skill={job.skill} />
+      <TurnHeader doc={job.doc} instruction={job.instruction} scope={job.scope} skill={job.skill} />
       <div className="tray-line">
         <span className="tray-state">
           {LABELS[job.state]}
@@ -149,6 +159,7 @@ function HeldRow({ request }: { request: HeldRequest }) {
   return (
     <li className="tray-job" data-state="held">
       <TurnHeader
+        doc={request.request.doc}
         instruction={request.request.instruction}
         scope={request.request.scope}
         skill={request.request.skill}

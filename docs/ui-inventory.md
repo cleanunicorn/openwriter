@@ -69,7 +69,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | Left and right edge handles | C (screen edges) | the discoverable toggles; the only always-visible chrome the shell adds |
 | Job count ("1 running · 2 to review") | C bottom-right while the agent panel is closed or stacked below the article; heads the transcript when the panel is open | running and failed work stays in sight; clicking it opens the panel or scrolls to it |
 | Transcript rows: Cancel, Open notes, Review (or "Review in <document title>" for another document), Dismiss / Reject and dismiss, the agent's output, herdr Copy (with its "Copy result" status), a held request's Cancel | R | the conversation: what was asked and what came of it |
-| Scope and skill chips on each turn | R | what each turn was about, at a glance |
+| Document, scope and skill chips on each turn (the document only when it is not the one on screen) | R | what each turn was about, at a glance; the transcript holds every document's turns |
 | Research notes: Insert as block, Close, Discard these notes | R, above the transcript | a research answer is part of the conversation |
 | Composer: "Message to the agent", "Ask about", Send, `/skill` chips, starters | R | whole-article requests and research questions get a home outside the palette |
 | "Carries the last N turns …" and New conversation | R, under the composer | shows what the next message sends the agent, and lets the writer start clean |
