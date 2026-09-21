@@ -18,6 +18,7 @@ import {
   setRightOpen,
   useShell,
 } from '../shell/state.ts'
+import { keepFocus } from '../keep-focus.ts'
 
 const SCOPES: Record<Job['scope'], string> = {
   blocks: 'selection',
@@ -194,7 +195,7 @@ export function Tray({ inPanel = false }: { inPanel?: boolean }) {
           type="button"
           className="tray-toggle"
           aria-expanded={true}
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={keepFocus}
           onClick={(event) => {
             const hadFocus = document.activeElement === event.currentTarget
             setRightOpen(false)
@@ -222,7 +223,7 @@ export function Tray({ inPanel = false }: { inPanel?: boolean }) {
       type="button"
       className="tray-toggle"
       aria-expanded={false}
-      onMouseDown={(event) => event.preventDefault()}
+      onMouseDown={keepFocus}
       onClick={(event) => {
         const hadFocus = document.activeElement === event.currentTarget
         if (layout === 'closed') setRightOpen(true)

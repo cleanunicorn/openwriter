@@ -1,9 +1,7 @@
 import { type FocusEvent, type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { PANEL_KEYS } from './keys.ts'
 import { layoutOf, setLeftOpen, setShellWidth, toggleLeft, toggleRight, useShell } from './state.ts'
-
-/** A click must never take the keyboard from an open block (blur commits it). */
-const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault()
+import { keepFocus } from '../keep-focus.ts'
 
 function EdgeHandle({
   side,

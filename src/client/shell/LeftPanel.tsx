@@ -3,9 +3,7 @@ import { docKey } from '../../shared/api-types.ts'
 import { allCommands, type Command } from '../palette/commands.ts'
 import { currentDoc, openDoc, setPalette, store, useApp } from '../state/app.ts'
 import { currentLayout, setLeftOpen } from './state.ts'
-
-/** A click must never take the keyboard from an open block (blur commits it). */
-const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault()
+import { keepFocus } from '../keep-focus.ts'
 
 /** A pick from the drawer closes it; a docked panel stays where the writer put it. */
 const pick = (run: () => void | Promise<void>) => () => {
