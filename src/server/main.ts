@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util'
 import { serve } from '@hono/node-server'
 import { SERVER_PORT, VITE_PORT } from '../shared/ports.ts'
 import { createApp } from './app.ts'
-import { hostsFor } from './security.ts'
+import { hostsFor, lanAddresses } from './security.ts'
 
 const SHUTDOWN_BUDGET_MS = 2000
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
@@ -33,7 +33,10 @@ export type RunningServer = {
   close: () => Promise<void>
 }
 
-/** Always binds 127.0.0.1 — the server has no auth model, so it must never listen wider. */
+/**
+ * Always binds 127.0.0.1 — the server has no auth model. In dev, other machines reach it only
+ * through Vite's proxy (see vite.config.ts), never on this port.
+ */
 function listen(
   fetch: (request: Request) => Response | Promise<Response>,
   port: number,
@@ -54,7 +57,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
     adapterOverride: options.adapterOverride,
     fakeControl: options.fakeControl ?? false,
     toolLookup: options.toolLookup,
-    allowedHosts: () => hostsFor(port, options.dev ? VITE_PORT : undefined),
+    allowedHosts: () => (options.dev ? hostsFor(port, VITE_PORT, lanAddresses()) : hostsFor(port)),
   })
 
   const candidates =
@@ -143,6 +146,12 @@ async function main(): Promise<void> {
     fakeControl: values['fake-control'],
   })
   console.log(`openwrite listening on ${server.url}`)
+  if (values.dev) {
+    console.warn(
+      `dev: Vite serves the editor on every interface (port ${VITE_PORT}) with no auth; ` +
+        'anyone on this network can edit files and start agents.',
+    )
+  }
   console.log(`workspace: ${workspace}`)
   // A backstop, not a strategy: the writer's editor and autosave must outlive a bug in a
   // background job. Every known path is handled where it happens; this only logs the unknown.
