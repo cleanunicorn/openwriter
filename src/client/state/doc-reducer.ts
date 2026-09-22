@@ -1,6 +1,7 @@
 import type { DocRef } from '../../shared/api-types.ts'
 import {
   type Block,
+  createDerivedMinter,
   createDoc,
   type Doc,
   deleteBlocks,
@@ -251,9 +252,18 @@ function change(
   }
 }
 
-/** Fold the focused editor's text into the document without touching history. */
-function withDraft(state: DocState, id: string, text: string): { doc: Doc; nextId: number } {
-  const { mint, next } = minter(state)
+/**
+ * Fold the focused editor's text into the document without touching history. `derived` mints the
+ * IDs when the result is not going to be stored; without it the document's own counter is used.
+ */
+function withDraft(
+  state: DocState,
+  id: string,
+  text: string,
+  derived?: MintId,
+): { doc: Doc; nextId: number } {
+  const { mint: stored, next } = minter(state)
+  const mint = derived ?? stored
   if (id === NEW_BLOCK_ID) {
     if (text.trim() === '' || state.pendingNew === null)
       return { doc: state.doc, nextId: state.nextId }
@@ -440,7 +450,10 @@ function settleFold(
 
 /** The document as the writer sees it right now: committed blocks plus the open editor's text. */
 export function liveDoc(state: DocState): Doc {
-  return state.draft === null ? state.doc : withDraft(state, state.draft.id, state.draft.text).doc
+  // Derived IDs: nothing reserves what this mints, so a stored-looking ID here could be shown
+  // to an agent and later given by the store to different text.
+  if (state.draft === null) return state.doc
+  return withDraft(state, state.draft.id, state.draft.text, createDerivedMinter()).doc
 }
 
 export const liveText = (state: DocState): string => serialise(liveDoc(state))

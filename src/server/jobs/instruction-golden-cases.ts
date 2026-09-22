@@ -3,8 +3,8 @@ import type { Skill } from '../skills.ts'
 
 /**
  * Fixed requests whose instruction.md is pinned byte for byte (fixtures/instruction-first-turn.json,
- * rendered once by the renderer as it was before conversations existed). A conversation's first
- * turn must keep getting exactly this.
+ * rendered once by the renderer as it was before conversations existed, then amended for the
+ * derived `liveN` block IDs). A conversation's first turn must keep getting exactly this.
  */
 const snapshot = {
   blocks: [

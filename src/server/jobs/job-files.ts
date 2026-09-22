@@ -72,7 +72,8 @@ ${skill ? `## Skill: ${skill.name}\n\n${skill.body}\n` : ''}
 - ${docLine}
 - \`${jobRel}/article.md\` — a snapshot of the document. Every block is wrapped in
   \`<!-- zen:block id=bN -->\` … \`<!-- /zen:block -->\`. The markers carry the block IDs; they are not
-  part of the document and must never appear in your markdown.
+  part of the document and must never appear in your markdown. An ID is \`bN\`, or \`liveN\` for a
+  block the writer is still typing; use each exactly as its marker gives it.
 - \`${jobRel}/targets.json\` — the scope, the target block IDs, and the selected text if any.
 - \`${jobRel}/strategy.md\` and \`${jobRel}/brief.md\` — the writer's strategy and this article's brief.
   Follow them for voice, structure, and audience.
