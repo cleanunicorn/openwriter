@@ -19,6 +19,7 @@ import {
   readJobAsset,
   readJobText,
   readJobTextOrNull,
+  refuseSymlink,
   removeJobDir,
   UnsafeJobFileError,
   writeJobText,
@@ -50,12 +51,16 @@ describe('reading an artifact', () => {
     ['a symlink to an outside file', () => symlinkSync(secret(), path.join(jobDir, 'result.json'))],
     ['a hard link to an outside file', () => linkSync(secret(), path.join(jobDir, 'result.json'))],
     ['a directory', () => mkdirSync(path.join(jobDir, 'result.json'))],
-    [
-      'a FIFO (must not block the server)',
-      () => execFileSync('mkfifo', [path.join(jobDir, 'result.json')]),
-    ],
   ])('refuses %s', (_name, plant) => {
     plant()
+    expect(() => readJobText(jobDir, 'result.json')).toThrow(UnsafeJobFileError)
+    expect(readJobTextOrNull(jobDir, 'result.json')).toBeNull()
+  })
+
+  // POSIX only: Windows has no FIFOs in the filesystem. The `mkfifo` that ships with the Windows
+  // runner's MSYS tools makes an emulation Node sees as a plain file, so there is nothing to refuse.
+  it.skipIf(process.platform === 'win32')('refuses a FIFO (must not block the server)', () => {
+    execFileSync('mkfifo', [path.join(jobDir, 'result.json')])
     expect(() => readJobText(jobDir, 'result.json')).toThrow(UnsafeJobFileError)
     expect(readJobTextOrNull(jobDir, 'result.json')).toBeNull()
   })
@@ -180,4 +185,17 @@ describe('removing a job directory', () => {
       expect(existsSync(jobDir)).toBe(true)
     },
   )
+})
+
+describe('refuseSymlink, the stand-in for O_NOFOLLOW where the platform has none (Windows)', () => {
+  it('refuses a symlink, and lets a plain file and a missing name through to the open', () => {
+    const link = path.join(jobDir, 'result.json')
+    symlinkSync(secret(), link)
+    expect(() => refuseSymlink(link, 'result.json')).toThrow(UnsafeJobFileError)
+    expect(() => refuseSymlink(link, 'result.json')).toThrow('it is a symlink')
+    const plain = path.join(jobDir, 'progress.log')
+    writeFileSync(plain, 'ok\n')
+    expect(() => refuseSymlink(plain, 'progress.log')).not.toThrow()
+    expect(() => refuseSymlink(path.join(jobDir, 'nope.json'), 'nope.json')).not.toThrow()
+  })
 })

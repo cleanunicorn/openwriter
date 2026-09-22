@@ -316,7 +316,10 @@ test('a save that loses the race with an outside change gets a 409 and keeps bot
   await page.getByText('Results arrive as ghost diffs').click()
   await page.keyboard.press(blockEnd)
 
-  // No event will announce the outside change, so the autosave is the first to find out.
+  // No event will announce the outside change, so the autosave is the first to find out. The
+  // stream is kept down, not just dropped: it reconnects within a second (`retry`), and the
+  // re-check on reconnect would otherwise find the change before the autosave does.
+  await page.route(/\/api\/events(\?|$)/, (route) => route.abort())
   await dropEventStreams(app)
   writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
   const conflict = page.waitForResponse(

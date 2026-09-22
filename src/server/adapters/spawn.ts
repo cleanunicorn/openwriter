@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 
 const STDOUT_TAIL = 64 * 1024
 const STDERR_TAIL = 16 * 1024
@@ -51,6 +51,8 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
     env: process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: true,
+    // Windows only: no console window pops up for the agent or what it starts.
+    windowsHide: true,
   })
 
   const done = new Promise<SpawnOutcome>((resolve) => {
@@ -105,6 +107,12 @@ export function spawnAgent(options: SpawnOptions): SpawnedAgent {
 
   const signalGroup = (signal: NodeJS.Signals) => {
     if (child.pid === undefined) return
+    if (process.platform === 'win32') {
+      // Windows has no process groups (`kill(-pid)` throws) and no SIGTERM a console program can
+      // catch: `taskkill /T /F` ends the tree at once. Untested on Windows (README, "Windows").
+      execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {})
+      return
+    }
     try {
       process.kill(-child.pid, signal)
     } catch {

@@ -1,7 +1,12 @@
 import { expect, test } from './fixtures.ts'
 import { blocks, editor, expectFile, mod, openArticle } from './helpers.ts'
 
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+// Chromium asks for the clipboard permissions; Firefox and WebKit have no such permission in
+// Playwright (granting one throws "Unknown permission") and let the page write the clipboard.
+test.beforeEach(async ({ context, browserName }) => {
+  if (browserName === 'chromium')
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+})
 
 test('pasting three paragraphs into a block re-splits it on blur', async ({ page, app }) => {
   await openArticle(page)

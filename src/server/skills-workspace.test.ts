@@ -151,7 +151,7 @@ describe('workspace skills on disk', () => {
     expect(listLocalSkills(root).skills.map((skill) => skill.name)).toEqual(['haiku'])
   })
 
-  it('refuses a hard link, a folder and a FIFO named like a skill', () => {
+  it('refuses a hard link and a folder named like a skill', () => {
     writeFileSync(path.join(outside, 'linked.md'), skillText('linked'))
     try {
       linkSync(path.join(outside, 'linked.md'), path.join(skillsDir(), 'linked.md'))
@@ -161,9 +161,13 @@ describe('workspace skills on disk', () => {
       linkSync(path.join(root, 'linked.md'), path.join(skillsDir(), 'linked.md'))
     }
     mkdirSync(path.join(skillsDir(), 'folder.md'))
-    execFileSync('mkfifo', [path.join(skillsDir(), 'pipe.md')])
     expect(errorFor('linked.md')).toMatch(/hard link/)
     expect(errorFor('folder.md')).toMatch(/not a regular file/)
+  })
+
+  // POSIX only: Windows has no FIFOs (the runner's MSYS `mkfifo` makes a plain-file emulation).
+  it.skipIf(process.platform === 'win32')('refuses a FIFO named like a skill', () => {
+    execFileSync('mkfifo', [path.join(skillsDir(), 'pipe.md')])
     // O_NONBLOCK: opening the FIFO returns at once instead of waiting for a writer.
     expect(errorFor('pipe.md')).toMatch(/not a regular file/)
   })

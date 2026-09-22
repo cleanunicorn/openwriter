@@ -28,6 +28,16 @@ async function clickMargin(block: Locator) {
   await block.getByTestId('gutter').click({ position: { x: 2, y: (gutter?.height ?? 10) - 2 } })
 }
 
+/**
+ * Shift-click `block` to extend the block selection to it, and wait until the selection shows it.
+ * `ask` then waits for the pill to take it in (`afterPillUpdate`): the pill was already open for
+ * the first block, and typing too soon sent the job with one target (WebKit in CI).
+ */
+async function extendSelection(block: Locator) {
+  await block.getByTestId('rendered').click({ modifiers: ['Shift'] })
+  await expect(block).toHaveClass(/is-selected/)
+}
+
 test('select → prompt → review → accept, then one undo step reverts it', async ({ page, app }) => {
   await openArticle(page)
   const heading = blockWith(page, 'Why blocks')
@@ -90,9 +100,8 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   // A margin click selects a block; shift-click extends the selection.
   await clickMargin(first)
   await expect(first).toHaveClass(/is-selected/)
-  await second.getByTestId('rendered').click({ modifiers: ['Shift'] })
+  await extendSelection(second)
   await expect(first).toHaveClass(/is-selected/)
-  await expect(second).toHaveClass(/is-selected/)
   await ask(page, 'fake:multi')
   await expectWaiting(app, 1)
   await release(app)
@@ -118,6 +127,8 @@ test('several blocks selected by shift-click; ops reviewed one by one, by mouse 
   await expect(ghosts(page)).toHaveCount(2)
   // Mouse for the rest.
   await acceptButton(page.getByRole('group', { name: 'Proposed insertion 3 of 4' })).click()
+  // Each accept re-lays out the article: the next click waits for it, or it can land mid-move.
+  await expect(ghosts(page)).toHaveCount(1)
   await acceptButton(page.getByRole('group', { name: 'Proposed deletion 4 of 4' })).click()
   await expect(ghosts(page)).toHaveCount(0)
 
@@ -204,9 +215,8 @@ test('accepting a replacement of the block being edited wins over the open draft
   await openArticle(page)
   const first = blockWith(page, 'Select some text, type an instruction')
   await clickMargin(first)
-  await blockWith(page, 'Results arrive as ghost diffs')
-    .getByTestId('rendered')
-    .click({ modifiers: ['Shift'] })
+  await extendSelection(blockWith(page, 'Results arrive as ghost diffs'))
+  await expect(first).toHaveClass(/is-selected/)
   await ask(page, 'fake:multi')
   await expectWaiting(app, 1)
 

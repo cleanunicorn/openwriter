@@ -45,6 +45,8 @@ test('two sections get different instructions while the writer types in a third;
 
   // Review both, each job on its own.
   await acceptButton(page.getByRole('group', { name: 'Proposed replacement 1 of 1' })).click()
+  // Each accept re-lays out the article: the next click waits for it, or it can land mid-move.
+  await expect(ghosts(page)).toHaveCount(1)
   await acceptButton(page.getByRole('group', { name: 'Proposed insertion 1 of 1' })).click()
   await expect(ghosts(page)).toHaveCount(0)
 

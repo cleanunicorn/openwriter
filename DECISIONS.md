@@ -897,8 +897,8 @@ codex exec --json --skip-git-repo-check --ephemeral
   never cover a block's drag handle; the key and the palette still reach the panel from anywhere.
 - **Shortcuts `Ctrl/Cmd+B` and `Ctrl/Cmd+Alt+B`** are VS Code's two sidebar keys, which the writer
   already knows. CodeMirror binds neither, and they are matched on `event.code` because Option
-  changes `event.key` on macOS. Browsers other than Chromium are not tested (Playwright runs
-  Chromium only); the handles are the fallback. The keys are one table in `shell/keys.ts`.
+  changes `event.key` on macOS. They are tested in Chromium, Firefox and WebKit (issue #7); the
+  handles are the fallback. The keys are one table in `shell/keys.ts`.
 - **A panel docks only when the column keeps 680px.** A docked panel reserves its width
   (`body[data-left|right="docked"]` padding), and the column is centred in what is left. When
   both cannot dock, the right panel keeps the dock: research answers arrive there unasked and must
@@ -1015,6 +1015,78 @@ codex exec --json --skip-git-repo-check --ephemeral
   heights (the 680px column, panel widths, the 24×48 handle). One commented allow-list entry: the
   drag gutter's `left: -44px`, which follows the gutter's 40px width, not the scale; and the
   export stage's off-screen `left:-10000px` in `render/export-html.ts`.
+
+## Browsers and Windows (issue #7)
+
+- **Three Playwright projects: `chromium`, `firefox`, `webkit`** (`playwright.config.ts`). The whole
+  suite runs on each; no flow is excluded. First run on 2026-09-22: Chromium 180/180, Firefox
+  173/180, WebKit 178/180. Every failure was fixed in the product or in the test's approach:
+  - *A truncated PNG fixture* (`e2e/image-paste.spec.ts`): Chromium and WebKit drew it, Firefox
+    rejected it as corrupt and laid it out at 0×0. Replaced with a well-formed one.
+  - *A synthetic paste*: Firefox does not carry a `File` given to the `ClipboardEvent`
+    constructor into `clipboardData`; the test attaches the `DataTransfer` to the event instead.
+  - *`route.fetch()` on an upload*: WebKit refetched a `File` body as empty. The test holds the
+    request before it is sent (`route.continue()` later) instead of refetching and holding the
+    response; the page sees the same late upload.
+  - *Clipboard permissions*: only Chromium has `clipboard-read`/`clipboard-write` in Playwright
+    (the others throw "Unknown permission" and let the page write the clipboard anyway), so
+    `paste-splitting.spec.ts` grants them only there. The real `Ctrl+V` still runs everywhere.
+  - *Touching edges*: Firefox lays out in 1/60 px, so a panel stacked right under the column came
+    back 0.00006 px "overlapping" it. Edge comparisons allow `SUBPIXEL` (0.5 px) — 14 comparisons
+    in 4 specs, the same shape everywhere.
+  - *A job event of the old workspace after a switch*: the old job came back into the new
+    workspace's tray ("1 need a look" in an empty workspace), 3 Chromium runs of 8 with
+    `--repeat-each=8`, Firefox more often. It was fixed on `main` while this change was under way
+    (#39: the event stream's `hello` names its workspace, and the client drops events about
+    another one), so this change keeps that fix and adds none of its own.
+  - *Engine-specific EventSource reconnect delay* (product): 3 s in Chromium and WebKit, 5 s in
+    Firefox, during which every event is lost; the server now sends `retry: 1000` with `hello`
+    (`src/server/routes/events.ts`). The 409 test in `external-change.spec.ts` had leaned on the
+    slow reconnect to keep the stream down; it now blocks `/api/events` itself, as
+    `workspace-switch-safety.spec.ts` already did. `workspace-jobs.spec.ts` waits for both tabs' re-read instead
+    of asserting before the reconnect, and targets the heading by role (the front matter line
+    shows the same title, and a match by text sent the job there in 2 Firefox runs of 6).
+  - *Back-to-back Accept clicks* (Firefox, after the rebase onto #35/#36): the second click landed
+    while the first accept re-laid out the article. `jobs-review` and `jobs-overlap` wait for the
+    ghost count between the two (sweep: 2 places with two accept clicks in a row, both fixed).
+  - *Typing into the pill within a frame of changing the selection* (WebKit in CI, twice): the
+    pill re-reads its target one animation frame after the key or click. A `fill` sooner sent a
+    job with one target instead of two, or moved the focus first so the late update closed the
+    pill with nothing sent. `ask` waits two frames before it types (the one helper every pill
+    test goes through), and `extendSelection` waits for the block's `is-selected` class. A person
+    cannot type within a frame, so the product is left as it is.
+  - *Mermaid in WebKit under a full parallel run* took longer than 5 s to draw; `openArticle` waits
+    up to 15 s for the diagram.
+  - *A click right after `page.reload()`* landed while the diagram was still drawing and pushing
+    the ghost down (Firefox under full load). `reloadArticle` waits as `openArticle` does; used for
+    the 4 reloads in `reload.spec.ts` that interact afterwards (the other 4 reloads in the suite
+    only assert or use the keyboard).
+- **`npm run test:e2e` runs Chromium only; `npm run test:e2e:all` runs all three.** Chromium is the
+  one browser the setup instructions install, so the local gate works on any machine; CI runs all
+  three, and a change to the editor, the shell, pasting or layout should run `test:e2e:all`
+  first. Locally (24 cores) Chromium alone takes about 1.1 min, all three about 3.3 min.
+- **CI runs one e2e job per engine** (a matrix, `fail-fast: false`) beside one `checks` job, so the
+  wall time is the slowest engine's rather than the sum, each installs only its own browser with
+  `--with-deps`, and a failure names the engine. The build runs in each e2e job.
+- **Windows is documented as unsupported; only the unit suite runs there** (README, "Windows"). The cheap fixes that
+  change nothing on POSIX were made: `taskkill /T /F` for cancel, `windowsHide`, `/` in claude's
+  `Edit(...)` rule and codex's path rewriting, `PATHEXT` for `requires:`, `explorer.exe` for
+  `--open`, an `lstat` refusal where `O_NOFOLLOW` does not exist, and `.gitattributes` with
+  `eol=lf`. On Linux and macOS the adapters' command lines are byte-identical to before
+  (`path.sep` is `/`), so `scripts/verify-adapter.ts` was not re-run. `.cmd` agent shims are left
+  unsupported: running them needs a shell, and the arguments carry the writer's text.
+- **A `unit (windows)` CI job gates the unit suite on `windows-latest`.** Its first run (added as
+  informational) found 7 failures and 4 test files lost to a crash: libuv aborts the process when
+  `fs.watch` is given a path in 8.3 short form, which `os.tmpdir()` is on the runner — fixed in
+  the product (`watchDirectory`, `src/server/watcher.ts`, long path via `realpathSync.native`).
+  Of the failures, 2 were a test comparing `path.relative` output with `/` paths (fixed), and 5 are
+  inherently POSIX (FIFOs, `chmod` on directories, a POSIX `PATH` with a drive letter in it): they
+  are scoped with `it.skipIf(process.platform === 'win32')` and a comment, the same rule as an
+  engine-specific e2e test. With those, 930 pass and 5 skip (2026-09-22), so the job fails the run like any
+  other. Golden rule 4 is not bent: nothing that can run on Windows is skipped there.
+- **The e2e suite is not run on Windows.** The fixtures stop servers with `SIGTERM` (a hard kill
+  there, leaking temp directories), and Windows is not a supported platform yet; the three engines
+  run on Linux.
 
 ## Runtime dependencies
 

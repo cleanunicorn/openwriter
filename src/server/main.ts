@@ -117,7 +117,13 @@ function defaultWorkspace(): string {
 }
 
 function openBrowser(url: string): void {
-  const command = process.platform === 'darwin' ? 'open' : 'xdg-open'
+  // Windows has neither `open` nor `xdg-open`; Explorer hands a URL to the default browser.
+  const command =
+    process.platform === 'darwin'
+      ? 'open'
+      : process.platform === 'win32'
+        ? 'explorer.exe'
+        : 'xdg-open'
   const child = spawn(command, [url], { stdio: 'ignore', detached: true })
   child.on('error', () => console.log(`Open ${url} in your browser.`))
   child.unref()

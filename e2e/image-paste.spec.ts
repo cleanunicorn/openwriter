@@ -4,11 +4,16 @@ import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { blockEnd, editor, expectFile, notice, openArticle } from './helpers.ts'
 
+/**
+ * A well-formed 2×2 PNG (valid CRCs, complete zlib stream). The earlier fixture's IDAT was
+ * truncated: Chromium and WebKit drew it anyway, Firefox rejected it as corrupt and laid the
+ * image out at 0×0.
+ */
 const PNG =
-  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mNk+M9Qz0AEYBxVSF8FAFi2A/0tT9i7AAAAAElFTkSuQmCC'
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEUlEQVR42mOwzlv6H4QZYAwATeAJNRwUPzoAAAAASUVORK5CYII='
 
 /**
- * Headless Chromium cannot put an image on the real clipboard or drag a file in from outside, so
+ * A headless browser cannot put an image on the real clipboard or drag a file in from outside, so
  * the paste or drop event is synthetic.
  */
 async function sendFile(
@@ -23,11 +28,17 @@ async function sendFile(
       const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
       const data = new DataTransfer()
       data.items.add(new File([bytes], fileName, { type: mime }))
-      element.dispatchEvent(
-        kind === 'drop'
-          ? new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true })
-          : new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
-      )
+      if (kind === 'drop') {
+        element.dispatchEvent(
+          new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }),
+        )
+        return
+      }
+      // In Firefox a File passed to the ClipboardEvent constructor never reaches the handler's
+      // `clipboardData`; attaching the DataTransfer to the event works in every engine.
+      const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'clipboardData', { value: data })
+      element.dispatchEvent(event)
     },
     { kind, base64, fileName, mime: mimeType },
   )
@@ -146,10 +157,11 @@ test('an upload that finishes after its editor closed says where the image went'
   const held = new Promise<void>((resolve) => {
     finish = resolve
   })
+  // The request is held before it reaches the server rather than refetched and held after:
+  // WebKit hands `route.fetch()` no body for a File upload, so the refetch arrived empty.
   await page.route('**/api/docs/article/*/assets', async (route) => {
-    const response = await route.fetch()
     await held
-    await route.fulfill({ response })
+    await route.continue()
   })
   await sendFile(page, 'paste', 'late.png', 'image/png')
   await page.keyboard.press('Escape')

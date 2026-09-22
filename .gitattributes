@@ -1,0 +1,4 @@
+# Check out LF everywhere, Windows included. The round-trip tests compare bytes, the sample
+# workspace is test data, and Biome formats with LF; a CRLF checkout (core.autocrlf=true) would
+# fail all three without any change to the code.
+* text=auto eol=lf

@@ -1,10 +1,21 @@
-import { type FSWatcher, watch } from 'node:fs'
+import { type FSWatcher, realpathSync, watch } from 'node:fs'
 import path from 'node:path'
 import type { DocRef } from '../shared/api-types.ts'
 import type { EventHub } from './sse.ts'
 import type { Workspace } from './workspace.ts'
 
 const DEBOUNCE_MS = 80
+
+/**
+ * `fs.watch` on a directory named by its long path. On Windows, libuv aborts the whole process
+ * (an assertion in `fs-event.c`) when a path it watches is given in 8.3 short form
+ * (`C:\Users\RUNNER~1\…`) and the events come back with long names; `os.tmpdir()` is short
+ * on GitHub's Windows runners, and a workspace path can be too. `realpathSync.native` expands
+ * it; on POSIX it only resolves links, which the callers have done already.
+ */
+export function watchDirectory(dir: string, onChange: () => void): FSWatcher {
+  return watch(realpathSync.native(dir), onChange)
+}
 
 /**
  * Watches the directory of every document the client has opened (a directory watch also sees
@@ -31,7 +42,7 @@ export class DocWatcher {
     const dir = path.dirname(file)
     if (this.watchers.has(dir)) return
     try {
-      const watcher = watch(dir, () => this.schedule(dir))
+      const watcher = watchDirectory(dir, () => this.schedule(dir))
       watcher.on('error', () => this.drop(dir))
       this.watchers.set(dir, watcher)
     } catch {

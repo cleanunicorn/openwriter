@@ -63,20 +63,25 @@ describe('config', () => {
     expect((await json(t.get('/api/articles'))).articles).toHaveLength(1)
   })
 
-  it('does not report a filesystem failure as a conflict, and leaks no path', async () => {
-    const { config } = await json(t.get('/api/config'))
-    const zen = path.join(t.workspace, '.zen')
-    chmodSync(zen, 0o500)
-    try {
-      const res = await t.send('PUT', '/api/config', { ...config, concurrency: 4 })
-      expect(res.status).toBe(500)
-      const body = await res.text()
-      expect(body).toBe('{"error":"internal error"}')
-      expect(body).not.toContain(t.workspace)
-    } finally {
-      chmodSync(zen, 0o700)
-    }
-  })
+  // POSIX only: on Windows `chmod` sets the read-only attribute, which does not stop writes into
+  // a directory, so the failure this test needs cannot be made there.
+  it.skipIf(process.platform === 'win32')(
+    'does not report a filesystem failure as a conflict, and leaks no path',
+    async () => {
+      const { config } = await json(t.get('/api/config'))
+      const zen = path.join(t.workspace, '.zen')
+      chmodSync(zen, 0o500)
+      try {
+        const res = await t.send('PUT', '/api/config', { ...config, concurrency: 4 })
+        expect(res.status).toBe(500)
+        const body = await res.text()
+        expect(body).toBe('{"error":"internal error"}')
+        expect(body).not.toContain(t.workspace)
+      } finally {
+        chmodSync(zen, 0o700)
+      }
+    },
+  )
 
   it('saves a valid config and reports an absolute content directory', async () => {
     const { config } = await json(t.get('/api/config'))

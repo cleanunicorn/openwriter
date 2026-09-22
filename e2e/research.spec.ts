@@ -2,6 +2,7 @@ import { expect, test } from './fixtures.ts'
 import {
   answer,
   boundingBox,
+  SUBPIXEL,
   editor,
   expectFile,
   expectWaiting,
@@ -64,8 +65,8 @@ for (const viewport of [
 
     const column = await boundingBox(page.getByRole('main'))
     const notes = await boundingBox(panel)
-    const besideTheText = column.x + column.width <= notes.x
-    const belowTheText = column.y + column.height <= notes.y
+    const besideTheText = column.x + column.width <= notes.x + SUBPIXEL
+    const belowTheText = column.y + column.height <= notes.y + SUBPIXEL
     expect(besideTheText || belowTheText).toBe(true)
     expect(column.width).toBeGreaterThanOrEqual(Math.min(680, viewport.width - 96))
   })

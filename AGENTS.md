@@ -24,7 +24,9 @@ Versions are what is installed on the dev machine as of 2026-09-19.
 
 - **Node.js ≥ 24 + npm** (v24.14.1 / 11.11.0). TypeScript everywhere.
 - **Playwright browser binaries** — `npx playwright install --with-deps chromium`,
-  once per machine or container.
+  once per machine or container; add `firefox webkit` for `npm run test:e2e:all`.
+- **Linux or macOS.** Windows is not supported yet (only the unit suite runs there, in CI); README, "Windows",
+  lists what was made portable and what is known not to work.
 - **Agent CLIs, only for the real adapters:** `claude` (2.1.278), `codex`
   (codex-cli 0.155.1). They use the user's own logins; the app stores no keys.
 - **Hugo** (v0.154.5 extended) — the user's true preview. No test depends on it.
@@ -52,8 +54,10 @@ npm scripts are the single source of the dev flow (`package.json`).
   entry points and every ignore are listed, with reasons, in `knip.jsonc`
 - **Test (unit, all):** `npm test`
 - **Test (single file):** `npm test -- <path>`
-- **Test (end-to-end):** `npm run test:e2e` — see
+- **Test (end-to-end):** `npm run test:e2e` (Chromium) — see
   [End-to-end tests](#end-to-end-tests-playwright)
+- **Test (end-to-end, all engines):** `npm run test:e2e:all` — Chromium, Firefox
+  and WebKit, as CI runs it
 - **Build:** `npm run build`
 
 Lint, format, type-check, unit tests, e2e tests, and build use the sample
@@ -207,8 +211,10 @@ least once per milestone; never commit a red tree.
 
 The same checks CI runs. Two differences: CI runs `npm run format:check` (it
 must not rewrite files; run `npm run format` before you commit so it passes),
-and CI builds before the e2e suite (locally `test:e2e` builds the client itself
-when it is missing or stale):
+CI builds before the e2e suite (locally `test:e2e` builds the client itself
+when it is missing or stale), and CI runs the e2e suite on Chromium, Firefox and
+WebKit (`npm run test:e2e:all` locally; run it for a change to the editor, the
+shell, pasting or layout):
 
 ```bash
 npm run format        # CI: npm run format:check
@@ -296,7 +302,8 @@ skills/               prompt templates: diagram, terminal-recording, image, vide
                       (a workspace adds its own in <workspace>/.zen/skills/; a shipped name wins)
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
 scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
-.github/workflows/    ci.yml: format:check, lint, typecheck, knip, test, build, test:e2e (fake adapter only)
+.github/workflows/    ci.yml: checks (format:check, lint, typecheck, knip, test, build), e2e per engine
+                      (chromium, firefox, webkit), unit (windows) (fake adapter only)
 e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts,
                       start-server.ts (spawns scripts/e2e-server.ts; also used by scripts/screenshots.ts)
 docs/                 herdr-evaluation.md, ui-inventory.md (every option's home), screenshots/
@@ -369,20 +376,26 @@ point into a Hugo site.
   `scripts/e2e-server.ts`, which starts the app against a temp copy of the
   sample workspace with the `fake` adapter, so the run starts the app itself.
   Tests that write use the `app` fixture in `e2e/fixtures.ts`: one server
-  process on a free port and one workspace copy per test. Chromium only.
-  `npm run test:e2e` builds the client first when it is missing or stale.
+  process on a free port and one workspace copy per test. Three projects:
+  `chromium`, `firefox`, `webkit`; `npm run test:e2e` runs `chromium`,
+  `npm run test:e2e:all` all three, and both build the client first when it is
+  missing or stale. A test only one engine can run is scoped with `browserName`
+  and a comment, and gets a line in `DECISIONS.md`; none is so far.
 - **Ports:** the `webServer` smoke server takes a free port too, picked once in
   the runner and handed to the workers through `OPENWRITE_E2E_PORT`, so runs in
   several checkouts or worktrees on one machine never collide. Set
   `OPENWRITE_E2E_PORT=<port>` to pin it; an invalid value fails the run at once.
-- **Browser binaries:** `npx playwright install --with-deps chromium`. A
+- **Browser binaries:** `npx playwright install --with-deps chromium firefox webkit`
+  (`--with-deps` installs system libraries and needs root; without it the
+  browsers still download into the user's cache). A
   "browser not found" / "executable doesn't exist" error means this hasn't been
   run.
 
 Prefer `npm run test:e2e`; the raw forms:
 
 ```bash
-npx playwright test                          # everything, headless
+npx playwright test                          # everything, all three engines, headless
+npx playwright test --project=firefox        # one engine
 npx playwright test e2e/click-to-edit.spec.ts  # one spec
 npx playwright test -g "<test title>"        # one test by title
 npx playwright test --reporter=list          # plain streaming output
@@ -422,6 +435,11 @@ conflict without a save ping-pong. A reload's three-way merge and its conflicts
 - **Waiting:** use web-first assertions — `await expect(locator).toBeVisible()`
   auto-retries until the timeout. Never `waitForTimeout`. The fake adapter's
   timing is controlled by the test, not by sleeps.
+- **Cross-engine habits** (each one was a Firefox or WebKit failure): compare
+  layout edges with `SUBPIXEL` slack, never exactly; after `page.reload()` use
+  `reloadArticle` before clicking; fixtures such as images must be well-formed
+  (Firefox refuses what Chromium repairs); build synthetic events so every engine
+  keeps their payload (`image-paste.spec.ts`).
 - **Test data:** each test gets its own temp copy of the sample workspace.
 - **Isolation:** tests run in parallel, so no test may depend on another's
   leftovers or on file order.

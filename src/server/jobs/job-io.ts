@@ -36,6 +36,24 @@ export class UnsafeJobFileError extends Error {
 }
 
 const NO_FOLLOW = constants.O_NOFOLLOW | constants.O_NONBLOCK
+/**
+ * Windows has no `O_NOFOLLOW` (Node leaves it undefined, and `undefined | flags` is `flags`), so
+ * an open there would follow a link without a word. It gets an `lstat` first instead: weaker —
+ * a link swapped in between the two calls is still followed — but not silently absent.
+ */
+const HAS_NO_FOLLOW = constants.O_NOFOLLOW !== undefined
+
+/** Refuse a symlink at `file`; a missing file is left to the open. The Windows stand-in above. */
+export function refuseSymlink(file: string, label: string): void {
+  let stats: ReturnType<typeof lstatSync>
+  try {
+    stats = lstatSync(file)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw new UnsafeJobFileError(label, String((error as NodeJS.ErrnoException).code))
+  }
+  if (stats.isSymbolicLink()) throw new UnsafeJobFileError(label, 'it is a symlink')
+}
 
 function artifactPath(jobDir: string, name: string): string {
   if (name !== path.basename(name) || name === '' || name.startsWith('.')) {
@@ -46,6 +64,7 @@ function artifactPath(jobDir: string, name: string): string {
 
 /** Open without following links; the returned descriptor is a regular, singly linked file. */
 function openChecked(file: string, flags: number, label: string): number {
+  if (!HAS_NO_FOLLOW) refuseSymlink(file, label)
   let fd: number
   try {
     fd = openSync(file, flags | NO_FOLLOW, 0o644)

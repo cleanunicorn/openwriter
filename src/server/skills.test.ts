@@ -9,6 +9,7 @@ import {
   ALLOW_ENTRY,
   findSkill,
   listSkills,
+  findOnPath,
   missingTools,
   parseSkill,
   SKILLS_DIR,
@@ -250,5 +251,32 @@ describe('skills in jobs', () => {
       custom.cleanup()
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('findOnPath', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'openwrite-path-'))
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  // On a Windows host the temp directory has a drive letter, which a POSIX PATH cannot hold.
+  it.skipIf(process.platform === 'win32')(
+    'finds a tool by its bare name on POSIX, and not by a Windows extension',
+    () => {
+      writeFileSync(path.join(dir, 'agg'), '')
+      expect(findOnPath('agg', { PATH: `/nowhere:${dir}` }, 'linux')).toBe(true)
+      expect(findOnPath('asciinema', { PATH: dir }, 'linux')).toBe(false)
+    },
+  )
+
+  it('on Windows tries each PATHEXT extension and splits PATH on semicolons', () => {
+    writeFileSync(path.join(dir, 'agg.EXE'), '')
+    expect(findOnPath('agg', { PATH: `C:\\nowhere;${dir}`, PATHEXT: '.COM;.EXE' }, 'win32')).toBe(
+      true,
+    )
+    expect(findOnPath('agg', { PATH: dir, PATHEXT: '.CMD' }, 'win32')).toBe(false)
+    expect(findOnPath('agg', { Path: dir }, 'win32')).toBe(true)
   })
 })

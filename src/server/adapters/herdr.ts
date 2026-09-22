@@ -1,10 +1,9 @@
 import { execFile, spawn } from 'node:child_process'
-import path from 'node:path'
 import { z } from 'zod'
 import { herdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
 import { createChannel } from './channel.ts'
 import { claudeConfinement } from './claude.ts'
-import { parseLine } from './process-adapter.ts'
+import { jobRelative, parseLine } from './process-adapter.ts'
 import type {
   AdapterHandle,
   AdapterOptions,
@@ -131,7 +130,7 @@ export function createHerdrAdapter(
       }
 
       const startAgent = async (paneId: string) => {
-        const jobRel = path.relative(options.workspace, jobDir)
+        const jobRel = jobRelative(options.workspace, jobDir)
         const model = options.config.model ? ['--model', options.config.model] : []
         await cli.run(
           scoped(
