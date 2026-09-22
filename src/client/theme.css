@@ -923,6 +923,18 @@ button.chip:focus-visible {
   gap: 6px;
 }
 
+.composer-skill-errors {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85em;
+  color: var(--warn);
+}
+
+.composer-skill-errors code {
+  color: var(--fg);
+}
+
 .tray-job {
   padding: 8px;
   border-radius: 6px;

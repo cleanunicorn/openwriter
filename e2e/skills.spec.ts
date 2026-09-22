@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
@@ -9,6 +10,8 @@ import {
   expectOneWaiting,
   ghosts,
   jobFile,
+  mod,
+  notice,
   openArticle,
   release,
   runCommand,
@@ -57,4 +60,43 @@ test('the video skill is a stub and says so', async ({ page }) => {
   await ask(page, '/video a ten second intro')
   await tray(page).getByRole('button').first().click()
   await expect(tray(page)).toContainText('stub')
+})
+
+test('a skill saved in .zen/skills appears while the editor is open and runs; a broken one says why', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  // Written after the page loaded: the server's watcher tells the client, no reload needed.
+  const dir = path.join(app.workspace, '.zen', 'skills')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    path.join(dir, 'haiku.md'),
+    '---\nname: haiku\ndescription: Rewrite as a haiku\n---\nRewrite the target as a haiku: five, seven, five.\n',
+  )
+  writeFileSync(path.join(dir, 'broken.md'), '---\nname: broken\n---\nno description\n')
+
+  // The broken file is visible to the writer, not only in a console: a notice, then a list in
+  // the agent panel that stays until the file is fixed.
+  await expect(notice(page)).toContainText('Skill not loaded: .zen/skills/broken.md')
+  await expect(notice(page)).toContainText('description:')
+  await page.keyboard.press(`${mod}+Alt+b`)
+  const problems = page.getByRole('list', { name: 'Skills not loaded' })
+  await expect(problems).toContainText('.zen/skills/broken.md')
+  await expect(page.getByRole('button', { name: '/haiku' })).toBeVisible()
+
+  // The valid one is an ordinary skill: the palette runs it and its body reaches the agent.
+  await runCommand(page, 'run skill haiku')
+  await answer(page, 'Instruction for the haiku skill', 'the closing paragraph')
+  const jobId = await expectOneWaiting(app)
+  const instruction = readFileSync(jobFile(app, jobId, 'instruction.md'), 'utf8')
+  expect(instruction).toContain('## Skill: haiku')
+  expect(instruction).toContain('five, seven, five')
+
+  writeFileSync(
+    path.join(dir, 'broken.md'),
+    '---\nname: broken\ndescription: Fixed now\n---\nA prompt.\n',
+  )
+  await expect(problems).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '/broken' })).toBeVisible()
 })

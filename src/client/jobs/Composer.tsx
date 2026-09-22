@@ -31,6 +31,7 @@ export function Composer() {
     if (doc !== null) setDraft(doc.ref, patch)
   }
   const skills = useApp((state) => state.skills)
+  const skillErrors = useApp((state) => state.skillErrors)
   const input = useRef<HTMLTextAreaElement>(null)
   // How many earlier turns the next message carries to the agent (a number: a stable snapshot).
   const carried = useJobs((state) => (doc === null ? 0 : threadOf(state, doc.ref).length))
@@ -155,13 +156,27 @@ export function Composer() {
                 key={skill.name}
                 type="button"
                 className="chip"
-                title={skill.description}
+                title={
+                  skill.source === 'workspace'
+                    ? `${skill.description} (workspace skill)`
+                    : skill.description
+                }
                 onClick={() => prefill(`/${skill.name} `)}
               >
                 /{skill.name}
               </button>
             ))}
           </div>
+        )}
+        {skillErrors.length > 0 && (
+          // A skill file the writer saved with a mistake says what is wrong where the skills are.
+          <ul className="composer-skill-errors" aria-label="Skills not loaded">
+            {skillErrors.map((problem) => (
+              <li key={problem.file}>
+                <code>{problem.file}</code> {problem.error}
+              </li>
+            ))}
+          </ul>
         )}
       </form>
     </div>

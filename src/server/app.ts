@@ -18,6 +18,7 @@ import { mountFakeControl, mountJobRoutes } from './routes/jobs.ts'
 import { mountWorkspaceRoutes } from './routes/workspaces.ts'
 import { JobManager } from './jobs/manager.ts'
 import { localOnly } from './security.ts'
+import { SkillsWatcher } from './skills-watcher.ts'
 import { EventHub } from './sse.ts'
 import { DocWatcher } from './watcher.ts'
 import { realpathOrSelf, WorkspaceList } from './workspace-list.ts'
@@ -45,6 +46,7 @@ export function createApp(options: AppOptions): CreatedApp {
   }
   const events = new EventHub()
   const watcher = new DocWatcher(workspace, events)
+  const skills = new SkillsWatcher(workspace, events, options.skillsDir)
   const gate = new FakeGate(options.fakeControl)
   const registry = new AdapterRegistry()
     .register(createClaudeAdapter())
@@ -57,6 +59,7 @@ export function createApp(options: AppOptions): CreatedApp {
     workspaces,
     events,
     watcher,
+    skills,
     adapterNames: () => registry.names(),
   }
   const jobs = new JobManager({
@@ -110,6 +113,7 @@ export function createApp(options: AppOptions): CreatedApp {
     gate,
     dispose: async () => {
       watcher.close()
+      skills.close()
       await jobs.shutdown()
     },
   }

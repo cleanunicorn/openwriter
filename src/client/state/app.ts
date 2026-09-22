@@ -4,6 +4,7 @@ import {
   type DocRef,
   docKey,
   type SkillInfo,
+  type SkillProblem,
 } from '../../shared/api-types.ts'
 import type { Config } from '../../shared/config-schema.ts'
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
@@ -42,8 +43,13 @@ export type AppState = {
   docs: Record<string, DocState>
   articles: Article[]
   config: ConfigResponse | null
-  /** Prompt templates from `skills/`; the palette lists them, the editor knows nothing else. */
+  /**
+   * Prompt templates from `skills/` and the workspace's `.zen/skills/`; the palette lists them,
+   * the editor knows nothing else.
+   */
   skills: SkillInfo[]
+  /** Workspace skill files that did not load, and why; the palette and the agent panel show them. */
+  skillErrors: SkillProblem[]
   /** The open workspace and the ones the writer has opened before; the palette lists them. */
   workspaces: WorkspacesResponse | null
   palette: PaletteMode | null
@@ -59,6 +65,7 @@ export const store = createStore<AppState>({
   articles: [],
   config: null,
   skills: [],
+  skillErrors: [],
   workspaces: null,
   palette: null,
   panel: null,
@@ -364,8 +371,36 @@ export async function refreshConfig(): Promise<void> {
 }
 
 async function refreshSkills(): Promise<void> {
-  const { skills } = await api.skills()
-  store.set((state) => ({ ...state, skills }))
+  const { skills, errors } = await api.skills()
+  store.set((state) => ({ ...state, skills, skillErrors: errors }))
+  announceSkillErrors()
+}
+
+/** The skill problems the writer has already been told about in a notice, this session. */
+const announcedSkillErrors = new Set<string>()
+const skillErrorKey = (problem: SkillProblem) => `${problem.file}\0${problem.error}`
+
+/** One line for a skill file that did not load: where it is and what to fix. */
+export const describeSkillError = (problem: SkillProblem) =>
+  `Skill not loaded: ${problem.file} — ${problem.error}`
+
+/**
+ * Tell the writer, once, about each workspace skill file that did not load. The palette and the
+ * agent panel keep listing them; the notice makes sure a file just saved with a mistake is seen.
+ * Without a document on screen there is nowhere to say it yet: `start` calls this again.
+ */
+function announceSkillErrors(): void {
+  const { current, skillErrors } = store.get()
+  if (current === null || docStateOf(current) === undefined) return
+  const fresh = skillErrors.filter((problem) => !announcedSkillErrors.has(skillErrorKey(problem)))
+  if (fresh.length === 0) return
+  for (const problem of fresh) announcedSkillErrors.add(skillErrorKey(problem))
+  const [first] = fresh
+  const notice =
+    fresh.length === 1 && first !== undefined
+      ? describeSkillError(first)
+      : `${fresh.length} workspace skills did not load: ${fresh.map((p) => p.file).join(', ')}. The agent panel says why.`
+  dispatchDoc(current, { type: 'notice', notice })
 }
 
 export async function createArticle(title: string): Promise<void> {
@@ -425,6 +460,7 @@ async function resync(): Promise<void> {
     }),
     refreshConfig(),
     refreshArticles(),
+    refreshSkills(),
   ])
 }
 
@@ -442,7 +478,11 @@ export function connectEvents(): () => void {
     const event = parsed.data
     if (event.type === 'doc.changed') void onDocChanged(event.ref, event.hash)
     else if (event.type === 'workspace.changed') handlers.onWorkspaceChanged?.(event.root)
-    else if (event.type === 'config.changed') {
+    else if (event.type === 'skills.changed') {
+      void refreshSkills().catch((error: unknown) =>
+        notifyFailure('Could not reload the skills', error),
+      )
+    } else if (event.type === 'config.changed') {
       void refreshConfig().catch((error: unknown) =>
         notifyFailure('Could not reload the settings', error),
       )
@@ -463,6 +503,7 @@ export async function start(): Promise<void> {
       fromHash ?? (first === undefined ? null : ({ kind: 'article', slug: first.slug } as const))
     if (initial !== null) await openDoc(initial)
     store.set((state) => ({ ...state, boot: 'ready' }))
+    announceSkillErrors()
   } catch (error) {
     store.set((state) => ({ ...state, boot: { error: (error as Error).message } }))
     return
