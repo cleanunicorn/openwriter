@@ -17,11 +17,23 @@ describe('summariseFrontMatter', () => {
     })
   })
 
-  it('stays quiet on malformed front matter', () => {
-    expect(summariseFrontMatter('---\n{{{\n---')).toEqual({
+  it('extracts title, date and tags from JSON', () => {
+    expect(
+      summariseFrontMatter(
+        '{\n  "title": "C",\n  "date": "2026-09-22T08:00:00Z",\n  "tags": ["json", 7, "hugo"]\n}',
+      ),
+    ).toEqual({ title: 'C', date: '2026-09-22', tags: ['json', 'hugo'] })
+    expect(summariseFrontMatter('{"title": 1, "tags": "one"}')).toEqual({
       title: undefined,
       date: undefined,
-      tags: [],
+      tags: ['one'],
     })
+  })
+
+  it('stays quiet on malformed front matter', () => {
+    const empty = { title: undefined, date: undefined, tags: [] }
+    expect(summariseFrontMatter('---\n{{{\n---')).toEqual(empty)
+    expect(summariseFrontMatter('{ "title": ')).toEqual(empty)
+    expect(summariseFrontMatter('{"title": null}')).toEqual(empty)
   })
 })

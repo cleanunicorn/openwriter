@@ -41,6 +41,13 @@ describe('moveBlock', () => {
     expect(moveBlock(doc, 0, 2, mint)).toBe(doc)
     expect(raws(moveBlock(doc, 2, 0, mint))).toEqual(['---\nt: 1\n---', 'B', 'A'])
   })
+
+  it('treats JSON front matter the same way', () => {
+    const { doc, mint } = setup('{\n  "t": 1\n}\n\nA\n\nB\n')
+    expect(moveBlock(doc, 0, 2, mint)).toBe(doc)
+    expect(raws(moveBlock(doc, 2, 0, mint))).toEqual(['{\n  "t": 1\n}', 'B', 'A'])
+    expect(mergeWithPrevious(doc, 1, mint)).toBeNull()
+  })
 })
 
 describe('insertMarkdown', () => {

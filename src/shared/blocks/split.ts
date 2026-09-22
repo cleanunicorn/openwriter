@@ -41,6 +41,46 @@ function frontMatterEnd(text: string, offset: number): number {
   }
 }
 
+/** Only spaces or tabs, then a line break or the end of the text. */
+const restOfLine = /[ \t]*(\r|\n|$)/y
+
+/**
+ * End offset of Hugo JSON front matter starting at `offset`, or -1. Hugo's lexer takes a leading
+ * `{` as JSON front matter and ends it at the matching `}`, counting braces outside strings. This
+ * is stricter, so ambiguous text stays ordinary markdown: the `{` must open the document, the
+ * `}` must end its line, and the slice must parse as a JSON object (which rules out `{{< … >}}`).
+ */
+function jsonFrontMatterEnd(text: string, offset: number): number {
+  let depth = 0
+  let inString = false
+  for (let i = offset; i < text.length; i++) {
+    const char = text[i]
+    if (inString) {
+      if (char === '\\') i++
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === '{') depth++
+    else if (char === '}' && --depth === 0) {
+      const end = i + 1
+      restOfLine.lastIndex = end
+      if (!restOfLine.test(text)) return -1
+      return isJsonObject(text.slice(offset, end)) ? end : -1
+    }
+  }
+  return -1
+}
+
+function isJsonObject(raw: string): boolean {
+  try {
+    const value: unknown = JSON.parse(raw)
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+  } catch {
+    return false
+  }
+}
+
 function trimEnd(text: string, start: number, end: number): number {
   let cursor = end
   while (cursor > start && ' \t\r\n'.includes(text[cursor - 1] ?? '')) cursor--
@@ -122,7 +162,8 @@ export function splitText(text: string): SplitResult {
   const ranges: Range[] = []
 
   let contentStart = bodyStart
-  const fmEnd = frontMatterEnd(text, bodyStart)
+  const fmEnd =
+    text[bodyStart] === '{' ? jsonFrontMatterEnd(text, bodyStart) : frontMatterEnd(text, bodyStart)
   if (fmEnd !== -1) {
     ranges.push({ start: bodyStart, end: fmEnd, kind: 'frontmatter', scan: false })
     contentStart = fmEnd

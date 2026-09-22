@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { createDoc, createIdMinter, serialise, splitText } from './index.ts'
+import { createDoc, createIdMinter, replaceBlock, serialise, splitText } from './index.ts'
 
 const corpusDir = path.join(import.meta.dirname, 'corpus')
 const corpus = (name: string) => readFileSync(path.join(corpusDir, name), 'utf8')
@@ -30,6 +30,7 @@ function expectLossless(text: string): ReturnType<typeof splitText> {
 const expectations: Record<string, string[]> = {
   'front-matter-yaml.md': ['---\ntitle', '# Heading', 'A paragraph', '---', 'After the', '[ref]:'],
   'front-matter-toml.md': ['+++\ntitle', 'First paragraph', 'Second paragraph'],
+  'front-matter-json.md': ['{\n  "title"', '{{< notice >}}', 'Closing paragraph'],
   'shortcodes.md': [
     'Intro paragraph',
     '{{< notice warning >}}',
@@ -82,6 +83,34 @@ describe('corpus round trip', () => {
     expect(splitText('---\ntitle: unclosed\n\ntext\n').slices[0]?.kind).toBe('content')
   })
 
+  it('marks a leading JSON object as front matter, braces and quotes in strings included', () => {
+    const { slices } = splitText(corpus('front-matter-json.md'))
+    expect(slices.map((slice) => slice.kind)).toEqual(['frontmatter', 'content', 'content'])
+    expect(slices[0]?.raw.endsWith('"draft": false\n}')).toBe(true)
+    expect(JSON.parse(slices[0]?.raw ?? '')).toMatchObject({ title: 'JSON post' })
+    expect(splitText('{"title": "one line"}\n\nText\n').slices.map((s) => s.kind)).toEqual([
+      'frontmatter',
+      'content',
+    ])
+    expect(splitText('{"a": "\\"}"}\nText\n').slices[0]?.raw).toBe('{"a": "\\"}"}')
+    expect(splitText('{}').slices).toEqual([{ raw: '{}', kind: 'frontmatter' }])
+  })
+
+  it.each([
+    ['unclosed', '{\n  "title": "x"\n\nText\n'],
+    ['not JSON', '{ title: x }\n\nText\n'],
+    ['a trailing comma', '{\n  "title": "x",\n}\n\nText\n'],
+    ['text after the closing brace', '{"title": "x"} and more\n\nText\n'],
+    ['markdown before a stray closing brace', '{\n\nA paragraph.\n\n```\n}\n```\n'],
+    ['a leading shortcode', '{{< figure src="x.png" >}}\n\nText\n'],
+    ['a leading paired shortcode', '{{< notice >}}\n{"a": 1}\n{{< /notice >}}\n'],
+    ['whitespace before the brace', ' {"title": "x"}\n\nText\n'],
+    ['a JSON object not at the top', 'Intro\n\n{"title": "x"}\n'],
+  ])('keeps a leading brace with %s as ordinary content, byte for byte', (_name, text) => {
+    const { slices } = expectLossless(text)
+    expect(slices.every((slice) => slice.kind === 'content')).toBe(true)
+  })
+
   it('keeps the whole paired shortcode as one block', () => {
     const { slices } = splitText(corpus('shortcodes.md'))
     expect(slices[1]?.raw.startsWith('{{< notice warning >}}')).toBe(true)
@@ -91,7 +120,9 @@ describe('corpus round trip', () => {
 })
 
 describe('line endings and encoding edge cases', () => {
-  const sample = '---\ntitle: x\n---\n\n# Title\n\nOne paragraph\nover two lines.\n\n- a\n- b\n'
+  const body = '\n\n# Title\n\nOne paragraph\nover two lines.\n\n- a\n- b\n'
+  const sample = `---\ntitle: x\n---${body}`
+  const json = `{\n  "title": "x"\n}${body}`
 
   it.each([
     ['LF', sample],
@@ -99,6 +130,10 @@ describe('line endings and encoding edge cases', () => {
     ['lone CR', sample.replaceAll('\n', '\r')],
     ['BOM + LF', `﻿${sample}`],
     ['BOM + CRLF', `﻿${sample.replaceAll('\n', '\r\n')}`],
+    ['JSON + LF', json],
+    ['JSON + CRLF', json.replaceAll('\n', '\r\n')],
+    ['JSON + lone CR', json.replaceAll('\n', '\r')],
+    ['BOM + JSON + CRLF', `﻿${json.replaceAll('\n', '\r\n')}`],
   ])('%s keeps bytes and boundaries', (_name, text) => {
     const { slices, gaps } = expectLossless(text)
     expect(slices.map((slice) => slice.kind)).toEqual([
@@ -150,6 +185,12 @@ const fragments = {
   rule: ['***'],
 } as const
 
+const frontMatters = [
+  '---\ntitle: "t"\n---',
+  '+++\ntitle = "t"\n+++',
+  '{\n  "title": "t",\n  "params": { "brace": "}", "quote": "\\"" }\n}',
+] as const
+
 type Category = keyof typeof fragments
 const fragmentArb = fc
   .constantFrom(...(Object.keys(fragments) as Category[]))
@@ -166,14 +207,14 @@ describe('property: split recovers the fragments a document was built from', () 
         fc.array(gapArb, { minLength: 13, maxLength: 13 }),
         fc.constantFrom('\n', '\r\n', '\r'),
         fc.constantFrom('', '\n', '\n\n'),
-        fc.boolean(),
-        (parts, gapPool, eol, tail, withFrontMatter) => {
+        fc.constantFrom('', ...frontMatters),
+        (parts, gapPool, eol, tail, frontMatter) => {
           // Neighbours of the same category can legitimately fuse (two lists, two quotes).
           const chosen = parts.filter(
             (part, index) => index === 0 || parts[index - 1]?.category !== part.category,
           )
           const raws = chosen.map((part) => part.raw)
-          if (withFrontMatter) raws.unshift('---\ntitle: "t"\n---')
+          if (frontMatter !== '') raws.unshift(frontMatter)
           let text = ''
           raws.forEach((raw, index) => {
             text += raw + (index < raws.length - 1 ? gapPool[index] : tail)
@@ -183,9 +224,40 @@ describe('property: split recovers the fragments a document was built from', () 
           expect(slices.map((slice) => slice.raw)).toEqual(
             raws.map((raw) => raw.replaceAll('\n', eol)),
           )
+          expect(slices[0]?.kind).toBe(frontMatter === '' ? 'content' : 'frontmatter')
         },
       ),
       { seed: 20260919, numRuns: 400 },
+    )
+  })
+})
+
+// Property: whatever a neighbouring block is edited into — braces, quotes, shortcodes, a lone
+// `}` — the front matter keeps its bytes, its kind, and its ID.
+describe('property: editing a neighbour never alters the front matter', () => {
+  const editArb = fc.oneof(
+    fragmentArb.map((part) => part.raw),
+    fc.constantFrom('}', '{', '"', '\\', '{"title": "other"}', '---', '+++', '}\n\n{'),
+    fc.string({ unit: fc.constantFrom('{', '}', '"', '\\', 'a', ' ', '\n', '-', '+') }),
+  )
+
+  it('holds for every front matter format and any replacement text', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...frontMatters),
+        fc.array(fragmentArb, { minLength: 1, maxLength: 5 }),
+        fc.nat(),
+        editArb,
+        (frontMatter, parts, pick, edit) => {
+          const text = [frontMatter, ...parts.map((part) => part.raw)].join('\n\n')
+          const doc = createDoc(text, createIdMinter())
+          const index = 1 + (pick % (doc.blocks.length - 1))
+          const next = replaceBlock(doc, index, edit, createIdMinter(100))
+          expect(next.blocks[0]).toEqual(doc.blocks[0])
+          expect(serialise(next).startsWith(frontMatter)).toBe(true)
+        },
+      ),
+      { seed: 20260922, numRuns: 400 },
     )
   })
 })
