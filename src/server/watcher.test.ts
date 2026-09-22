@@ -24,10 +24,13 @@ describe('watching', () => {
       baseHash: doc.hash,
     })
     await new Promise((resolve) => setTimeout(resolve, 300))
-    expect(seen).toEqual([])
+    // The save route announces its own write (#29, routes/docs.test.ts); the watcher adds nothing.
+    expect(seen).toHaveLength(1)
+    seen.length = 0
 
     writeFileSync(article(), 'outside\n')
     await expect.poll(() => seen.length, { timeout: 3000 }).toBe(1)
+    expect(seen[0]).not.toHaveProperty('origin')
     expect(seen[0]).toMatchObject({
       type: 'doc.changed',
       ref: { kind: 'article', slug: 'hello-openwrite' },

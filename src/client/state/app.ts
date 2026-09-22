@@ -169,6 +169,14 @@ export function resetDocSession(): void {
   inFlight.clear()
 }
 
+/**
+ * Whether a read that started when the document was based on `base` is still news. A save or a
+ * reload that landed meanwhile moved the document to a revision at least as new as the one read,
+ * and merging the older text over it would undo what came in between; a write after it announces
+ * itself with an event of its own.
+ */
+const stillNews = (ref: DocRef, base: string | null) => docStateOf(ref)?.baseHash === base
+
 async function save(ref: DocRef): Promise<void> {
   const key = docKey(ref)
   const state = store.get().docs[key]
@@ -181,7 +189,7 @@ async function save(ref: DocRef): Promise<void> {
     const base = state.baseHash
     // A reload that brings this very text back is this tab's own save (the base of the merge).
     dispatchDoc(ref, { type: 'sending', text })
-    const { hash } = await api.save(ref, text, base)
+    const { hash } = await api.save(ref, text, base, tabId)
     if (session !== docSession) return
     dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
   } catch (error) {
@@ -198,9 +206,10 @@ async function save(ref: DocRef): Promise<void> {
         ? DocResponseSchema.safeParse(error.body)
         : null
     if (disk?.success === true) {
-      // Someone else changed (or deleted) the file: reconcile instead of overwriting.
+      // Someone else changed (or deleted) the file: merge instead of overwriting — unless a
+      // reload for another tab's save already moved the document past what this refusal saw.
       const { text, hash, exists } = disk.data
-      dispatchDoc(ref, { type: 'external', text, hash, exists })
+      if (stillNews(ref, state.baseHash)) dispatchDoc(ref, { type: 'external', text, hash, exists })
       return
     }
     dispatchDoc(ref, { type: 'notice', notice: `Could not save: ${(error as Error).message}` })
@@ -502,14 +511,15 @@ type EventHandlers = {
 const handlers: EventHandlers = {}
 export const setEventHandlers = (next: EventHandlers) => Object.assign(handlers, next)
 
-async function onDocChanged(ref: DocRef, hash: string | null): Promise<void> {
+async function onDocChanged(ref: DocRef, hash: string | null, fromTab: boolean): Promise<void> {
   const state = docStateOf(ref)
   if (state === undefined || state.baseHash === hash) return
   const session = docSession
+  const base = state.baseHash
   try {
     const disk = await api.doc(ref)
-    if (session !== docSession) return
-    dispatchDoc(ref, { type: 'external', ...disk })
+    if (session !== docSession || !stillNews(ref, base)) return
+    dispatchDoc(ref, { type: 'external', ...disk, ...(fromTab ? { from: 'tab' as const } : {}) })
   } catch (error) {
     if (session !== docSession) return
     dispatchDoc(ref, { type: 'notice', notice: `Could not reload: ${(error as Error).message}` })
@@ -545,9 +555,10 @@ export async function resync(): Promise<void> {
   await Promise.all([
     ...open.map(async (doc) => {
       const session = docSession
+      const base = doc.baseHash
       try {
         const disk = await api.doc(doc.ref)
-        if (session !== docSession) return
+        if (session !== docSession || !stillNews(doc.ref, base)) return
         if (disk.hash !== docStateOf(doc.ref)?.baseHash) {
           dispatchDoc(doc.ref, { type: 'external', ...disk })
         }
@@ -583,8 +594,11 @@ export function connectEvents(): () => void {
     // Every other event is about the workspace the server is on; while this tab still shows the
     // one it left (`moved`), those would land on the wrong documents, settings and jobs.
     if (store.get().moved !== null) return
-    if (event.type === 'doc.changed') void onDocChanged(event.ref, event.hash)
-    else if (event.type === 'skills.changed') {
+    if (event.type === 'doc.changed') {
+      // This tab's own save: it already has the text, and the answer to its PUT brings the hash.
+      if (event.origin === tabId) return
+      void onDocChanged(event.ref, event.hash, event.origin !== undefined)
+    } else if (event.type === 'skills.changed') {
       void refreshSkills().catch((error: unknown) =>
         notifyFailure('Could not reload the skills', error),
       )

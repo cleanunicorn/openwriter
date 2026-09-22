@@ -136,8 +136,9 @@ directory keeps the name `.zen/`.
   hash. A stale base is a 409 and triggers the same reload as a watcher event: a three-way merge
   (below). A file deleted from outside pauses autosave and is never recreated.
 - **`fs.watch` on the document's directory** (sees save-by-rename), debounced, compared by
-  content hash; hashes the server itself wrote are ignored, which is also why another tab's save
-  is never reported (see "Two tabs on one document"). No `chokidar` needed so far.
+  content hash; hashes the server itself wrote are ignored, so a save through the server is
+  announced by the save route instead, naming the tab (see "Two tabs on one document"). No
+  `chokidar` needed so far.
 - **Mermaid labels are SVG text (`htmlLabels: false`).** HTML labels live in `foreignObject`,
   which sanitising removes; SVG text also survives the standalone HTML export.
 - **The mermaid source travels as the text of a `<pre>`,** not in a `data-` attribute: DOMPurify
@@ -149,21 +150,34 @@ directory keeps the name `.zen/`.
   is something to say. The exceptions in the app are the two panel handles and the job count
   (under "Shell and panels" below).
 
-## Two tabs on one document (issue #5)
+## Two tabs on one document (issues #5, #29)
 
-- **Documented rather than fixed at first, because the fix that looks obvious makes it worse.**
-  The watcher ignores the hash of every server write, so another tab's save never reaches a tab
-  as `doc.changed`, and the stale tab only learns of it from its own 409 (#29, still open).
+- **Documented rather than fixed at first (#5), because the fix that looks obvious makes it
+  worse.** The watcher ignores the hash of every server write, so another tab's save never
+  reached a tab as `doc.changed`, and the stale tab only learnt of it from its own 409 (#29).
   Emitting `doc.changed` from the PUT route fixes the staleness, but on its own it starts a save
   ping-pong: when both tabs have an editor open on the same block, each reload kept the local
-  draft, and the `lastSeen` key (base hash plus text) re-armed the autosave. The three-way merge
-  (#30, next section) is the tie-break the ping-pong needed: a reload that finds the disk changed
-  the block an editor has open closes that editor and shows a conflict, so there is no draft left
-  to save back.
-- **What the README says happens is tested** (`e2e/two-tabs.spec.ts`). Different blocks merge on
-  the stale tab's refused save. For the same block the stale tab gets a conflict and the file
-  keeps the other tab's text until the writer chooses; the other tab is still not told (#29). A
-  block finished with `Esc` before its autosave survives the reload (#30).
+  draft, and the `lastSeen` key (base hash plus text) re-armed the autosave.
+- **Every save is announced, and names the tab that made it (#29).** The PUT body carries the
+  tab ID (`SaveRequestSchema.tab`, the same `TabIdSchema` the event stream and jobs use); the
+  route emits `doc.changed` with that `origin` right after the write, and the watcher, which
+  knows the hash, stays quiet. The saving tab drops its own event: it has the text, and the PUT's
+  answer brings the hash — reloading its own save would only race the typing that followed.
+  Filtering in the client rather than skipping that tab's stream on the server keeps the event
+  hub a plain fan-out. A PUT without a tab (a script) is still announced, without an origin.
+- **The three-way merge (#30, next section) is the tie-break the ping-pong needed.** A reload
+  that finds the disk changed the block an editor has open closes that editor and shows a
+  conflict, so there is no draft left to save back; a plain origin check without it would still
+  have saved the draft over the other tab's text. The other tab hears nothing more until the
+  writer chooses, and `two-tabs.spec.ts` counts the saves to show it.
+- **A reload read that a save or another reload overtook is dropped** (`stillNews` in
+  `state/app.ts`, for events and for the reconnect re-check). With saves announced, a tab can
+  read the file for another tab's event while its own save lands; merging that older text over
+  the newer document would revert what came in between. A later write announces itself.
+- **What the README says happens is tested** (`e2e/two-tabs.spec.ts`): a save reaches the other
+  tab at once; the same block edited one after the other keeps both words; typed at once, a
+  conflict with no ping-pong; a block finished with `Esc` before its autosave survives another
+  tab's save arriving (#30).
 
 ## A reload is a three-way merge (issue #30)
 

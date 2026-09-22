@@ -1,10 +1,20 @@
 import { z } from 'zod'
-import { DocRefSchema } from './api-types.ts'
+import { DocRefSchema, TabIdSchema } from './api-types.ts'
 import { JobSchema } from './jobs/job-types.ts'
 
 /** Server → client events on `/api/events` (SSE). The client zod-parses every message. */
 export const ServerEventSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('doc.changed'), ref: DocRefSchema, hash: z.string().nullable() }),
+  /**
+   * A document changed on disk: by another program (the watcher), or by a save through this
+   * server, which names the tab that made it (`origin`). That tab ignores its own; every other
+   * tab reloads through the three-way merge (#29).
+   */
+  z.object({
+    type: z.literal('doc.changed'),
+    ref: DocRefSchema,
+    hash: z.string().nullable(),
+    origin: TabIdSchema.optional(),
+  }),
   z.object({ type: z.literal('config.changed') }),
   /** A file in `<workspace>/.zen/skills/` changed what the palette lists; refetch `/api/skills`. */
   z.object({ type: z.literal('skills.changed') }),

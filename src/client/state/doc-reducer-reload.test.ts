@@ -43,6 +43,18 @@ describe('a reload keeps a finished block that was not saved yet (#30)', () => {
     expect(state.notice).toBe('The file changed on disk. Your unsaved text was kept.')
   })
 
+  it('says so when the change was another tab’s save (#29)', () => {
+    const state = docReducer(loaded(), {
+      type: 'external',
+      text: 'One\n\nTwo\n\nThree AAA\n',
+      hash: 'h1',
+      exists: true,
+      from: 'tab',
+    })
+    expect(state.notice).toBe('Reloaded: another tab saved this file.')
+    expect(text(state)).toBe('One\n\nTwo\n\nThree AAA\n')
+  })
+
   it('keeps it when the refused save’s own text is not on disk (the 409 path)', () => {
     // The rejected PUT carried this very text; the disk answered with another tab's.
     const state = reload(finish(loaded(), 'b3', 'Three MINE'), 'One AAA\n\nTwo\n\nThree\n')

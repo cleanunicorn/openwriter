@@ -89,8 +89,9 @@ export const api = {
   createArticle: (title: string) =>
     request(ArticleSchema, '/api/articles', { method: 'POST', body: { title } }),
   doc: (ref: DocRef) => request(DocResponseSchema, docUrl(ref)),
-  save: (ref: DocRef, text: string, baseHash: string | null) =>
-    request(SaveResponseSchema, docUrl(ref), { method: 'PUT', body: { text, baseHash } }),
+  /** `tab` names the tab that saves, so the others hear of it and it does not (#29). */
+  save: (ref: DocRef, text: string, baseHash: string | null, tab: string) =>
+    request(SaveResponseSchema, docUrl(ref), { method: 'PUT', body: { text, baseHash, tab } }),
   uploadImage: (slug: string, file: File) =>
     request(AssetResponseSchema, `/api/docs/article/${slug}/assets`, {
       method: 'POST',

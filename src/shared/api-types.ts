@@ -56,7 +56,18 @@ export const WorkspaceMovedSchema = z.object({
   workspaceChanged: z.literal(true),
 })
 
-export const SaveRequestSchema = z.object({ text: z.string(), baseHash: z.string().nullable() })
+/**
+ * One browser tab, for as long as it lives — a reload keeps it (client/state/session.ts). Block IDs
+ * are that tab's own, so a job can only be applied by the tab that asked for it; a save names it
+ * so that every other tab hears of the save and this one does not (`doc.changed`'s `origin`).
+ */
+export const TabIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
+
+export const SaveRequestSchema = z.object({
+  text: z.string(),
+  baseHash: z.string().nullable(),
+  tab: TabIdSchema.optional(),
+})
 export const SaveResponseSchema = z.object({ hash: z.string() })
 
 export const ArticleSchema = z.object({ slug: SlugSchema, title: z.string() })

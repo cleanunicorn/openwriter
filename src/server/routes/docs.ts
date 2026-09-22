@@ -43,7 +43,7 @@ async function readLimited(request: Request, limit: number): Promise<Uint8Array>
   return Buffer.concat(chunks)
 }
 
-export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext): void {
+export function mountDocRoutes(app: Hono, { workspace, watcher, events }: ServerContext): void {
   app.get('/api/articles', (c) => c.json({ articles: workspace.listArticles() }))
 
   // Every route below that reads or writes a document checks, after its last await, that the
@@ -72,10 +72,13 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
   app.put('/api/docs/:kind/:slug?', async (c) => {
     const ref = refFrom(c.req.param('kind'), c.req.param('slug'))
     const pinned = pinWorkspace(c, workspace, 'The workspace changed before this was saved.')
-    const { text, baseHash } = await parseBody(c, SaveRequestSchema)
+    const { text, baseHash, tab } = await parseBody(c, SaveRequestSchema)
     pinned()
     const hash = workspace.writeDoc(ref, text, baseHash)
+    // The watcher knows this hash now and stays quiet about the write, so the save is announced
+    // here, to every tab: the one that saved knows itself by `origin` and ignores it (#29).
     watcher.remember(ref, hash)
+    events.emit({ type: 'doc.changed', ref, hash, ...(tab === undefined ? {} : { origin: tab }) })
     return c.json({ hash })
   })
 
