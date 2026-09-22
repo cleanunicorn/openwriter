@@ -6,13 +6,12 @@ openwrite is a local-first, block-based markdown editor for technical blog
 posts, with agent-powered editing. One user for now: they write markdown,
 publish with Hugo, and already use CLI coding agents (Claude Code, Codex). The
 editor is calm and minimal; AI help appears only when reached for, and several
-agent jobs run in the background while the writer keeps writing. The project
-follows GitHub flow: `main` is always runnable, work happens on short-lived
-branches, and every change lands through a pull request.
+agent jobs run in the background while the writer keeps writing. Work happens
+directly on `main`: no branches, no worktrees, no pull requests.
 
 **Status:** the first version is built: the editor, the job system, the
 `claude`, `codex`, `herdr` and `fake` adapters, skills, and export. This file
-describes what exists; update it in the same PR as the code it describes.
+describes what exists; update it in the same change as the code it describes.
 
 Use [README.md](README.md) for setup, the workspace layout, the job file
 contract, and how to add an adapter or a skill. Record every non-obvious
@@ -26,7 +25,6 @@ Versions are what is installed on the dev machine as of 2026-09-19.
 - **Node.js ≥ 24 + npm** (v24.14.1 / 11.11.0). TypeScript everywhere.
 - **Playwright browser binaries** — `npx playwright install --with-deps chromium`,
   once per machine or container.
-- **`gh` CLI** for PRs (2.92.0).
 - **Agent CLIs, only for the real adapters:** `claude` (2.1.278), `codex`
   (codex-cli 0.155.1). They use the user's own logins; the app stores no keys.
 - **Hugo** (v0.154.5 extended) — the user's true preview. No test depends on it.
@@ -64,10 +62,9 @@ rerun without asking. The exceptions are in
 
 ## Golden rules
 
-1. **Never commit directly to `main`.** Always branch, always PR. The one
-   exception is the first commit of the empty repository, which has nothing to
-   branch from.
-2. **Never force-push a shared branch.**
+1. **Work directly on `main`.** Commit straight to `main`; no branches, no
+   worktrees, no pull requests.
+2. **Never force-push `main`.**
 3. **Keep `main` green and runnable.** Every milestone ends with passing tests
    and an app that starts.
 4. **Never disable, skip, or delete a test to make a build pass.** If a test is
@@ -103,8 +100,8 @@ rerun without asking. The exceptions are in
 
 ## What done looks like
 
-A change is done when its code, tests, docs, and wiring are in one PR, the
-checks pass locally, the app still starts, and the PR is open against `main`.
+A change is done when its code, tests, docs, and wiring are committed to
+`main`, the checks pass locally, and the app still starts.
 The first working implementation is not a stopping point: running the result,
 inspecting it, and fixing what fails is part of the task. A read-only request
 (explain, review, diagnose) is done when the report is delivered.
@@ -128,8 +125,7 @@ The project's definition of done:
 ## Decision boundaries
 
 - **Safe without asking:** the full check suite; `--help` and `--version` on
-  any agent CLI; creating and deleting sample or temp workspaces; removing a
-  merged task worktree that has no uncommitted work.
+  any agent CLI; creating and deleting sample or temp workspaces.
 - **Needs confirmation unless already authorized, and why:**
   - *Running a real `claude` or `codex` job* — it spends the user's
     subscription or API credits and starts an agent with file access. A task
@@ -140,8 +136,8 @@ The project's definition of done:
   - *Installing system tools* (`asciinema`, `agg`) — changes the user's
     machine. The skill's missing-tool path is testable without them.
   A request that already covers it is the confirmation. In an unattended run
-  there is nobody to ask: leave that part unchanged and list it in the PR with
-  the reason.
+  there is nobody to ask: leave that part unchanged and note the reason in the
+  commit message.
 - **Never:** see [Golden rules](#golden-rules).
 
 ## Communication
@@ -153,48 +149,26 @@ The project's definition of done:
 - When uncertain, say so rather than presenting a guess as fact.
 - End each response with a confidence indicator: 🟢 High | 🟡 Medium | 🔴 Low
 
-## The GitHub flow, step by step
+## The workflow, step by step
 
 ### 1. Start from an up-to-date `main`
 
 ```bash
-git checkout main
 git pull origin main
 ```
 
-### 2. Create a branch — in a worktree
+Work directly in the repository checkout, on `main`. No branches, no
+worktrees.
 
-**Never edit a checkout of `main` directly.** Create the worktree before the
-first edit, do the whole change there, and open the PR from it:
+### 2. Make focused changes
 
-```bash
-git worktree add .claude/worktrees/<short-topic> -b <type>/<short-topic>
-```
-
-`.claude/worktrees/` must be gitignored.
-
-Branch names are short, lowercase, hyphenated, and prefixed by intent:
-
-```
-feat/<short-description>      # new feature
-fix/<short-description>       # bug fix
-refactor/<short-description>  # internal change, no behavior change
-perf/<short-description>      # performance work
-docs/<short-description>      # documentation only
-chore/<short-description>     # tooling, deps, housekeeping
-```
-
-Examples: `feat/block-editor`, `fix/shortcode-split`.
-
-### 3. Make focused changes
-
-- One logical change per PR — and a whole feature *is* one logical change.
+- One logical change per commit — and a whole feature *is* one logical change.
   Ship its code, tests, and docs together; don't split it across a chain of
-  dependent PRs. Don't bundle an unrelated refactor into a fix either.
-- **While the project is being set up, the initial build is one PR.** The build
-  spec's milestones are checkboxes in that PR's Progress checklist, not
-  separate PRs. Tick one only when its tests pass and the app starts, and
-  commit at least once per milestone so each is a green point on the branch.
+  dependent commits. Don't bundle an unrelated refactor into a fix either.
+- **While the project is being set up, the initial build is a series of
+  commits.** The build spec's milestones are checkboxes in the change's
+  Progress checklist. Tick one only when its tests pass and the app starts, and
+  commit at least once per milestone so each is a green point on `main`.
   Revisit this once the first version has landed.
 - Match the surrounding style: strict TypeScript, typed data between client and
   server, zod at every boundary that reads a file or a message, early returns.
@@ -202,11 +176,11 @@ Examples: `feat/block-editor`, `fix/shortcode-split`.
   Focused is about relevance, not size.
 - **Fix it everywhere.** When you fix a problem, search the repo for the same
   problem — the *shape*, not the literal text — and fix every instance in the
-  same PR. Put the count up front so the reviewer sees the scale. Stop and list
-  the rest at generated code, where the fix would differ, or anything this file
-  says needs confirmation.
+  same commit. Put the count in the commit message. Stop and list the rest at
+  generated code, where the fix would differ, or anything this file says needs
+  confirmation.
 
-### 4. Commit
+### 3. Commit
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org):
 
@@ -226,7 +200,7 @@ Write in the imperative mood ("add", not "added"). Keep the subject under ~72
 characters and explain the *why* in the body when it isn't obvious. Commit at
 least once per milestone; never commit a red tree.
 
-### 5. Run the checks locally
+### 4. Run the checks locally
 
 The same checks CI runs. Two differences: CI runs `npm run format:check` (it
 must not rewrite files; run `npm run format` before you commit so it passes),
@@ -242,30 +216,21 @@ npm run test:e2e
 npm run build
 ```
 
-### 6. Push and open a PR
+### 5. Push to `main`
 
 ```bash
-git push -u origin feat/<short-description>
-gh pr create --base main --fill
+git push origin main
 ```
 
 Target **`main`**.
 
-## PR titles
+## Commit messages
 
-The PR title follows the same Conventional Commits format as commits:
-
-```
-type(optional scope)!: description
-```
-
-## PR description
-
-Keep it short and useful:
+Beyond the conventional format, keep a commit body short and useful:
 
 - **What** changed and **why**.
 - **A Progress checklist** — `- [x]` done, `- [ ]` open — covering the
-  milestones inside this PR and any deferred follow-ups.
+  milestones in this change and any deferred follow-ups.
 - **Numbers, not adjectives.** Anything you claim improved carries the value
   you measured and how to reproduce it — `npm test: 269 pass`, `-412 lines`.
   "Not measured" beats a vague adjective.
@@ -274,13 +239,11 @@ Keep it short and useful:
 - **The sweep**, for any fix: the search you ran for other instances, and its
   count — found, fixed, and left (with why).
 - **How to test** / what you ran.
-- Screenshots for UI changes, in both light and dark themes.
 
-## After opening the PR
+## After pushing
 
 - Make sure **CI is green**. CI runs the unit and Playwright suites with the
   `fake` adapter only; it never calls a real agent.
-- Address review feedback by pushing more commits to the same branch.
 
 ## Project map (where things live)
 
