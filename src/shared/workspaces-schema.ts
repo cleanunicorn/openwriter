@@ -4,10 +4,19 @@ import { WorkspaceNameSchema } from './names.ts'
 /** A hand-edited label must not become an unbounded string in the palette. */
 const LabelSchema = z.string().trim().min(1).max(120)
 
+/**
+ * A POSIX (`/…`) or Windows (`C:\…`, `\\server\…`) absolute path. Written without `node:path`
+ * because this module is shared with the client. A relative path is refused, never resolved: the
+ * erase route deletes `path`, and a relative one would resolve against the server's own working
+ * directory — the openwrite checkout that `npm start` runs from.
+ */
+const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/]|\\\\)/
+const isAbsolutePath = (value: string): boolean => ABSOLUTE_PATH.test(value)
+
 /** One remembered workspace. `id` is the handle every mutating route takes; `path` is absolute. */
 export const WorkspaceEntrySchema = z.object({
   id: z.string().regex(/^[0-9a-f]{12}$/),
-  path: z.string().min(1),
+  path: z.string().refine(isAbsolutePath, 'a workspace path must be absolute'),
   label: LabelSchema,
 })
 export type WorkspaceEntry = z.infer<typeof WorkspaceEntrySchema>

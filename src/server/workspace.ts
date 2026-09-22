@@ -151,7 +151,7 @@ export class Workspace {
     // A content directory that cannot be used lists nothing; /api/config says why.
     if (this.contentDirProblem() !== null) return []
     const posts = path.join(this.contentRoot(), 'posts')
-    if (!existsSync(posts)) return []
+    if (!existsSync(posts) || !statSync(posts).isDirectory()) return []
     const articles: Article[] = []
     for (const entry of readdirSync(posts, { withFileTypes: true })) {
       if (!entry.isDirectory() || !isSlug(entry.name)) continue

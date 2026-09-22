@@ -81,6 +81,13 @@ export class JobManager {
   private epoch = 0
   /** The runs currently in flight, so `quiesce` can wait for them instead of hoping. */
   private readonly inFlight = new Set<Promise<void>>()
+  /**
+   * Every adapter handle whose run has not completed, whichever workspace it belongs to. It is
+   * the one list `cancelAll` walks, and `rebind` never clears it: an entry is dropped from
+   * `entries` on a switch, but its agent is still a process spending the writer's credits, so it
+   * must stay reachable until its own `done` settles — for the switch and for `shutdown`.
+   */
+  private readonly live = new Set<AdapterHandle>()
 
   constructor(options: ManagerOptions) {
     this.options = options
@@ -329,6 +336,9 @@ export class JobManager {
       network: entry.skill?.network ?? false,
     })
     entry.handle = handle
+    this.live.add(handle)
+    const release = () => this.live.delete(handle)
+    void handle.done.then(release, release)
     const relay = (async () => {
       for await (const event of handle.progress) this.progress(entry, event.text)
     })()
@@ -590,6 +600,10 @@ export class JobManager {
    */
   rebind(): void {
     this.epoch++
+    // Whatever is still running belongs to the workspace being left — a job created while the
+    // switch waited, or one whose cancel outlived the budget. Its entry goes; its handle stays in
+    // `live` and is stopped now rather than left to spend until it finishes on its own.
+    this.cancelAll()
     this.entries.clear()
     this.waiting.length = 0
     this.running = 0
@@ -597,11 +611,7 @@ export class JobManager {
   }
 
   private cancelAll(): Promise<unknown>[] {
-    return [...this.entries.values()].map((entry) =>
-      entry.handle === undefined
-        ? Promise.resolve()
-        : entry.handle.cancel({ force: true }).catch(() => {}),
-    )
+    return [...this.live].map((handle) => handle.cancel({ force: true }).catch(() => {}))
   }
 
   /** Stop every running agent; used when the server shuts down. */

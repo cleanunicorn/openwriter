@@ -33,13 +33,17 @@ export type CreatedApp = {
 }
 
 export function createApp(options: AppOptions): CreatedApp {
-  const workspace = new Workspace(options.workspace)
+  // The real location, as every switch stores it (`validRoot`): the list keeps realpaths, and a
+  // workspace opened through a symlink must still be recognised as the open one — otherwise the
+  // client offers to switch to, remove or erase the workspace the writer is in.
+  const startRoot = realpathOrSelf(options.workspace)
+  const workspace = new Workspace(startRoot)
   const workspaces = new WorkspaceList(options.workspacesFile)
   // The workspace the process started on is a known workspace: without this the palette would
   // list nothing until the writer had already switched once, which they cannot do from an empty
   // list. A list that cannot be written must not stop the server from starting.
   try {
-    workspaces.touch(realpathOrSelf(options.workspace))
+    workspaces.touch(startRoot)
   } catch (error) {
     console.error('could not record the startup workspace', error)
   }
