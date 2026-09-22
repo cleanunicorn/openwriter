@@ -169,6 +169,10 @@ palette (`Cmd/Ctrl+K`). Renaming, removing and deleting are in the palette only:
 | `Remove workspace from the list: <name>` | forgets it; every file stays where it is |
 | `Delete workspace from disk: <name>` | deletes it, after you type its name (see below) |
 
+| Light | Dark |
+| --- | --- |
+| ![The palette's workspace commands, light theme](docs/screenshots/workspace-commands-light.png) | ![The palette's workspace commands, dark theme](docs/screenshots/workspace-commands-dark.png) |
+
 The list of remembered workspaces is the one piece of state that cannot live in a workspace,
 so it lives beside them:
 
@@ -196,6 +200,15 @@ you see, nothing else.
 cancelled and marked stale — their files stay where they are, and switching back finds them
 again — so no job of one workspace can ever write into another.
 
+While a switch is under way a status line says so and the document waits. If another tab moves
+the server while this one holds text it has not saved yet, this tab stays where it is, pauses
+autosave, and asks: go back and save, or discard the changes and follow.
+
+| Light | Dark |
+| --- | --- |
+| ![A switch under way, light theme](docs/screenshots/workspace-switching-light.png) | ![A switch under way, dark theme](docs/screenshots/workspace-switching-dark.png) |
+| ![Another tab moved the workspace, light theme](docs/screenshots/workspace-moved-light.png) | ![Another tab moved the workspace, dark theme](docs/screenshots/workspace-moved-dark.png) |
+
 ### Deleting a workspace from disk
 
 This one is irreversible. There is no undo and no trash: the directory is gone. To make it
@@ -213,6 +226,10 @@ server refuses the request unless it comes back matching. It also refuses:
 Nothing outside the workspace's own directory is ever deleted: a symlink inside it that
 points somewhere else is unlinked, not followed, and a remembered root that is itself a
 symlink is refused.
+
+| Light | Dark |
+| --- | --- |
+| ![The delete confirmation and its warning, light theme](docs/screenshots/workspace-erase-light.png) | ![The delete confirmation and its warning, dark theme](docs/screenshots/workspace-erase-dark.png) |
 
 ## Agents and settings
 
@@ -438,6 +455,7 @@ npm run lint
 npm run typecheck
 npm test             # Vitest; one file: npm test -- src/server/paths.test.ts
 npm run test:e2e     # Playwright; first run: npx playwright install --with-deps chromium
+                     # the smoke server takes a free port; OPENWRITE_E2E_PORT=<port> pins one
 npm run build
 node scripts/screenshots.ts   # regenerates docs/screenshots/ (light and dark)
 ```

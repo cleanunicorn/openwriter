@@ -8,5 +8,6 @@
     "types": ["vite/client"]
   },
   "include": ["src/shared", "src/client"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts"],
+  "files": ["src/client/state/app.test.ts"]
 }

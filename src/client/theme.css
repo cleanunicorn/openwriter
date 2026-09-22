@@ -152,6 +152,9 @@ body {
 .notice.notice-warn {
   border-left-color: var(--warn);
   color: var(--fg);
+  /* A <div>, unlike every other notice (a <p>, 1em below): without this it sat flush on the line
+     below it. The nearest step of the scale to that 14px. */
+  margin-bottom: var(--space-5);
 }
 
 .notice .notice-actions {
