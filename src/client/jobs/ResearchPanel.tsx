@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { splitText } from '../../shared/blocks/index.ts'
 import type { Job } from '../../shared/jobs/job-types.ts'
 import type { Result } from '../../shared/jobs/result-schema.ts'
@@ -6,18 +5,14 @@ import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
 import { dismissJob, insertNote, setResearchJob, useJobs } from '../state/jobs.ts'
 import { useRestoreFocus } from '../use-restore-focus.ts'
 
-/** Research answers never touch the article; the writer inserts what is useful as new blocks. */
+/**
+ * Research answers never touch the article; the writer inserts what is useful as new blocks. The
+ * notes show at the top of the agent panel, which never covers the text (see shell/layout.ts).
+ */
 export function ResearchPanel() {
   const job = useJobs((state) =>
     state.researchJobId === null ? undefined : state.jobs[state.researchJobId],
   )
-  const open = job !== undefined && job.result !== null
-  // The panel reserves its space instead of covering the text the writer is typing in: the
-  // column moves over on a wide screen and the panel drops below the article on a narrow one.
-  useEffect(() => {
-    document.body.classList.toggle('has-research', open)
-    return () => document.body.classList.remove('has-research')
-  }, [open])
   if (job === undefined || job.result === null) return null
   return <OpenPanel job={job} result={job.result} />
 }

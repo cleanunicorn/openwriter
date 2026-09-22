@@ -1,5 +1,6 @@
 import type { HtmlExportRequest, MarkdownExportRequest } from '../shared/api-types.ts'
 import { registerCommands } from './palette/commands.ts'
+import { inGroup } from './palette/group.ts'
 import { renderForExport } from './render/export-html.ts'
 import { currentDoc, dispatch, flush, store } from './state/app.ts'
 
@@ -52,7 +53,7 @@ async function exportArticle(kind: 'markdown' | 'html'): Promise<void> {
 registerCommands((state) => {
   const doc = currentDoc(state)
   if (doc === null || doc.ref.kind !== 'article' || doc.status !== 'ready') return []
-  return [
+  return inGroup('export', [
     {
       id: 'export-markdown',
       title: 'Export: markdown + assets (zip)',
@@ -65,5 +66,5 @@ registerCommands((state) => {
       hint: 'diagrams rendered',
       run: () => exportArticle('html'),
     },
-  ]
+  ])
 })

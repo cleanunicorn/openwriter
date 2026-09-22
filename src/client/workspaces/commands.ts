@@ -1,5 +1,6 @@
 import type { WorkspaceEntry } from '../../shared/workspaces-schema.ts'
 import { registerCommands } from '../palette/commands.ts'
+import { inGroup } from '../palette/group.ts'
 import { notifyFailure, setPalette } from '../state/app.ts'
 import {
   createWorkspace,
@@ -26,7 +27,7 @@ registerCommands((state) => {
   const others = workspaces.entries.filter((entry) => entry.path !== workspaces.active.root)
   const known = (entry: WorkspaceEntry) => entry.path
 
-  return [
+  return inGroup('workspace', [
     ...others.map((entry) => ({
       id: `workspace-open:${entry.id}`,
       title: `Switch to workspace: ${entry.label}`,
@@ -85,5 +86,5 @@ registerCommands((state) => {
           ),
         }),
     })),
-  ]
+  ])
 })

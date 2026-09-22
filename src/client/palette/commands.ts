@@ -1,15 +1,17 @@
-import { api } from '../api.ts'
 import {
   type AppState,
   bumpThemeEpoch,
   createArticle,
-  notifyFailure,
   openDoc,
+  saveConfigPatch,
   setPalette,
-  store,
 } from '../state/app.ts'
 
-export type Command = { id: string; title: string; hint?: string; run: () => void | Promise<void> }
+import { PANEL_KEYS } from '../shell/keys.ts'
+import { goToPanel, toggleLeft, toggleRight } from '../shell/state.ts'
+import type { Command } from './group.ts'
+
+export type { Command } from './group.ts'
 
 type Provider = (state: AppState) => Command[]
 const providers: Provider[] = []
@@ -27,18 +29,9 @@ export function applyTheme(theme: (typeof THEMES)[number]): void {
   bumpThemeEpoch()
 }
 
-async function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
+function setTheme(theme: (typeof THEMES)[number]): Promise<void> {
   applyTheme(theme)
-  const current = store.get().config
-  if (current === null || current.error !== null) return
-  // Update the store first: the next toggle must see this theme even if the save is still in flight.
-  const config = { ...current.config, theme }
-  store.set((state) => ({ ...state, config: { ...current, config } }))
-  try {
-    await api.saveConfig(config)
-  } catch (error) {
-    notifyFailure('The theme is set for now, but could not be saved', error)
-  }
+  return saveConfigPatch({ theme }, 'The theme is set for now, but could not be saved')
 }
 
 registerCommands((state) => {
@@ -49,11 +42,13 @@ registerCommands((state) => {
       id: `open:${article.slug}`,
       title: `Open article: ${article.title}`,
       hint: article.slug,
+      group: 'documents' as const,
       run: () => openDoc({ kind: 'article', slug: article.slug }),
     })),
     {
       id: 'new-article',
       title: 'New article…',
+      group: 'documents',
       run: () =>
         setPalette({
           kind: 'input',
@@ -66,19 +61,33 @@ registerCommands((state) => {
       id: 'theme',
       title: `Theme: switch to ${nextTheme}`,
       hint: `now ${theme}`,
+      group: 'app',
       run: () => setTheme(nextTheme),
     },
+    // Toggling keeps the focus where it is; "Go to" is the explicit way into a panel.
+    {
+      id: 'toggle-left',
+      title: 'Toggle files and actions',
+      hint: PANEL_KEYS.left,
+      group: 'app',
+      run: toggleLeft,
+    },
+    {
+      id: 'toggle-right',
+      title: 'Toggle agent panel',
+      hint: PANEL_KEYS.right,
+      group: 'app',
+      run: toggleRight,
+    },
+    {
+      id: 'go-left',
+      title: 'Go to files and actions',
+      group: 'app',
+      run: () => goToPanel('left-panel'),
+    },
+    { id: 'go-right', title: 'Go to agent', group: 'app', run: () => goToPanel('right-panel') },
   ]
 })
 
 export const allCommands = (state: AppState): Command[] =>
   providers.flatMap((provider) => provider(state))
-
-/** Every word of the query must appear in the title or the hint, in any order. */
-export function filterCommands(commands: Command[], query: string): Command[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  return commands.filter((command) => {
-    const haystack = `${command.title} ${command.hint ?? ''}`.toLowerCase()
-    return words.every((word) => haystack.includes(word))
-  })
-}

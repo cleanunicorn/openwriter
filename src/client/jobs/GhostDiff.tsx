@@ -9,6 +9,7 @@ import type { Decoration } from '../blocks/Block.tsx'
 import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
 import type { DocState } from '../state/doc-reducer.ts'
 import { acceptAll, claimsOn, decide, rejectAll, undecided, useJobs } from '../state/jobs.ts'
+import { keepFocus } from '../keep-focus.ts'
 
 const focusNextGhost = () =>
   requestAnimationFrame(() => document.querySelector<HTMLElement>('.ghost')?.focus())
@@ -38,9 +39,6 @@ function Ghost(props: {
       else reject()
     }
   }
-  // Keep the keyboard where it is: without this, pressing a button blurs an open editor, the
-  // block re-renders, the layout shifts, and the click misses the button.
-  const keepFocus = (event: { preventDefault: () => void }) => event.preventDefault()
   const kind = op.op === 'replace' ? 'replacement' : op.op === 'delete' ? 'deletion' : 'insertion'
   return (
     // biome-ignore lint/a11y/useSemanticElements: a fieldset would restyle the ghost; role=group is enough

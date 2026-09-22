@@ -1,21 +1,22 @@
 import { useEffect } from 'react'
 import { BlockList } from './blocks/BlockList.tsx'
+import { docLabel } from './doc-label.ts'
 import { useGhosts } from './jobs/GhostDiff.tsx'
 import { PromptPill } from './jobs/PromptPill.tsx'
-import { ResearchPanel } from './jobs/ResearchPanel.tsx'
 import { useSelectionPill } from './jobs/selection.ts'
-import { Tray } from './jobs/Tray.tsx'
+import { JobCount } from './jobs/Tray.tsx'
 import './jobs/commands.ts'
 import './export.ts'
 import './settings/commands.ts'
 import './workspaces/commands.ts'
 import { Settings } from './settings/Settings.tsx'
-import { startJobs } from './state/jobs.ts'
+import { startJobs, useJobs } from './state/jobs.ts'
 import { watchForWorkspaceChanges } from './workspaces/switch.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
 import {
   connectEvents,
+  createArticle,
   currentDoc,
   dispatch,
   setPalette,
@@ -25,10 +26,20 @@ import {
   bumpThemeEpoch,
 } from './state/app.ts'
 import { NEW_BLOCK_ID } from './state/doc-reducer.ts'
+import { routeKey } from './shell/keys.ts'
+import { LeftPanel } from './shell/LeftPanel.tsx'
+import { RightPanel } from './shell/RightPanel.tsx'
+import { Shell } from './shell/Shell.tsx'
+import { setRightOpen, toggleLeft, toggleRight } from './shell/state.ts'
 
 const inTextField = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   target.closest('input, textarea, [contenteditable="true"], .cm-editor') !== null
+
+/** Enter activates these itself; the document must not take it from them. */
+const onControl = (target: EventTarget | null) =>
+  target instanceof HTMLElement &&
+  target.closest('button, a[href], summary, select, [role="button"], [role="option"]') !== null
 
 export function App() {
   const doc = useApp(currentDoc)
@@ -51,6 +62,13 @@ export function App() {
     if (theme !== undefined) applyTheme(theme)
   }, [theme])
 
+  // A research answer shows in the agent panel, opened for it; the keyboard stays where it is.
+  // Here, not in the jobs store: the store knows jobs, the shell knows where things are shown.
+  const researchJobId = useJobs((state) => state.researchJobId)
+  useEffect(() => {
+    if (researchJobId !== null) setRightOpen(true)
+  }, [researchJobId])
+
   // With the "system" theme the OS can switch between light and dark at any time.
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -60,32 +78,39 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const mod = event.metaKey || event.ctrlKey
-      if (mod && event.key.toLowerCase() === 'k') {
+      const state = store.get()
+      const key = {
+        key: event.key,
+        code: event.code,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        defaultPrevented: event.defaultPrevented,
+        altGraph: event.getModifierState('AltGraph'),
+      }
+      const action = routeKey(key, {
+        modalOpen: state.panel !== null,
+        paletteOpen: state.palette !== null,
+        inTextField: inTextField(event.target),
+        onControl: onControl(event.target),
+      })
+      if (action === null) return
+      if (action === 'enter-document') {
+        // Keyboard entry into the document: edit the first content block.
+        const first = currentDoc(state)?.doc.blocks.find((block) => block.kind === 'content')
+        if (first === undefined) return
         event.preventDefault()
-        setPalette(store.get().palette === null ? { kind: 'commands' } : null)
+        dispatch({ type: 'focus', id: first.id, cursor: 'end' })
         return
       }
-      // A modal panel owns the keyboard: no document undo or block focus behind it.
-      if (store.get().panel !== null) return
-      // A key that another control already handled (a ghost's Enter/Backspace) is not ours.
-      if (event.defaultPrevented) return
-      if (inTextField(event.target)) return
+      event.preventDefault()
+      if (action === 'palette') setPalette(state.palette === null ? { kind: 'commands' } : null)
+      // Toggling never moves the focus: the writer keeps typing where they were.
+      else if (action === 'toggle-left') toggleLeft()
+      else if (action === 'toggle-right') toggleRight()
       // Document-level undo and redo when no editor has the keyboard.
-      if (mod && event.key.toLowerCase() === 'z') {
-        event.preventDefault()
-        dispatch({ type: event.shiftKey ? 'redo' : 'undo' })
-      } else if (mod && event.key.toLowerCase() === 'y') {
-        event.preventDefault()
-        dispatch({ type: 'redo' })
-      } else if (event.key === 'Enter' && !mod && store.get().palette === null) {
-        // Keyboard entry into the document: edit the first content block.
-        const first = currentDoc(store.get())?.doc.blocks.find((block) => block.kind === 'content')
-        if (first !== undefined) {
-          event.preventDefault()
-          dispatch({ type: 'focus', id: first.id, cursor: 'end' })
-        }
-      }
+      else dispatch({ type: action })
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -93,75 +118,91 @@ export function App() {
 
   return (
     <>
-      <main className="column" data-doc-status={doc?.status ?? 'none'}>
-        {doc !== null && doc.notice !== null && (
-          <p className="notice" role="status" aria-label="Document notice">
-            {doc.notice}{' '}
-            <button
-              type="button"
-              className="link"
-              onClick={() => dispatch({ type: 'notice', notice: null })}
-            >
-              Dismiss
-            </button>
-          </p>
-        )}
-        {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
-        {typeof boot === 'object' && (
-          <p className="notice" role="alert">
-            openwrite could not load the workspace: {boot.error}{' '}
-            <button type="button" className="link" onClick={() => void start()}>
-              Retry
-            </button>
-          </p>
-        )}
-        {boot === 'ready' && doc === null && (
-          <p className="quiet">No article yet. Press Ctrl/Cmd+K and choose “New article…”.</p>
-        )}
-        {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
-        {doc?.status === 'error' && (
-          <p className="notice" role="alert">
-            {doc.error}
-          </p>
-        )}
-        {doc?.status === 'missing' && doc.notice === null && (
-          <p className="notice" role="alert">
-            This document does not exist on disk.
-          </p>
-        )}
-        {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
-          <>
-            {doc.ref.kind !== 'article' && (
-              <p className="quiet doc-label">
-                {doc.ref.kind === 'strategy' ? 'strategy.md' : `brief · ${doc.ref.slug}`}
-              </p>
-            )}
-            <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
-            {!doc.doc.blocks.some((block) => block.kind === 'content') &&
-              doc.focusedId !== NEW_BLOCK_ID && (
-                <button
-                  type="button"
-                  className="link quiet"
-                  onClick={() => dispatch({ type: 'append' })}
-                >
-                  Start writing
-                </button>
+      <Shell left={<LeftPanel />} right={<RightPanel />}>
+        <main className="column" data-doc-status={doc?.status ?? 'none'}>
+          {doc !== null && doc.notice !== null && (
+            <p className="notice" role="status" aria-label="Document notice">
+              {doc.notice}{' '}
+              <button
+                type="button"
+                className="link"
+                onClick={() => dispatch({ type: 'notice', notice: null })}
+              >
+                Dismiss
+              </button>
+            </p>
+          )}
+          {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
+          {typeof boot === 'object' && (
+            <p className="notice" role="alert">
+              openwrite could not load the workspace: {boot.error}{' '}
+              <button type="button" className="link" onClick={() => void start()}>
+                Retry
+              </button>
+            </p>
+          )}
+          {boot === 'ready' && doc === null && (
+            <p className="quiet">
+              No article yet.{' '}
+              <button
+                type="button"
+                className="link"
+                onClick={() =>
+                  setPalette({
+                    kind: 'input',
+                    label: 'Article title',
+                    placeholder: 'Title of the new article',
+                    submit: (title) => void createArticle(title),
+                  })
+                }
+              >
+                New article
+              </button>{' '}
+              · your files are under Ctrl/Cmd+B
+            </p>
+          )}
+          {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
+          {doc?.status === 'error' && (
+            <p className="notice" role="alert">
+              {doc.error}
+            </p>
+          )}
+          {doc?.status === 'missing' && doc.notice === null && (
+            <p className="notice" role="alert">
+              This document does not exist on disk.
+            </p>
+          )}
+          {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
+            <>
+              {doc.ref.kind !== 'article' && (
+                <p className="quiet doc-label">{docLabel(doc.ref, [])}</p>
               )}
-          </>
-        )}
-        {pill !== null && (
-          // No key: extending the selection updates the pill in place and keeps what was typed.
-          <PromptPill
-            target={pill}
-            onClose={() => {
-              setPill(null)
-              dispatch({ type: 'select', ids: [] })
-            }}
-          />
-        )}
-      </main>
-      <ResearchPanel />
-      <Tray />
+              <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
+              {!doc.doc.blocks.some((block) => block.kind === 'content') &&
+                doc.focusedId !== NEW_BLOCK_ID && (
+                  <button
+                    type="button"
+                    className="link quiet"
+                    onClick={() => dispatch({ type: 'append' })}
+                  >
+                    Start writing
+                  </button>
+                )}
+            </>
+          )}
+          {pill !== null && (
+            // No key: extending the selection updates the pill in place and keeps what was typed.
+            <PromptPill
+              target={pill}
+              onClose={() => {
+                setPill(null)
+                dispatch({ type: 'select', ids: [] })
+              }}
+            />
+          )}
+        </main>
+      </Shell>
+      <JobCount />
       {panel === 'settings' && <Settings />}
       {palette !== null && <Palette mode={palette} />}
     </>

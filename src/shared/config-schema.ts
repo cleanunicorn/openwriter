@@ -13,6 +13,18 @@ export const AdapterConfigSchema = z.object({
 export type AdapterConfig = z.infer<typeof AdapterConfigSchema>
 
 /**
+ * Which edge panels are open. A toggle, not a setting: the Settings form does not show it.
+ * `prefault` (not `default`): in zod 4 `.default({})` would skip the inner defaults.
+ */
+export const UiStateSchema = z
+  .object({
+    leftPanel: z.boolean().default(false),
+    rightPanel: z.boolean().default(false),
+  })
+  .prefault({})
+export type UiState = z.infer<typeof UiStateSchema>
+
+/**
  * `<workspace>/.zen/config.json`. Every key has a default, so an older or partial file keeps
  * loading. No secrets are stored: agent CLIs use the writer's own logins.
  */
@@ -27,6 +39,7 @@ export const ConfigSchema = z.object({
   concurrency: z.number().int().min(1).max(16).default(3),
   jobTimeoutSec: z.number().int().min(1).max(7200).default(600),
   adapters: z.record(z.string(), AdapterConfigSchema).default({}),
+  ui: UiStateSchema,
 })
 export type Config = z.infer<typeof ConfigSchema>
 

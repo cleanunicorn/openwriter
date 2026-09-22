@@ -61,3 +61,21 @@ describe('watching across a content directory change', () => {
       .toBe(1)
   })
 })
+
+describe('watching across a settings save', () => {
+  it('keeps watching an open document when the content directory did not change', async () => {
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    await t.get('/api/docs/article/hello-openwrite')
+
+    // A panel toggle is a config save that changes only `ui`.
+    const { config } = await json(t.get('/api/config'))
+    const res = await t.send('PUT', '/api/config', { ...config, ui: { leftPanel: true } })
+    expect(res.status).toBe(200)
+
+    writeFileSync(article(), 'changed outside after the save\n')
+    await expect
+      .poll(() => seen.filter((event) => event.type === 'doc.changed').length, { timeout: 3000 })
+      .toBe(1)
+  })
+})

@@ -1,5 +1,6 @@
 import { type DocRef, docKey } from '../../shared/api-types.ts'
 import { applyOps } from '../../shared/jobs/apply-ops.ts'
+import { threadFor } from '../../shared/jobs/conversation.ts'
 import { rewriteAssetRefs } from '../../shared/jobs/asset-refs.ts'
 import {
   isActive,
@@ -34,17 +35,30 @@ export type JobsState = {
   held: HeldRequest[]
   /** jobId → op index → IDs of the blocks that op inserted (keeps result order across accepts). */
   inserted: Record<string, Record<number, string[]>>
-  trayOpen: boolean
   researchJobId: string | null
+  /**
+   * The right panel's unsent message, one per document (docKey): it survives closing the panel,
+   * and a message written about one document is never sent against another.
+   */
+  drafts: Record<string, ComposerDraft>
+  /**
+   * docKey → when the writer last started a new conversation about that document (ISO time);
+   * that document's earlier jobs are not carried. Each document's conversation is its own.
+   */
+  threadStarts: Record<string, string>
 }
+
+export type ComposerDraft = { text: string; scope: 'article' | 'research' }
+export const EMPTY_DRAFT: ComposerDraft = { text: '', scope: 'article' }
 
 const jobsStore = createStore<JobsState>({
   jobs: {},
   order: [],
   held: [],
   inserted: {},
-  trayOpen: false,
   researchJobId: null,
+  drafts: {},
+  threadStarts: {},
 })
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
@@ -82,15 +96,13 @@ function upsert(job: Job): void {
   // The POST response can arrive after newer SSE events for the same job; never go backwards.
   const known = jobsStore.get().jobs[job.id]
   if (known !== undefined && known.revision >= job.revision && known !== job) return
+  const answered = job.scope === 'research' && job.state === 'ready' && known?.state !== 'ready'
   jobsStore.set((state) => ({
     ...state,
     jobs: { ...state.jobs, [job.id]: job },
     order: state.order.includes(job.id) ? state.order : [...state.order, job.id],
     // A research answer opens its panel when it arrives; nothing steals the keyboard focus.
-    researchJobId:
-      job.scope === 'research' && job.state === 'ready' && state.jobs[job.id]?.state !== 'ready'
-        ? job.id
-        : state.researchJobId,
+    researchJobId: answered ? job.id : state.researchJobId,
   }))
 }
 
@@ -113,8 +125,16 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   const doc = liveDoc(docState)
   const snapshot = { blocks: doc.blocks, gaps: doc.gaps }
   const targets = effectiveTargets(request.scope, request.targets, snapshot)
+  // Picked now, not when the request was made: a held request then carries what became of the
+  // job it waited for. A conversation's first turn sends no field at all.
+  const conversation = threadOf(jobsStore.get(), request.doc)
   try {
-    const job = await api.createJob({ ...request, targets, snapshot })
+    const job = await api.createJob({
+      ...request,
+      targets,
+      snapshot,
+      ...(conversation.length > 0 ? { conversation } : {}),
+    })
     createdHere.add(job.id)
     upsert(job)
   } catch (error) {
@@ -313,7 +333,27 @@ export function insertNote(job: Job, markdown: string): void {
   dispatchDoc(job.doc, { type: 'insert', index, markdown })
 }
 
-export const setTrayOpen = (trayOpen: boolean) => jobsStore.set((state) => ({ ...state, trayOpen }))
+/** "New conversation" about `ref`: its next message carries none of its turns before it. */
+export const startNewConversation = (ref: DocRef) =>
+  jobsStore.set((state) => ({
+    ...state,
+    threadStarts: { ...state.threadStarts, [docKey(ref)]: new Date().toISOString() },
+  }))
+
+/** The turns the next message about `ref` would carry. */
+export const threadOf = (state: JobsState, ref: DocRef) => {
+  const key = docKey(ref)
+  return threadFor(key, state.jobs, state.order, state.threadStarts[key] ?? null)
+}
+
+export const setDraft = (ref: DocRef, patch: Partial<ComposerDraft>) =>
+  jobsStore.set((state) => {
+    const key = docKey(ref)
+    return {
+      ...state,
+      drafts: { ...state.drafts, [key]: { ...(state.drafts[key] ?? EMPTY_DRAFT), ...patch } },
+    }
+  })
 export const setResearchJob = (researchJobId: string | null) =>
   jobsStore.set((state) => ({ ...state, researchJobId }))
 
@@ -394,7 +434,7 @@ async function sync(): Promise<void> {
 
 /**
  * Forget this workspace's jobs and load the other one's. Everything keyed by job id has to go:
- * the tray, the held requests, the decisions on their way to the server, and the module state
+ * the transcript, the held requests, the decisions on their way to the server, and the module state
  * beside the store. `firstSync` goes back to true for the same reason a page reload sets it —
  * the client holds no block IDs for the new workspace's documents, so a job found unsettled
  * there cannot be applied and is marked stale with its output kept.
@@ -405,8 +445,9 @@ export async function resetJobs(): Promise<void> {
     order: [],
     held: [],
     inserted: {},
-    trayOpen: false,
     researchJobId: null,
+    drafts: {},
+    threadStarts: {},
   }))
   createdHere.clear()
   inFlight.clear()

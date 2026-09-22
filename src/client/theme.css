@@ -12,6 +12,11 @@
   --del-bg: #f9dede;
   --code-bg: #f1efea;
   --column: 680px;
+  /* The column's width: 680px, less on a window too narrow for it plus its two 48px gutters. */
+  --column-width: min(var(--column), 100% - 96px);
+  /* Edge panel widths; src/client/shell/layout.test.ts checks they match layout.ts. */
+  --left-panel: 280px;
+  --right-panel: 380px;
   color-scheme: light;
 }
 
@@ -66,7 +71,7 @@ body {
 }
 
 .column {
-  width: min(var(--column), 100% - 96px);
+  width: var(--column-width);
   margin: 0 auto;
   padding: 72px 0 40vh;
 }
@@ -414,6 +419,234 @@ body {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.palette-group + .palette-group {
+  margin-top: 4px;
+}
+
+.palette-group-label {
+  padding: 6px 10px 2px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── shell: the two edge panels ─────────────────────────────────────────── */
+
+/* A docked panel reserves its width; the column stays 680px, centred in what is left. */
+body[data-left="docked"] {
+  padding-left: var(--left-panel);
+}
+
+body[data-right="docked"] {
+  padding-right: var(--right-panel);
+}
+
+.shell-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 12;
+  overflow-y: auto;
+  padding: 24px 20px 80px;
+  background: var(--surface);
+  font:
+    14px / 1.5 system-ui,
+    sans-serif;
+}
+
+.shell-panel:focus {
+  outline: none;
+}
+
+/* The keyboard landed on the panel itself ("Go to" with nothing enabled inside): show it. */
+.shell-panel:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.shell-left {
+  left: 0;
+  width: var(--left-panel);
+  border-right: 1px solid var(--line);
+  animation: panel-in-left 160ms ease-out;
+}
+
+/* Narrow window, opened by hand: a drawer over the page, closed by a pick, Escape or a click away. */
+.shell-left[data-layout="overlay"] {
+  z-index: 16;
+  box-shadow: 12px 0 40px rgb(0 0 0 / 16%);
+}
+
+.shell-right {
+  right: 0;
+  width: var(--right-panel);
+  border-left: 1px solid var(--line);
+  animation: panel-in-right 160ms ease-out;
+}
+
+/* No room beside the text: the agent panel follows the article instead of lying over it. */
+.shell-right[data-layout="stacked"] {
+  position: static;
+  width: var(--column-width);
+  margin: 0 auto;
+  padding: 24px 0 96px;
+  overflow: visible;
+  border-left: 0;
+  border-top: 1px solid var(--line);
+  animation: none;
+}
+
+body[data-right="stacked"] .column {
+  padding-bottom: 48px;
+}
+
+.edge-handle {
+  position: fixed;
+  top: 50%;
+  z-index: 17;
+  /* 24px: the WCAG 2.5.8 minimum target, with no need to count on the space around it. */
+  width: 24px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--quiet);
+  font:
+    18px / 1 system-ui,
+    sans-serif;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.edge-handle:hover,
+.edge-handle:focus-visible {
+  color: var(--fg);
+}
+
+.edge-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.edge-handle-left {
+  left: 0;
+}
+
+.edge-handle-right {
+  right: 0;
+}
+
+body[data-left="docked"] .edge-handle-left,
+body[data-left="overlay"] .edge-handle-left {
+  left: var(--left-panel);
+}
+
+body[data-right="docked"] .edge-handle-right {
+  right: var(--right-panel);
+}
+
+/* Narrower than the column plus its gutters (680 + 96): the block gutter reaches the window's left
+   edge, and a handle fixed there would sit on some block's drag handle. The left handle moves into
+   the page's top padding, where no block is; Ctrl/Cmd+B and the palette still reach the panel. */
+@media (max-width: 775px) {
+  .edge-handle-left {
+    position: absolute;
+    top: 24px;
+    transform: none;
+  }
+}
+
+@keyframes panel-in-left {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+}
+
+@keyframes panel-in-right {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-left,
+  .shell-right {
+    animation: none;
+  }
+}
+
+.panel-section + .panel-section {
+  margin-top: 22px;
+}
+
+.panel-heading {
+  margin: 0 0 6px;
+  color: var(--quiet);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel-current {
+  margin: 0 0 4px;
+}
+
+.panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.panel-list + .panel-list {
+  margin-top: 8px;
+}
+
+.panel-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  width: calc(100% + 16px);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.panel-item[aria-current="page"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.panel-item:focus-visible,
+.panel-switch > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel-item .quiet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.panel-switch > summary {
+  padding: 4px 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
 /* ── jobs: pill, pending marks, ghosts, tray, research ──────────────────── */
 
 .column {
@@ -590,17 +823,104 @@ body {
   cursor: pointer;
 }
 
+/* The transcript's turns (the list lives only in the agent panel). */
 .tray-list {
   list-style: none;
-  margin: 0;
-  padding: 8px;
-  width: min(420px, 100vw - 40px);
-  max-height: 60vh;
-  overflow-y: auto;
-  background: var(--surface);
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+/* In the agent panel the count heads the transcript, and the list is always shown. */
+.tray.transcript {
+  position: static;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.turn-chips {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.chip {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 16%);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: none;
+  color: var(--quiet);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* A document's title can be long (up to 200 characters): the chip keeps the instruction readable. */
+.chip-doc {
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.chip {
+  cursor: pointer;
+}
+
+button.chip:hover,
+button.chip:focus-visible {
+  color: var(--fg);
+  border-color: var(--quiet);
+}
+
+.composer-start {
+  margin-bottom: 12px;
+}
+
+.composer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.composer-input {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.composer-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.composer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-row select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.composer-thread {
+  margin: 0;
+  font-size: 12px;
+}
+
+.composer-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .tray-job {
@@ -657,41 +977,10 @@ body {
 }
 
 .research {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(380px, 100vw);
-  overflow-y: auto;
-  padding: 24px 22px 80px;
-  background: var(--bg);
-  border-left: 1px solid var(--line);
-  z-index: 12;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
   font-size: 15px;
-}
-
-/* Wide: the column is centred in the space left of the panel, so nothing is covered. */
-@media (min-width: 1160px) {
-  .has-research .column {
-    margin-left: calc((100vw - 380px - min(var(--column), 100% - 96px)) / 2);
-    margin-right: 0;
-  }
-}
-
-/* Narrow: no room beside the text, so the notes follow the article instead of lying over it. */
-@media (max-width: 1159px) {
-  .research {
-    position: static;
-    width: min(var(--column), 100% - 96px);
-    margin: 0 auto;
-    padding: 24px 0 96px;
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-
-  .has-research .column {
-    padding-bottom: 48px;
-  }
 }
 
 .research-header,

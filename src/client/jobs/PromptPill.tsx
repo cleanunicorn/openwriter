@@ -8,11 +8,8 @@ import {
 } from 'react'
 import type { DocRef } from '../../shared/api-types.ts'
 import type { Scope } from '../../shared/jobs/job-types.ts'
-import { SKILL_NAME_SOURCE } from '../../shared/names.ts'
 import { requestJob } from '../state/jobs.ts'
-
-/** `/skill-name rest of the instruction` */
-const SLASH_SKILL = new RegExp(`^/(${SKILL_NAME_SOURCE})\\s*(.*)$`, 's')
+import { parseInstruction } from './instruction.ts'
 
 export type PillTarget = {
   docRef: DocRef
@@ -69,12 +66,7 @@ export function PromptPill({ target, onClose }: { target: PillTarget; onClose: (
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const typed = text.trim()
-    const slash = typed.match(SLASH_SKILL)
-    const skill = slash?.[1] ?? target.skill
-    const body = (slash === null ? typed : (slash[2] ?? '')).trim()
-    // A skill with no words after it runs bare.
-    const instruction = body === '' && skill !== undefined ? `Run the ${skill} skill.` : body
+    const { instruction, skill } = parseInstruction(text, target.skill)
     if (instruction === '') return
     requestJob({
       doc: target.docRef,

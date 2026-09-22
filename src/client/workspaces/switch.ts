@@ -1,6 +1,7 @@
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
 import { api } from '../api.ts'
 import {
+  configWritesSettled,
   flush,
   notifyFailure,
   resetDocSession,
@@ -40,7 +41,8 @@ async function adopt(workspaces: WorkspacesResponse): Promise<void> {
 }
 
 /**
- * Save everything that is dirty and **wait for it**, then ask the server to move. After the
+ * Save everything that is dirty, and every queued config write, and **wait for it**, then ask the
+ * server to move. After the
  * switch a save would resolve against the new root, so this order is what keeps unsaved work.
  * `flush` is the one that returns a promise; `flushAll` fires the saves and returns void, which
  * is nothing to wait for.
@@ -48,6 +50,8 @@ async function adopt(workspaces: WorkspacesResponse): Promise<void> {
 async function move(call: () => Promise<WorkspacesResponse>): Promise<void> {
   const dirty = Object.values(store.get().docs).filter(isDirty)
   await Promise.all(dirty.map((doc) => flush(doc.ref)))
+  // Settings and panel toggles still on their way belong to this workspace too.
+  await configWritesSettled()
   await adopt(await call())
 }
 

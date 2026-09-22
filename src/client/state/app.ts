@@ -5,6 +5,7 @@ import {
   docKey,
   type SkillInfo,
 } from '../../shared/api-types.ts'
+import type { Config } from '../../shared/config-schema.ts'
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
 import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
@@ -251,9 +252,115 @@ export async function refreshWorkspaces(): Promise<void> {
   store.set((state) => ({ ...state, workspaces }))
 }
 
+/** The quick toggles `saveConfigPatch` owns; Settings saves the rest through `saveSettings`. */
+type ConfigPatch = Partial<Pick<Config, 'theme' | 'ui'>>
+
+/**
+ * Every write of `.zen/config.json` from this page goes through one queue, so two writes can never
+ * land on disk in the wrong order: the server replaces the whole file on each PUT. Each write
+ * builds its body when its turn comes, from the state at that moment.
+ */
+let configWrites: Promise<unknown> = Promise.resolve()
+let configSavesInFlight = 0
+/** A quick-toggle write is waiting in the queue; it will send the latest state, so one is enough. */
+let quickWriteQueued = false
+
+function queueConfigWrite<T>(write: () => Promise<T>): Promise<T> {
+  configSavesInFlight += 1
+  const next = configWrites.then(async () => {
+    try {
+      return await write()
+    } finally {
+      configSavesInFlight -= 1
+    }
+  })
+  configWrites = next.catch(() => undefined)
+  return next
+}
+
+/** Resolves once every config write queued so far has been answered. A switch waits for this. */
+export const configWritesSettled = (): Promise<void> => configWrites.then(() => undefined)
+
+/**
+ * The workspace a write is for. It loads alongside the config at start, so a write made before it
+ * has arrived asks for it: no write leaves this page without saying which workspace it is for.
+ */
+async function workspaceRoot(): Promise<string> {
+  const known = store.get().workspaces
+  if (known !== null) return known.active.root
+  const workspaces = await api.workspaces()
+  store.set((state) => (state.workspaces === null ? { ...state, workspaces } : state))
+  return workspaces.active.root
+}
+
+/** A write refused because another workspace is open now: show the settings really in force. */
+const reloadIfRefused = (error: unknown) => {
+  if (error instanceof ApiError && error.status === 409) void refreshConfig()
+}
+
+/**
+ * The writer for quick toggles (theme, panels). The store changes first, so the next toggle sees
+ * this one; the write is queued behind any other, and toggles made while one waits share it. While
+ * any write is queued, `refreshConfig` keeps the local theme and panels, so an older copy fetched
+ * in between can never flip them back. An invalid config file is never overwritten: the toggle
+ * then holds for this session only.
+ */
+export async function saveConfigPatch(patch: ConfigPatch, what: string): Promise<void> {
+  const current = store.get().config
+  if (current === null) return
+  store.set((state) =>
+    state.config === null
+      ? state
+      : { ...state, config: { ...state.config, config: { ...state.config.config, ...patch } } },
+  )
+  if (current.error !== null || quickWriteQueued) return
+  quickWriteQueued = true
+  await queueConfigWrite(async () => {
+    quickWriteQueued = false
+    try {
+      const root = await workspaceRoot()
+      const latest = store.get().config
+      if (latest === null || latest.error !== null) return
+      await api.saveConfig(latest.config, root)
+    } catch (error) {
+      notifyFailure(what, error)
+      reloadIfRefused(error)
+    }
+  })
+}
+
+/**
+ * The Settings form's save, in the same queue. The panels are toggles, not form fields: the write
+ * keeps whatever they are when its turn comes. The store takes the saved file at once, so a toggle
+ * queued behind this save sends the new settings rather than the ones from before the form.
+ */
+export function saveSettings(draft: Config): Promise<void> {
+  return queueConfigWrite(async () => {
+    const root = await workspaceRoot()
+    const ui = store.get().config?.config.ui ?? draft.ui
+    const saved = await api.saveConfig({ ...draft, ui }, root).catch((error: unknown) => {
+      reloadIfRefused(error)
+      throw error
+    })
+    store.set((state) => ({
+      ...state,
+      config: { ...saved, config: { ...saved.config, ui: state.config?.config.ui ?? ui } },
+    }))
+  })
+}
+
 export async function refreshConfig(): Promise<void> {
   const config = await api.config()
-  store.set((state) => ({ ...state, config }))
+  store.set((state) => {
+    const local = state.config?.config
+    // While a toggle is still on its way to disk, the server's copy is older than the screen.
+    if (configSavesInFlight === 0 || local === undefined || config.error !== null)
+      return { ...state, config }
+    return {
+      ...state,
+      config: { ...config, config: { ...config.config, theme: local.theme, ui: local.ui } },
+    }
+  })
 }
 
 async function refreshSkills(): Promise<void> {

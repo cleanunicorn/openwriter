@@ -1,8 +1,8 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { Config } from '../../shared/config-schema.ts'
-import { ApiError, api } from '../api.ts'
+import { ApiError } from '../api.ts'
 import { applyTheme } from '../palette/commands.ts'
-import { refreshArticles, refreshConfig, setPanel, useApp } from '../state/app.ts'
+import { refreshArticles, refreshConfig, saveSettings, setPanel, useApp } from '../state/app.ts'
 import { useRestoreFocus } from '../use-restore-focus.ts'
 
 const TASKS = ['image'] as const
@@ -43,7 +43,7 @@ export function Settings() {
   const save = async (event: FormEvent) => {
     event.preventDefault()
     try {
-      await api.saveConfig(draft)
+      await saveSettings(draft)
       applyTheme(draft.theme)
       await Promise.all([refreshConfig(), refreshArticles()])
       setMessage('Saved.')

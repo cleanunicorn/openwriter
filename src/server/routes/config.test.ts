@@ -1,7 +1,17 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { encodeWorkspaceHeader, WORKSPACE_HEADER } from '../../shared/api-types.ts'
+import { createTestApp, HOST, json, type TestApp } from '../test-helpers.ts'
 
 let t: TestApp
 beforeEach(() => {
@@ -84,5 +94,55 @@ describe('config', () => {
     } finally {
       rmSync(outside, { recursive: true, force: true })
     }
+  })
+})
+
+describe('a config write names the workspace it was made for', () => {
+  const put = (app: TestApp, config: unknown, root: string) =>
+    app.app.request('/api/config', {
+      method: 'PUT',
+      headers: {
+        host: HOST,
+        'content-type': 'application/json',
+        [WORKSPACE_HEADER]: encodeWorkspaceHeader(root),
+      },
+      body: JSON.stringify(config),
+    })
+
+  it('is saved when that workspace is the one open', async () => {
+    const { config } = await json(t.get('/api/config'))
+    const res = await put(t, { ...config, concurrency: 5 }, t.workspace)
+    expect(res.status).toBe(200)
+    expect((await json(t.get('/api/config'))).config.concurrency).toBe(5)
+  })
+
+  it('works for a workspace whose path is not ASCII', async () => {
+    const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-ț-文章-'))
+    const root = path.join(base, 'ciorne 📝')
+    cpSync(path.join(import.meta.dirname, '..', '..', '..', 'sample-workspace'), root, {
+      recursive: true,
+    })
+    const uni = createTestApp({ workspace: root })
+    try {
+      const { config } = await json(uni.get('/api/config'))
+      expect((await put(uni, { ...config, concurrency: 6 }, root)).status).toBe(200)
+      expect((await json(uni.get('/api/config'))).config.concurrency).toBe(6)
+      // Another non-ASCII root is still another workspace.
+      expect((await put(uni, config, `${root}-alt`)).status).toBe(409)
+    } finally {
+      uni.cleanup()
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('is refused, and nothing written, when another workspace is open now', async () => {
+    const file = path.join(t.workspace, '.zen', 'config.json')
+    const before = readFileSync(file, 'utf8')
+    const { config } = await json(t.get('/api/config'))
+    // Made for a workspace the server has since switched away from (this tab or another).
+    const res = await put(t, { ...config, concurrency: 7 }, '/somewhere/else')
+    expect(res.status).toBe(409)
+    expect((await json(res)).error).toContain('workspace changed')
+    expect(readFileSync(file, 'utf8')).toBe(before)
   })
 })
