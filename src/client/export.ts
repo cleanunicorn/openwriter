@@ -1,4 +1,5 @@
 import type { HtmlExportRequest, MarkdownExportRequest } from '../shared/api-types.ts'
+import { workspaceHeaders } from './api.ts'
 import { registerCommands } from './palette/commands.ts'
 import { inGroup } from './palette/group.ts'
 import { renderForExport } from './render/export-html.ts'
@@ -11,7 +12,7 @@ async function download(
 ): Promise<void> {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...workspaceHeaders() },
     body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(`export failed (${response.status})`)

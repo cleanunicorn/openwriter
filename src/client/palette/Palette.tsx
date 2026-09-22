@@ -81,7 +81,7 @@ export function Palette({ mode }: { mode: PaletteMode }) {
       >
         <input
           ref={input}
-          className="palette-input"
+          className={`palette-input${mode.kind === 'confirm' ? ' is-destructive' : ''}`}
           role="combobox"
           aria-expanded={mode.kind === 'commands'}
           aria-controls="palette-list"
@@ -101,7 +101,13 @@ export function Palette({ mode }: { mode: PaletteMode }) {
           // Only for the destructive prompt: moving the focus away cancels it. Clicking a
           // command uses onMouseDown with preventDefault, so the command list is unaffected.
           onBlur={mode.kind === 'confirm' ? close : undefined}
+          aria-describedby={mode.kind === 'confirm' ? 'palette-warning' : undefined}
         />
+        {mode.kind === 'confirm' && (
+          <p id="palette-warning" className="palette-warning">
+            {mode.warning}
+          </p>
+        )}
         {mode.kind === 'commands' && (
           <div id="palette-list" role="listbox" aria-label="Commands" className="palette-list">
             {sections.map((section) => (
@@ -137,7 +143,9 @@ export function Palette({ mode }: { mode: PaletteMode }) {
                       }}
                     >
                       <span>{command.title}</span>
-                      {command.hint !== undefined && <span className="quiet">{command.hint}</span>}
+                      {command.hint !== undefined && (
+                        <span className="quiet palette-hint">{command.hint}</span>
+                      )}
                     </div>
                   )
                 })}

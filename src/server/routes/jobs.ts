@@ -1,6 +1,6 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
-import { decodeWorkspaceHeader, SkillInfoSchema, WORKSPACE_HEADER } from '../../shared/api-types.ts'
+import { SkillInfoSchema } from '../../shared/api-types.ts'
 import {
   DecisionsRequestSchema,
   JobRequestSchema,
@@ -8,7 +8,7 @@ import {
 } from '../../shared/jobs/job-types.ts'
 import type { FakeGate } from '../adapters/fake.ts'
 import type { ServerContext } from '../context.ts'
-import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
+import { fileResponse, HttpError, parseBody, pathTail, pinWorkspace } from '../http.ts'
 import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
 import { loadSkills } from '../skills.ts'
@@ -16,15 +16,22 @@ import type { EventHub } from '../sse.ts'
 
 export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
   app.get('/api/jobs', (c) => c.json({ jobs: jobs.list() }))
-  app.post('/api/jobs', async (c) => c.json(jobs.create(await parseBody(c, JobRequestSchema)), 201))
+  // A job snapshots a document of the workspace it was asked in; it must not start in another.
+  app.post('/api/jobs', async (c) => {
+    const pinned = pinWorkspace(
+      c,
+      context.workspace,
+      'The workspace changed before the job started.',
+    )
+    const request = await parseBody(c, JobRequestSchema)
+    pinned()
+    return c.json(jobs.create(request), 201)
+  })
   // Housekeeping: deletes finished jobs' directories; queued, running and reviewable jobs stay.
   // Like a settings write, it names the workspace it was meant for: a click made before a switch
   // must not clear the jobs of the workspace that is open now. No await until the sweep is done.
   app.post('/api/jobs/clear-finished', (c) => {
-    const header = c.req.header(WORKSPACE_HEADER)
-    if (header !== undefined && decodeWorkspaceHeader(header) !== context.workspace.root) {
-      throw new HttpError(409, 'The workspace changed before the jobs were cleared.')
-    }
+    pinWorkspace(c, context.workspace, 'The workspace changed before the jobs were cleared.')()
     return c.json(jobs.clearFinished())
   })
   app.get('/api/jobs/:id', (c) => c.json(jobs.get(c.req.param('id'))))

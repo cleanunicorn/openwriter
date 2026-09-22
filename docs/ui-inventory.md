@@ -83,11 +83,14 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | Click-to-edit, Escape or click away to render, arrows across blocks, Enter to split, Backspace to merge, paste or drop an image | C | the writing surface (not part of this redesign) |
 | Front-matter line | C | the writing surface |
 | Document notice + Dismiss | C | failures stay where the writer is |
+| Notice + Dismiss (a failure with no document open, such as a refused workspace command in an empty workspace) | C | the same place the document notice would be; without a document there was nowhere to show it |
+| Workspace switch ("Opening the workspace…", "Creating the workspace…", "Following the other tab…", "Going back and saving…"), with the document held still meanwhile | C, above the document | a switch waits on saves and on running jobs; the page must not look inert while it does |
+| Workspace moved: "Another tab opened the workspace …", "Go back to … and save", "Discard the changes and open …" | C, above the document | only when another tab switched while this one held unsaved text; it stays until the writer chooses, because either choice decides the fate of that text |
 | Loading…, the load error + Retry, "This document does not exist on disk." | C | the same |
 | Empty workspace: "No article yet." + New article + the `Ctrl/Cmd+B` hint | C | the first step, in place |
 | Start writing | C | belongs to the empty document |
 | `strategy.md` / `brief · <slug>` label | C; the left panel marks the same document as current | which document this is, next to its text |
-| Palette: query, arrows, Enter, Escape, "No matching command", text prompts, typed confirmation | P | the universal keyboard route |
+| Palette: query, arrows, Enter, Escape, "No matching command", text prompts, typed confirmation (with its warning, in the warning colour, which stays while the name is typed) | P | the universal keyboard route |
 | "All commands" (bottom of the left panel's Actions, with its `Ctrl/Cmd+K` hint) | L·A | the palette's door from the panel, for a writer who reaches for the mouse |
 
 ## Keys

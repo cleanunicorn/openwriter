@@ -11,6 +11,7 @@ import './settings/commands.ts'
 import './workspaces/commands.ts'
 import { Settings } from './settings/Settings.tsx'
 import { startJobs, useJobs } from './state/jobs.ts'
+import { WorkspaceStatus } from './workspaces/WorkspaceStatus.tsx'
 import { watchForWorkspaceChanges } from './workspaces/switch.ts'
 import { applyTheme } from './palette/commands.ts'
 import { Palette } from './palette/Palette.tsx'
@@ -19,6 +20,7 @@ import {
   createArticle,
   currentDoc,
   dispatch,
+  setNotice,
   setPalette,
   start,
   store,
@@ -47,6 +49,8 @@ export function App() {
   const palette = useApp((state) => state.palette)
   const theme = useApp((state) => state.config?.config.theme)
   const panel = useApp((state) => state.panel)
+  const appNotice = useApp((state) => state.notice)
+  const switching = useApp((state) => state.switching)
 
   const ghosts = useGhosts(doc)
   const [pill, setPill] = useSelectionPill()
@@ -120,86 +124,98 @@ export function App() {
     <>
       <Shell left={<LeftPanel />} right={<RightPanel />}>
         <main className="column" data-doc-status={doc?.status ?? 'none'}>
-          {doc !== null && doc.notice !== null && (
-            <p className="notice" role="status" aria-label="Document notice">
-              {doc.notice}{' '}
-              <button
-                type="button"
-                className="link"
-                onClick={() => dispatch({ type: 'notice', notice: null })}
-              >
+          <WorkspaceStatus />
+          {appNotice !== null && (
+            <p className="notice" role="status" aria-label="Notice">
+              {appNotice}{' '}
+              <button type="button" className="link" onClick={() => setNotice(null)}>
                 Dismiss
               </button>
             </p>
           )}
-          {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
-          {typeof boot === 'object' && (
-            <p className="notice" role="alert">
-              openwrite could not load the workspace: {boot.error}{' '}
-              <button type="button" className="link" onClick={() => void start()}>
-                Retry
-              </button>
-            </p>
-          )}
-          {boot === 'ready' && doc === null && (
-            <p className="quiet">
-              No article yet.{' '}
-              <button
-                type="button"
-                className="link"
-                onClick={() =>
-                  setPalette({
-                    kind: 'input',
-                    label: 'Article title',
-                    placeholder: 'Title of the new article',
-                    submit: (title) => void createArticle(title),
-                  })
-                }
-              >
-                New article
-              </button>{' '}
-              · your files are under Ctrl/Cmd+B
-            </p>
-          )}
-          {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
-          {doc?.status === 'error' && (
-            <p className="notice" role="alert">
-              {doc.error}
-            </p>
-          )}
-          {doc?.status === 'missing' && doc.notice === null && (
-            <p className="notice" role="alert">
-              This document does not exist on disk.
-            </p>
-          )}
-          {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
-            <>
-              {doc.ref.kind !== 'article' && (
-                <p className="quiet doc-label">{docLabel(doc.ref, [])}</p>
-              )}
-              <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
-              {!doc.doc.blocks.some((block) => block.kind === 'content') &&
-                doc.focusedId !== NEW_BLOCK_ID && (
-                  <button
-                    type="button"
-                    className="link quiet"
-                    onClick={() => dispatch({ type: 'append' })}
-                  >
-                    Start writing
-                  </button>
+          {/* A switch in progress holds the document still: what is typed now would be lost. */}
+          <div className="column-body" inert={switching !== null} aria-busy={switching !== null}>
+            {doc !== null && doc.notice !== null && (
+              <p className="notice" role="status" aria-label="Document notice">
+                {doc.notice}{' '}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => dispatch({ type: 'notice', notice: null })}
+                >
+                  Dismiss
+                </button>
+              </p>
+            )}
+            {boot === 'loading' && doc === null && <p className="quiet">Loading…</p>}
+            {typeof boot === 'object' && (
+              <p className="notice" role="alert">
+                openwrite could not load the workspace: {boot.error}{' '}
+                <button type="button" className="link" onClick={() => void start()}>
+                  Retry
+                </button>
+              </p>
+            )}
+            {boot === 'ready' && doc === null && (
+              <p className="quiet">
+                No article yet.{' '}
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() =>
+                    setPalette({
+                      kind: 'input',
+                      label: 'Article title',
+                      placeholder: 'Title of the new article',
+                      submit: (title) => void createArticle(title),
+                    })
+                  }
+                >
+                  New article
+                </button>{' '}
+                · your files are under Ctrl/Cmd+B
+              </p>
+            )}
+            {doc?.status === 'loading' && <p className="quiet">Loading…</p>}
+            {doc?.status === 'error' && (
+              <p className="notice" role="alert">
+                {doc.error}
+              </p>
+            )}
+            {doc?.status === 'missing' && doc.notice === null && (
+              <p className="notice" role="alert">
+                This document does not exist on disk.
+              </p>
+            )}
+            {doc !== null && (doc.status === 'ready' || doc.status === 'missing') && (
+              <>
+                {doc.ref.kind !== 'article' && (
+                  <p className="quiet doc-label">{docLabel(doc.ref, [])}</p>
                 )}
-            </>
-          )}
-          {pill !== null && (
-            // No key: extending the selection updates the pill in place and keeps what was typed.
-            <PromptPill
-              target={pill}
-              onClose={() => {
-                setPill(null)
-                dispatch({ type: 'select', ids: [] })
-              }}
-            />
-          )}
+                <BlockList state={doc} decorate={ghosts.decorate} rowsAfter={ghosts.rowsAfter} />
+                {!doc.doc.blocks.some((block) => block.kind === 'content') &&
+                  doc.focusedId !== NEW_BLOCK_ID && (
+                    <button
+                      type="button"
+                      className="link quiet"
+                      onClick={() => dispatch({ type: 'append' })}
+                    >
+                      Start writing
+                    </button>
+                  )}
+              </>
+            )}
+            {pill !== null && (
+              // No key: extending the selection updates the pill in place and keeps what was typed.
+              <PromptPill
+                target={pill}
+                onClose={() => {
+                  setPill(null)
+                  dispatch({ type: 'select', ids: [] })
+                }}
+              />
+            )}
+          </div>
         </main>
       </Shell>
       <JobCount />

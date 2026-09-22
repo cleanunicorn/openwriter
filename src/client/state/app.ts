@@ -2,6 +2,7 @@ import {
   type Article,
   type ConfigResponse,
   type DocRef,
+  DocResponseSchema,
   docKey,
   type SkillInfo,
   type SkillProblem,
@@ -10,7 +11,7 @@ import type { Config } from '../../shared/config-schema.ts'
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
 import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
-import { ApiError, api } from '../api.ts'
+import { ApiError, api, nameWorkspaceWith, workspaceMoved } from '../api.ts'
 import {
   type DocAction,
   type DocState,
@@ -24,11 +25,16 @@ import { createStore, useStoreSlice } from './store.ts'
 export type PaletteMode =
   | { kind: 'commands' }
   | { kind: 'input'; label: string; placeholder: string; submit: (value: string) => void }
-  /** Like `input`, but Enter does nothing until what was typed is exactly `phrase`. */
+  /**
+   * Like `input`, but Enter does nothing until what was typed is exactly `phrase`. `warning` is
+   * shown under the input for as long as the prompt is open: a placeholder vanishes at the first
+   * keystroke, which is exactly when the writer needs to still see what they are about to do.
+   */
   | {
       kind: 'confirm'
       label: string
       placeholder: string
+      warning: string
       phrase: string
       submit: () => void
     }
@@ -52,6 +58,19 @@ export type AppState = {
   skillErrors: SkillProblem[]
   /** The open workspace and the ones the writer has opened before; the palette lists them. */
   workspaces: WorkspacesResponse | null
+  /**
+   * A failure with no document to show it on: an empty workspace has none, and the workspace
+   * commands are reachable from there. With a document open, its own notice is used instead.
+   */
+  notice: string | null
+  /** A workspace switch this tab is making, and what to call it; the document waits meanwhile. */
+  switching: string | null
+  /**
+   * Another tab moved the server to this workspace while this one held unsaved text. The tab stays
+   * on the workspace it shows, with autosave paused and every event of the new one ignored, until
+   * the writer chooses: go back and save, or discard and follow.
+   */
+  moved: { root: string; label: string } | null
   palette: PaletteMode | null
   panel: Panel
   /** Bumped whenever the effective theme changes, so baked-in colours (diagrams) re-render. */
@@ -67,10 +86,16 @@ export const store = createStore<AppState>({
   skills: [],
   skillErrors: [],
   workspaces: null,
+  notice: null,
+  switching: null,
+  moved: null,
   palette: null,
   panel: null,
   themeEpoch: 0,
 })
+
+// Every request names the workspace on screen; see `nameWorkspaceWith`.
+nameWorkspaceWith(() => store.get().workspaces?.active.root)
 
 export const useApp = <T>(selector: (state: AppState) => T): T => useStoreSlice(store, selector)
 
@@ -102,8 +127,11 @@ export function notifyFailure(
   const message = `${what}: ${error instanceof Error ? error.message : String(error)}`
   if (ref !== null && docStateOf(ref) !== undefined)
     dispatchDoc(ref, { type: 'notice', notice: message })
-  else console.error(message)
+  else setNotice(message)
 }
+
+/** Show (or, with null, dismiss) the notice that belongs to no document. */
+export const setNotice = (notice: string | null) => store.set((state) => ({ ...state, notice }))
 
 /** Dispatch to the document on screen. */
 export function dispatch(action: DocAction): void {
@@ -144,6 +172,8 @@ async function save(ref: DocRef): Promise<void> {
   const key = docKey(ref)
   const state = store.get().docs[key]
   if (state === undefined || !isDirty(state)) return
+  // The server is on another workspace now; nothing here may be saved there (see `moved`).
+  if (store.get().moved !== null) return
   const text = liveText(state)
   const session = docSession
   try {
@@ -153,10 +183,21 @@ async function save(ref: DocRef): Promise<void> {
     dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
   } catch (error) {
     if (session !== docSession) return
-    if (error instanceof ApiError && error.status === 409) {
+    if (workspaceMoved(error)) {
+      // Refused, not lost: the text stays dirty in this tab, which now learns of the switch.
+      void followServer().catch((reason: unknown) =>
+        notifyFailure('Could not follow the workspace change', reason, ref),
+      )
+      return
+    }
+    const disk =
+      error instanceof ApiError && error.status === 409
+        ? DocResponseSchema.safeParse(error.body)
+        : null
+    if (disk?.success === true) {
       // Someone else changed (or deleted) the file: reconcile instead of overwriting.
-      const disk = error.body as { text: string; hash: string | null; exists: boolean }
-      dispatchDoc(ref, { type: 'external', text: disk.text, hash: disk.hash, exists: disk.exists })
+      const { text, hash, exists } = disk.data
+      dispatchDoc(ref, { type: 'external', text, hash, exists })
       return
     }
     dispatchDoc(ref, { type: 'notice', notice: `Could not save: ${(error as Error).message}` })
@@ -198,8 +239,11 @@ store.subscribe(() => {
   }
 })
 
+/** The open documents that are ahead of the disk. */
+export const unsavedDocs = (): DocState[] => Object.values(store.get().docs).filter(isDirty)
+
 /** Is any open document ahead of the disk? Used by the unload guard. */
-export const hasUnsavedChanges = (): boolean => Object.values(store.get().docs).some(isDirty)
+export const hasUnsavedChanges = (): boolean => unsavedDocs().length > 0
 
 /** Save everything that is dirty, now. The tab going to the background is the last safe moment. */
 export function flushAll(): void {
@@ -229,6 +273,11 @@ async function load(ref: DocRef): Promise<void> {
   } catch (error) {
     if (session !== docSession) return
     dispatchDoc(ref, { type: 'failed', error: (error as Error).message })
+    if (workspaceMoved(error)) {
+      void followServer().catch((reason: unknown) =>
+        notifyFailure('Could not follow the workspace change', reason, ref),
+      )
+    }
   }
 }
 
@@ -424,8 +473,11 @@ export const setPanel = (panel: Panel) => store.set((state) => ({ ...state, pane
 type EventHandlers = {
   onJobEvent?: (event: ServerEvent) => void
   onConnect?: () => void
-  /** Another tab moved the server to a different workspace. */
-  onWorkspaceChanged?: (root: string) => void
+  /**
+   * The server is on `root`, which may not be the workspace this tab shows: another tab moved it,
+   * or moved it back. Also called when a reconnect or a refused request finds that out.
+   */
+  onWorkspaceChanged?: (root: string, label: string) => void
 }
 const handlers: EventHandlers = {}
 export const setEventHandlers = (next: EventHandlers) => Object.assign(handlers, next)
@@ -445,17 +497,44 @@ async function onDocChanged(ref: DocRef, hash: string | null): Promise<void> {
 }
 
 /**
- * The server keeps no event log, so whatever happened while the stream was down is unknown:
- * on every (re)connect re-check each open document against the disk (through the same
- * reconcile as a live event, so a focused draft survives), the settings, and the article list.
+ * Ask the server which workspace is open, and hand it to `onWorkspaceChanged` when it is not the
+ * one this tab shows — or when this tab is waiting on a `moved` decision, which it may settle.
+ * True when it did. Before the tab knows its workspace there is nothing to compare.
  */
-async function resync(): Promise<void> {
+export async function followServer(): Promise<boolean> {
+  const known = store.get().workspaces?.active.root
+  if (known === undefined) return false
+  const { active } = await api.workspaces()
+  if (active.root === known && store.get().moved === null) return false
+  handlers.onWorkspaceChanged?.(active.root, active.label)
+  return true
+}
+
+/**
+ * The server keeps no event log, so whatever happened while the stream was down is unknown:
+ * on every (re)connect first check that the server is still on this tab's workspace — a switch
+ * made meanwhile from another tab would otherwise make the other workspace's same-slug article
+ * look like an outside change to this one — then re-check each open document against the disk
+ * (through the same reconcile as a live event, so a focused draft survives), the jobs, the
+ * settings, and the article list.
+ */
+export async function resync(): Promise<void> {
+  if (await followServer()) return
+  handlers.onConnect?.()
   const open = Object.values(store.get().docs).filter((doc) => doc.status === 'ready')
   await Promise.all([
     ...open.map(async (doc) => {
-      const disk = await api.doc(doc.ref)
-      if (disk.hash !== docStateOf(doc.ref)?.baseHash) {
-        dispatchDoc(doc.ref, { type: 'external', ...disk })
+      const session = docSession
+      try {
+        const disk = await api.doc(doc.ref)
+        if (session !== docSession) return
+        if (disk.hash !== docStateOf(doc.ref)?.baseHash) {
+          dispatchDoc(doc.ref, { type: 'external', ...disk })
+        }
+      } catch (error) {
+        // A switch landed between the check above and this read: follow it, compare nothing.
+        if (!workspaceMoved(error)) throw error
+        await followServer()
       }
     }),
     refreshConfig(),
@@ -467,7 +546,6 @@ async function resync(): Promise<void> {
 export function connectEvents(): () => void {
   const source = new EventSource('/api/events')
   source.addEventListener('hello', () => {
-    handlers.onConnect?.()
     void resync().catch((error: unknown) =>
       notifyFailure('Could not check for outside changes', error),
     )
@@ -476,8 +554,14 @@ export function connectEvents(): () => void {
     const parsed = ServerEventSchema.safeParse(JSON.parse(message.data as string))
     if (!parsed.success) return
     const event = parsed.data
+    if (event.type === 'workspace.changed') {
+      handlers.onWorkspaceChanged?.(event.root, event.label)
+      return
+    }
+    // Every other event is about the workspace the server is on; while this tab still shows the
+    // one it left (`moved`), those would land on the wrong documents, settings and jobs.
+    if (store.get().moved !== null) return
     if (event.type === 'doc.changed') void onDocChanged(event.ref, event.hash)
-    else if (event.type === 'workspace.changed') handlers.onWorkspaceChanged?.(event.root)
     else if (event.type === 'skills.changed') {
       void refreshSkills().catch((error: unknown) =>
         notifyFailure('Could not reload the skills', error),

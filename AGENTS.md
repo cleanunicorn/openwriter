@@ -282,6 +282,8 @@ src/client/           Vite + React
   jobs/                 PromptPill, selection, GhostDiff, Tray (Transcript, and the corner JobCount), Composer,
                         ResearchPanel, commands, instruction (the pure `/skill` parser)
   settings/             Settings, commands
+  workspaces/           switch (the switch: save first, adopt once, the `moved` wait), commands,
+                        WorkspaceStatus (the switch under way; another tab moved the workspace)
   export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
                       (a workspace adds its own in <workspace>/.zen/skills/; a shipped name wins)
@@ -470,7 +472,9 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
   and `validate-ops.ts` — the `result.json` contract; `scheduler.ts` — the queue rules
 - `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
 - `src/server/workspace-list.ts` — the known-workspace list; `src/server/routes/workspaces.ts` —
-  the switch (quiesce, retarget, rebind) and the four guards on the delete
+  the switch (quiesce, retarget, rebind) and the four guards on the delete;
+  `src/server/http.ts` `pinWorkspace` — why a request admitted under one workspace never runs
+  against another; `src/client/workspaces/switch.ts` — the client side of a switch
 - `src/client/shell/layout.ts` — where the edge panels dock, stack or overlay;
   `shell/keys.ts` — the global key precedence; `src/shared/jobs/conversation.ts` — which earlier
   turns a job carries in `conversation.md`, and their bounds

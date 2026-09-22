@@ -12,6 +12,7 @@ import {
   SkillsResponseSchema,
   encodeWorkspaceHeader,
   WORKSPACE_HEADER,
+  WorkspaceMovedSchema,
 } from '../shared/api-types.ts'
 import type { Config } from '../shared/config-schema.ts'
 import { WorkspacesResponseSchema } from '../shared/workspaces-schema.ts'
@@ -33,6 +34,31 @@ export class ApiError extends Error {
   }
 }
 
+/** Was this refused because another workspace is open now than the one the request named? */
+export const workspaceMoved = (error: unknown): boolean =>
+  error instanceof ApiError &&
+  error.status === 409 &&
+  WorkspaceMovedSchema.safeParse(error.body).success
+
+let shownWorkspace: () => string | undefined = () => undefined
+
+/**
+ * Tell every request which workspace this tab is showing. The server refuses a document read or
+ * write meant for another one (409, `WorkspaceMovedSchema`), so a tab that has not heard of a switch
+ * yet can neither load the new workspace's same-slug article into its state nor save its own text
+ * there. Nothing is named until the tab knows its workspace.
+ */
+export const nameWorkspaceWith = (get: () => string | undefined): void => {
+  shownWorkspace = get
+}
+
+/** The one way this page builds the header: naming `root`, or nothing when it is unknown. */
+const workspaceHeader = (root: string | undefined): Record<string, string> =>
+  root === undefined ? {} : { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) }
+
+/** The header naming this tab's workspace, for a request made without `request` (the export). */
+export const workspaceHeaders = (): Record<string, string> => workspaceHeader(shownWorkspace())
+
 /** Every response is zod-parsed: typed data between client and server, checked at the boundary. */
 async function request<T extends z.ZodType>(
   schema: T,
@@ -43,8 +69,8 @@ async function request<T extends z.ZodType>(
     method: init.method ?? 'GET',
     headers:
       init.raw === undefined
-        ? { 'content-type': 'application/json', ...init.headers }
-        : init.headers,
+        ? { 'content-type': 'application/json', ...workspaceHeaders(), ...init.headers }
+        : { ...workspaceHeaders(), ...init.headers },
     body: init.raw ?? (init.method === undefined ? undefined : JSON.stringify(init.body ?? {})),
   })
   const body: unknown = await response.json().catch(() => null)
@@ -93,7 +119,7 @@ export const api = {
   clearFinishedJobs: (root: string) =>
     request(ClearJobsResponseSchema, '/api/jobs/clear-finished', {
       method: 'POST',
-      headers: { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) },
+      headers: workspaceHeader(root),
     }),
   skills: () => request(SkillsResponseSchema, '/api/skills'),
   /** `root`: the workspace this was written for; the server refuses it if another is open now. */
@@ -101,7 +127,7 @@ export const api = {
     request(ConfigResponseSchema, '/api/config', {
       method: 'PUT',
       body: config,
-      headers: root === undefined ? undefined : { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) },
+      headers: workspaceHeader(root),
     }),
   workspaces: () => request(WorkspacesResponseSchema, '/api/workspaces'),
   openWorkspace: (name: string) =>

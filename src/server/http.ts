@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import type { z } from 'zod'
+import { decodeWorkspaceHeader, WORKSPACE_HEADER } from '../shared/api-types.ts'
 import { IMAGE_EXTENSIONS, safeAssetBytes, UnsafeSvgError } from './assets.ts'
 
 /** An error a route wants the client to see, with its status. Everything else is a 500. */
@@ -27,6 +28,31 @@ export async function parseBody<T extends z.ZodType>(c: Context, schema: T): Pro
     throw new HttpError(400, `invalid body: ${issue?.path.join('.')} ${issue?.message}`)
   }
   return parsed.data
+}
+
+/**
+ * Pin a request to the workspace that was open when it arrived, and to the one the client says it
+ * is for. Call it before the first `await` and run the check it returns after the last one, right
+ * before the handler reads or writes: a switch can complete while the body is still arriving, and
+ * `Workspace.retarget` moves the shared object in place, so without this the handler would resume
+ * against the new root. A document's base-hash guard does not cover it: a file absent from both
+ * workspaces has a null hash in each, and `null !== null` is false.
+ *
+ * The header is optional (a request typed by hand has none); the admitted root is not.
+ */
+export function pinWorkspace(
+  c: Context,
+  workspace: { readonly root: string },
+  message = 'The workspace changed before this request was carried out.',
+): () => void {
+  const admitted = workspace.root
+  const header = c.req.header(WORKSPACE_HEADER)
+  const named = header === undefined ? admitted : decodeWorkspaceHeader(header)
+  return () => {
+    if (workspace.root !== admitted || named !== workspace.root) {
+      throw new HttpError(409, message, { workspaceChanged: true })
+    }
+  }
 }
 
 const CONTENT_TYPES: Record<string, string> = {
