@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
@@ -11,7 +11,13 @@ const PNG =
  * Headless Chromium cannot put an image on the real clipboard or drag a file in from outside, so
  * the paste or drop event is synthetic.
  */
-async function sendFile(page: Page, kind: 'paste' | 'drop', fileName: string, mimeType: string) {
+async function sendFile(
+  page: Page,
+  kind: 'paste' | 'drop',
+  fileName: string,
+  mimeType: string,
+  base64 = PNG,
+) {
   await editor(page).evaluate(
     (element, { kind, base64, fileName, mime }) => {
       const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
@@ -23,9 +29,61 @@ async function sendFile(page: Page, kind: 'paste' | 'drop', fileName: string, mi
           : new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
       )
     },
-    { kind, base64: PNG, fileName, mime: mimeType },
+    { kind, base64, fileName, mime: mimeType },
   )
 }
+
+const svg = (text: string) => Buffer.from(text).toString('base64')
+
+test('a pasted SVG is sanitised, still renders, and the writer is told what was removed', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' ')
+  const drawing = svg(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" onload="alert(1)"><script>alert(2)</script><rect width="40" height="20" fill="#3b6ea5"/></svg>',
+  )
+  await sendFile(page, 'paste', 'Drawing.svg', 'image/svg+xml', drawing)
+
+  await expect(editor(page)).toContainText('![](drawing.svg)')
+  await expect(notice(page)).toContainText(
+    'Removed from drawing.svg for safety: onload attribute, <script>.',
+  )
+  const stored = readFileSync(path.join(path.dirname(app.articlePath()), 'drawing.svg'), 'utf8')
+  expect(stored).not.toMatch(/script|onload/)
+  expect(stored).toContain('<rect width="40" height="20" fill="#3b6ea5"/>')
+
+  await page.keyboard.press('Escape')
+  const image = page.locator('img[src$="/assets/drawing.svg"]')
+  await expect(image).toBeVisible()
+  // It decoded as an image: the sanitised file still renders.
+  await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(40)
+})
+
+test('an SVG that cannot be read safely is refused with a notice and nothing is stored', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  const before = readdirSync(path.dirname(app.articlePath())).sort()
+  const entities = svg(
+    '<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>',
+  )
+  await sendFile(page, 'paste', 'evil.svg', 'image/svg+xml', entities)
+
+  await expect(notice(page)).toContainText(
+    'Could not add the image: evil.svg was refused as an unsafe SVG: it declares entities in a DOCTYPE',
+  )
+  // The editor keeps working and gained no reference.
+  await page.keyboard.type('still typing')
+  await expect(editor(page)).toContainText('still typing')
+  await expect(editor(page)).not.toContainText('evil.svg')
+  expect(readdirSync(path.dirname(app.articlePath())).sort()).toEqual(before)
+})
 
 test('pasting an image saves it into the bundle and inserts a relative reference', async ({
   page,

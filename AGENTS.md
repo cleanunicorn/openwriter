@@ -261,6 +261,7 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
   context.ts            AppOptions and the ServerContext every route module receives
   workspace.ts workspace-list.ts config.ts watcher.ts sse.ts assets.ts export.ts http.ts
   skills.ts skills-watcher.ts  shipped skills/ plus <workspace>/.zen/skills/ (guarded, errors kept); skills.changed
+  svg.ts                the allow-list SVG sanitiser every stored or served SVG goes through
   test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
   routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control),
                         workspaces (the known list, switch, create, erase), export

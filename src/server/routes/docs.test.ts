@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestApp, HOST, json, type TestApp } from '../test-helpers.ts'
@@ -221,6 +229,59 @@ describe('assets', () => {
 
   it('rejects anything that is not an image', async () => {
     expect((await upload('x.html', Buffer.from('<script>'), 'text/html')).status).toBe(415)
+  })
+
+  it('sanitises a pasted SVG before storing it and says what it removed', async () => {
+    const evil =
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><foreignObject><iframe src="javascript:alert(3)"/></foreignObject><use href="https://e.test/x.svg#a"/><circle r="4" fill="red"/></svg>'
+    const res = await upload('Drawing.svg', Buffer.from(evil), 'image/svg+xml')
+    expect(res.status).toBe(201)
+    const body = await json(res)
+    expect(body.name).toBe('drawing.svg')
+    expect(body.removed).toEqual([
+      'onload attribute',
+      '<script>',
+      '<foreignObject>',
+      'external reference',
+    ])
+    const stored = readFileSync(path.join(path.dirname(article()), 'drawing.svg'), 'utf8')
+    expect(stored).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg"><use/><circle r="4" fill="red"/></svg>\n',
+    )
+    // A clean image reports nothing, and a raster image is stored byte for byte.
+    expect((await json(upload('shot.png', png))).removed).toEqual([])
+  })
+
+  it('refuses an SVG it cannot read safely, with a reason, and stores nothing', async () => {
+    const before = readdirSync(path.dirname(article())).sort()
+    const res = await upload(
+      'x.svg',
+      Buffer.from('<!DOCTYPE svg [<!ENTITY a "b">]><svg xmlns="http://www.w3.org/2000/svg"/>'),
+      'image/svg+xml',
+    )
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toBe(
+      'x.svg was refused as an unsafe SVG: it declares entities in a DOCTYPE',
+    )
+    const html = await upload('page.svg', Buffer.from('<html><script/></html>'), 'image/svg+xml')
+    expect((await json(html)).error).toContain('it is not an SVG image')
+    expect(readdirSync(path.dirname(article())).sort()).toEqual(before)
+  })
+
+  it('sanitises an SVG put into the bundle by hand when serving it', async () => {
+    const bundle = path.dirname(article())
+    writeFileSync(
+      path.join(bundle, 'by-hand.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>',
+    )
+    writeFileSync(path.join(bundle, 'broken.svg'), '<svg><g></svg>')
+    const ok = await t.get('/api/docs/article/hello-openwrite/assets/by-hand.svg')
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('content-type')).toBe('image/svg+xml')
+    expect(ok.headers.get('content-security-policy')).toContain("default-src 'none'")
+    expect(await ok.text()).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>\n')
+    const broken = await t.get('/api/docs/article/hello-openwrite/assets/broken.svg')
+    expect(broken.status).toBe(415)
   })
 
   it('serves bundle assets and refuses to leave the bundle', async () => {

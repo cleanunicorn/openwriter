@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import type { z } from 'zod'
-import { IMAGE_EXTENSIONS } from './assets.ts'
+import { IMAGE_EXTENSIONS, safeAssetBytes, UnsafeSvgError } from './assets.ts'
 
 /** An error a route wants the client to see, with its status. Everything else is a 500. */
 export class HttpError extends Error {
@@ -59,10 +59,19 @@ export function pathTail(c: Context, prefix: string): string {
 
 /**
  * Answer with a file from the workspace. Assets can be anything an agent or the writer put
- * there, so they are never sniffed and never allowed to run anything when opened directly.
+ * there, so they are never sniffed and never allowed to run anything when opened directly. An
+ * SVG is sanitised on the way out as well as on the way in: a job's assets and a file copied into
+ * a bundle by hand never went through the upload.
  */
 export function fileResponse(c: Context, data: Uint8Array, name: string): Response {
-  return c.body(new Uint8Array(data), 200, {
+  let body: Uint8Array
+  try {
+    body = safeAssetBytes(name, data).data
+  } catch (error) {
+    if (error instanceof UnsafeSvgError) throw new HttpError(415, error.message)
+    throw error
+  }
+  return c.body(new Uint8Array(body), 200, {
     'content-type': contentTypeFor(name),
     'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'",

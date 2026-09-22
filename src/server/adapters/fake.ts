@@ -8,6 +8,14 @@ const PIXEL = Buffer.from(
   'base64',
 )
 
+/** The SVG each SVG scenario writes: one the sanitiser cleans, one it refuses. */
+export const FAKE_SVG: Record<string, string> = {
+  'svg-asset':
+    '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" onload="alert(1)"><script>alert(2)</script><rect width="8" height="8" fill="#3b6ea5"/></svg>',
+  'svg-unsafe':
+    '<!DOCTYPE svg [<!ENTITY x SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg"><text>&x;</text></svg>',
+}
+
 type Targets = { scope: string; blockIds: string[] }
 type ArticleBlock = { id: string; raw: string }
 
@@ -73,6 +81,24 @@ function scenarioResults(
       ],
       assets: [{ file: 'assets/fake-diagram.png', alt: 'Fake diagram' }],
     },
+    // An SVG asset with a script in it (`svg-asset`), or one that cannot be read safely
+    // (`svg-unsafe`): the same op, different bytes (see FAKE_SVG).
+    ...Object.fromEntries(
+      Object.keys(FAKE_SVG).map((scenario) => [
+        scenario,
+        {
+          summary: 'Added an SVG drawing.',
+          ops: [
+            {
+              op: 'insert_after',
+              block_id: first,
+              markdown: '![Fake drawing](assets/drawing.svg)',
+            },
+          ],
+          assets: [{ file: 'assets/drawing.svg', alt: 'Fake drawing' }],
+        },
+      ]),
+    ),
     diagram: {
       summary: 'Added a mermaid diagram.',
       ops: [
@@ -198,6 +224,11 @@ export function createFakeAdapter(gate: FakeGate): AgentAdapter {
         if (scenario === 'asset') {
           mkdirSync(path.join(jobDir, 'assets'), { recursive: true })
           writeFileSync(path.join(jobDir, 'assets', 'fake-diagram.png'), PIXEL)
+        }
+        const svg = FAKE_SVG[scenario]
+        if (svg !== undefined) {
+          mkdirSync(path.join(jobDir, 'assets'), { recursive: true })
+          writeFileSync(path.join(jobDir, 'assets', 'drawing.svg'), svg)
         }
         const body = invalid
           ? '{ "summary": "not quite json", "ops": [ { "op": "rewrite" '

@@ -33,6 +33,14 @@ function imageFiles(data: DataTransfer | null): File[] {
 
 const text = (view: EditorView) => view.state.doc.toString()
 
+/** What the server's SVG sanitiser took out of a pasted SVG, in one short sentence, or null. */
+export function removedNotice(name: string, removed: string[]): string | null {
+  if (removed.length === 0) return null
+  const shown = removed.slice(0, 4).join(', ')
+  const more = removed.length > 4 ? ` and ${removed.length - 4} more` : ''
+  return `Removed from ${name} for safety: ${shown}${more}.`
+}
+
 const atVisualEdge = (view: EditorView, forward: boolean) => {
   const range = view.state.selection.main
   return range.empty && view.moveVertically(range, forward).head === range.head
@@ -141,16 +149,18 @@ export function BlockEditor({ docRef, id, initialText, cursor, seed }: Props) {
       if (docRef.kind !== 'article') return
       for (const file of files) {
         try {
-          const { name } = await api.uploadImage(docRef.slug, file)
+          const { name, removed } = await api.uploadImage(docRef.slug, file)
+          const cleaned = removedNotice(name, removed)
           if (destroyed) {
             // The file is in the bundle, but the editor it was meant for closed meanwhile.
             send({
               type: 'notice',
-              notice: `The image was saved as ${name}, but its editor had closed. Add ![](${name}) where you want it.`,
+              notice: `The image was saved as ${name}, but its editor had closed. Add ![](${name}) where you want it.${cleaned === null ? '' : ` ${cleaned}`}`,
             })
             continue
           }
           view.dispatch(view.state.replaceSelection(`![](${name})`))
+          if (cleaned !== null) send({ type: 'notice', notice: cleaned })
         } catch (error) {
           send({ type: 'notice', notice: `Could not add the image: ${(error as Error).message}` })
         }

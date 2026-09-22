@@ -53,7 +53,8 @@ export type Article = z.infer<typeof ArticleSchema>
 export const ArticlesResponseSchema = z.object({ articles: z.array(ArticleSchema) })
 export const NewArticleRequestSchema = z.object({ title: z.string().trim().min(1).max(200) })
 
-export const AssetResponseSchema = z.object({ name: z.string() })
+/** `removed`: what the SVG sanitiser took out of a pasted SVG (empty for any other image). */
+export const AssetResponseSchema = z.object({ name: z.string(), removed: z.array(z.string()) })
 
 export const ConfigResponseSchema = z.object({
   config: ConfigSchema,

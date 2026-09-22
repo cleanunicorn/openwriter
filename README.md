@@ -37,6 +37,8 @@ with no auth.
   arrows, `Space`).
 - `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` undo and redo across the whole document, reorders included.
 - Paste or drop an image: it is saved next to the article and referenced with a relative path.
+  An SVG is sanitised first (scripts, event handlers, `foreignObject` and external references
+  are removed, and a notice says what went); one that cannot be read safely is refused.
 - Two edge panels, both closed at first: **Files and actions** on the left (`Ctrl/Cmd+B` or the
   handle at the left edge) and **Agent** on the right (`Ctrl/Cmd+Alt+B` or the right handle).
   The left one lists the workspace, every article (the open one marked), New article,
@@ -345,7 +347,9 @@ else.
 
 The file is validated with zod (unknown ops or keys reject it) and then against the job: for
 `blocks` scope, ops may only touch the target blocks or insert next to them; `research` must have
-no ops; asset paths must stay inside `assets/` and exist. A rejected result gets one automatic
+no ops; asset paths must stay inside `assets/` and exist; an `.svg` asset must be one the SVG
+sanitiser can read (it is served and copied into the bundle sanitised,
+`DECISIONS.md`). A rejected result gets one automatic
 repair attempt; after that the job fails and the raw output is shown in the agent panel.
 
 Job states: `queued → running → validating → (repairing →) ready → settled`, or `failed`
