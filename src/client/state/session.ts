@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { type DocRef, DocRefSchema } from '../../shared/api-types.ts'
 import { BlockIdSchema, type Doc } from '../../shared/blocks/types.ts'
 import { type Job, JobRequestSchema, SnapshotSchema } from '../../shared/jobs/job-types.ts'
-import { type DocState, docReducer } from './doc-reducer.ts'
+import { type Conflict, type DocState, docReducer } from './doc-reducer.ts'
 
 /**
  * What a page reload keeps: which tab this is, the block identity of every open document, and the
@@ -20,12 +20,23 @@ export const HeldRequestSchema = z.object({
   blockedBy: z.array(z.string()),
 })
 
+/** A conflict a reload found and the writer has not settled: its text is nowhere else. */
+const ConflictSchema = z.object({
+  id: z.string().regex(/^c\d+$/),
+  mine: z.string(),
+  theirs: z.string(),
+  written: z.string(),
+  blockIds: z.array(BlockIdSchema),
+  afterId: BlockIdSchema.nullable(),
+})
+
 const RestoredDocSchema = z.object({
   ref: DocRefSchema,
   doc: SnapshotSchema,
   nextId: z.number().int().min(1),
+  conflicts: z.array(ConflictSchema).default([]),
 })
-export type RestoredDoc = { ref: DocRef; doc: Doc; nextId: number }
+export type RestoredDoc = { ref: DocRef; doc: Doc; nextId: number; conflicts: Conflict[] }
 
 export const SessionSchema = z.object({
   version: z.literal(1),
@@ -53,7 +64,12 @@ function usableDoc(entry: z.infer<typeof RestoredDocSchema>): RestoredDoc | null
   const ids = blocks.map((block) => block.id)
   if (new Set(ids).size !== ids.length || ids.some((id) => !id.startsWith('b'))) return null
   const highest = Math.max(0, ...ids.map((id) => Number(id.slice(1))))
-  return { ref: entry.ref, doc: { blocks, gaps }, nextId: Math.max(entry.nextId, highest + 1) }
+  return {
+    ref: entry.ref,
+    doc: { blocks, gaps },
+    nextId: Math.max(entry.nextId, highest + 1),
+    conflicts: entry.conflicts,
+  }
 }
 
 /** Parse what `sessionStorage` held. Anything that does not conform is dropped, not guessed at. */
@@ -93,7 +109,12 @@ export function sessionOf(root: string, docs: DocState[], jobs: JobsPart): Sessi
       .filter((state) => state.status === 'ready')
       .map((state) => {
         const committed = docReducer(state, { type: 'blur' })
-        return { ref: state.ref, doc: committed.doc, nextId: committed.nextId }
+        return {
+          ref: state.ref,
+          doc: committed.doc,
+          nextId: committed.nextId,
+          conflicts: state.conflicts,
+        }
       }),
     ...jobs,
   }

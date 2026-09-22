@@ -301,8 +301,12 @@ describe('a reload that carries the editor’s own text', () => {
 
   it('keeps the keystrokes typed while the save was in flight', () => {
     const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
-    const inFlight = liveText(open) // what the PUT carried
-    const typing = docReducer(open, { type: 'draft', id: NEW_BLOCK_ID, text: 'Threex' })
+    const inFlight = liveText(open) // what the PUT carried; `save()` says so before sending it
+    const typing = run(
+      open,
+      { type: 'sending', text: inFlight },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Threex' },
+    )
     expect(liveText(reload(typing, inFlight))).toBe('One\n\nTwo\n\nThreex\n')
   })
 
@@ -740,71 +744,100 @@ describe('an open editor never loses its block', () => {
     expect(text(reloaded)).toBe('A\n\nC\n\nD\n\nE\n')
   })
 
+  // A disk change that rewrites the block being edited — swallows it into a fence, or deletes it
+  // along with a change to its neighbour — is a conflict since #30: the document shows the disk's
+  // text, the editor closes, and the writer's text is kept exactly once, in the conflict. These
+  // used to be rescues that put the editor's text back into the disk's version; each scenario
+  // stays, because each once lost or doubled the text.
+  const rewritten = (state: DocState, typed: string, disk: string) => {
+    expect(text(state)).toBe(disk)
+    expect(state.focusedId).toBeNull()
+    expect(dangling(state)).toBe(false)
+    const kept = state.conflicts.map((conflict) => occurrences(conflict.mine, typed))
+    expect(occurrences(liveText(state), typed) + kept.reduce((a, b) => a + b, 0)).toBe(1)
+    expect(isDirty(state)).toBe(false)
+  }
+
   it('keeps the editor’s text once when a fence from disk swallows its block', () => {
-    // The rescue puts the text back, but an unclosed fence arriving from disk swallows it, so
-    // no block carries the draft's ID afterwards — and the rescue used to run a second time.
+    // The rescue used to put the text back, the fence swallowed it, and the rescue ran twice.
+    const disk = '```js\nnever closed\n\nB\n'
     const state = run(
       loaded('A\n\nB\n\nC\n\nD\n'),
       { type: 'focus', id: 'b3', cursor: 0 },
       { type: 'draft', id: 'b3', text: 'typed' },
-      { type: 'external', text: '```js\nnever closed\n\nB\n', hash: 'h1', exists: true },
+      { type: 'external', text: disk, hash: 'h1', exists: true },
     )
-    expect(occurrences(liveText(state), 'typed')).toBe(1)
-    expect(dangling(state)).toBe(false)
+    rewritten(state, 'typed', disk)
   })
 
-  it('follows its text, not the first block, when the draft ends in whitespace', () => {
-    // `splitText` trims a block's trailing whitespace into the gap after it, so looking for the
-    // untrimmed draft found nothing and the editor was reopened on the top of the article.
+  it('keeps a draft that ends in whitespace once when a fence from disk swallows it', () => {
+    // `splitText` trims a block's trailing whitespace into the gap after it.
+    const disk = 'A\n\n```js\nnever closed'
     const state = run(
       loaded('A\n\nB\n\nC\n\nD\n'),
       { type: 'focus', id: 'b3', cursor: 0 },
       { type: 'draft', id: 'b3', text: 'typed with trailing spaces   ' },
-      { type: 'external', text: 'A\n\n```js\nnever closed', hash: 'h1', exists: true },
+      { type: 'external', text: disk, hash: 'h1', exists: true },
     )
-    expect(liveText(state)).toContain('typed with trailing spaces')
-    expect(state.draft?.text).toContain('typed with trailing spaces')
-    expect(state.focusedId).not.toBe('b1')
-    expect(dangling(state)).toBe(false)
+    rewritten(state, 'typed with trailing spaces', disk)
   })
 
-  it('puts a vanished block back next to its unchanged neighbour, not after an inherited ID', () => {
+  it('keeps the editor’s text when the disk deleted its block and rewrote the one before', () => {
     // Another program deleted the block being edited, edited the one before it and put a
-    // paragraph in front of that. `reconcile` gives the inserted paragraph the edited block's
-    // old ID, so a rescue that trusts IDs put the writer's text above "Two, edited" — away from
-    // "Four", the neighbour that is still exactly where it was.
+    // paragraph in front of that. Both sides changed that stretch, so it is the writer's call.
+    const disk = 'One\n\nInserted elsewhere\n\nTwo, edited\n\nFour\n'
     const state = run(
       loaded('One\n\nTwo\n\nThree\n\nFour\n'),
       { type: 'focus', id: 'b3', cursor: 0 },
       { type: 'draft', id: 'b3', text: 'Three, typed by the writer' },
-      {
-        type: 'external',
-        text: 'One\n\nInserted elsewhere\n\nTwo, edited\n\nFour\n',
-        hash: 'h1',
-        exists: true,
-      },
+      { type: 'external', text: disk, hash: 'h1', exists: true },
     )
-    expect(state.doc.blocks.map((block) => block.raw)).toEqual([
+    rewritten(state, 'Three, typed by the writer', disk)
+    expect(state.conflicts[0]?.theirs).toBe('Inserted elsewhere\n\nTwo, edited')
+    // Keeping both adds what the writer wrote right after the disk's version, before "Four" —
+    // where the old rescue put it — and not the "Two" the writer never touched.
+    const both = docReducer(state, {
+      type: 'resolve',
+      id: state.conflicts[0]?.id ?? '',
+      keep: 'both',
+    })
+    expect(both.doc.blocks.map((block) => block.raw)).toEqual([
       'One',
       'Inserted elsewhere',
       'Two, edited',
       'Three, typed by the writer',
       'Four',
     ])
-    expect(state.focusedId).toBe('b3')
-    expect(dangling(state)).toBe(false)
   })
 
-  it('follows its text into the fence that took it, not into an earlier block saying it too', () => {
-    // A fence from disk swallows the rescued text, so the editor has to find the block that now
-    // holds it. The first block *anywhere* containing the text is not that: here the article
-    // already says "note" above the fence, and the editor reopened on that paragraph.
+  it('keeps the editor’s text once when the disk unclosed the fence above it', () => {
+    const disk = 'A note on this.\n\n```js\nx\n'
     const state = run(
       loaded('A note on this.\n\n```js\nx\n```\n\nB\n'),
       { type: 'focus', id: 'b3', cursor: 0 },
       { type: 'draft', id: 'b3', text: 'note' },
-      { type: 'external', text: 'A note on this.\n\n```js\nx\n', hash: 'h1', exists: true },
+      { type: 'external', text: disk, hash: 'h1', exists: true },
     )
+    expect(text(state)).toBe(disk)
+    expect(state.conflicts.map((conflict) => conflict.mine)).toEqual(['```js\nx\n```\n\nnote'])
+    expect(dangling(state)).toBe(false)
+  })
+
+  it('follows its text into a fence from disk when only the disk’s side has the fence', () => {
+    // The slot's text is new, and the disk only changed what is above it, so there is no
+    // conflict — but the disk's unclosed fence takes the text in, and the editor follows it.
+    // The article already says "note" above the fence: that paragraph is not where it went.
+    const open = run(
+      loaded('A note on this.\n\n```js\nx\n```\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'note' },
+    )
+    const state = docReducer(open, {
+      type: 'external',
+      text: 'A note on this.\n\n```js\nx\n',
+      hash: 'h1',
+      exists: true,
+    })
     expect(state.doc.blocks.map((block) => block.raw)).toEqual([
       'A note on this.',
       '```js\nx\n\nnote',
@@ -813,7 +846,6 @@ describe('an open editor never loses its block', () => {
     expect(state.draft).toEqual({ id: state.doc.blocks[1]?.id, text: '```js\nx\n\nnote' })
     expect(dangling(state)).toBe(false)
   })
-
   it('emptying the focused block and leaving it still deletes it', () => {
     const state = run(editing(), { type: 'draft', id: 'b2', text: '' }, { type: 'blur' })
     expect(text(state)).toBe('A\n\nC\n\nD\n')

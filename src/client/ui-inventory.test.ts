@@ -63,6 +63,7 @@ const SURFACES = [
   'src/client/jobs/ResearchPanel.tsx',
   'src/client/jobs/PromptPill.tsx',
   'src/client/jobs/GhostDiff.tsx',
+  'src/client/blocks/ConflictCard.tsx',
   'src/client/settings/Settings.tsx',
   'src/client/workspaces/WorkspaceStatus.tsx',
   'src/client/App.tsx',

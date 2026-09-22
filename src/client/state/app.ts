@@ -179,6 +179,8 @@ async function save(ref: DocRef): Promise<void> {
   const session = docSession
   try {
     const base = state.baseHash
+    // A reload that brings this very text back is this tab's own save (the base of the merge).
+    dispatchDoc(ref, { type: 'sending', text })
     const { hash } = await api.save(ref, text, base)
     if (session !== docSession) return
     dispatchDoc(ref, { type: 'saved', text, hash, baseHash: base })
@@ -240,8 +242,12 @@ store.subscribe(() => {
   }
 })
 
-/** The open documents that are ahead of the disk. */
-export const unsavedDocs = (): DocState[] => Object.values(store.get().docs).filter(isDirty)
+/**
+ * The open documents that are ahead of the disk, or hold a conflict the writer has not settled:
+ * its text is in neither the document nor the file, so closing the tab would lose it.
+ */
+export const unsavedDocs = (): DocState[] =>
+  Object.values(store.get().docs).filter((doc) => isDirty(doc) || doc.conflicts.length > 0)
 
 /** Is any open document ahead of the disk? Used by the unload guard. */
 export const hasUnsavedChanges = (): boolean => unsavedDocs().length > 0

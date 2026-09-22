@@ -864,6 +864,35 @@ body[data-right="docked"] .edge-handle-right {
   margin-bottom: var(--space-2);
 }
 
+/* A passage both this tab and the file changed: the writer's version, waiting for a choice.
+   The warning colour, like the other notice where unsaved text is at stake. */
+.conflict {
+  margin-top: var(--prose-flow);
+  padding-left: var(--space-5);
+  border-left: 2px solid var(--warn);
+}
+
+.conflict-head,
+.conflict-actions {
+  font: var(--text-sm) / var(--leading-normal) var(--font-ui);
+  color: var(--quiet);
+}
+
+.conflict-head {
+  margin: 0 0 var(--space-3);
+}
+
+.conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-3);
+}
+
+.conflict + .block {
+  margin-top: var(--prose-flow);
+}
+
 .tray {
   position: fixed;
   right: var(--space-7);

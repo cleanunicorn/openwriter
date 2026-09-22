@@ -3,9 +3,10 @@ import { type App, expect, test } from './fixtures.ts'
 import { blockEnd, blockWith, editor, expectFile, notice, openArticle } from './helpers.ts'
 
 /**
- * Two tabs on the same article are unsupported (README, "Two tabs on the same article"). These
- * tests pin down what actually happens, so the documentation stays true. Two of them assert known
- * bugs (#29, #30): when one is fixed, its test here is the one to flip.
+ * Two tabs on the same article (README, "Two tabs on the same article"). These tests pin down
+ * what actually happens, so the documentation stays true. A refused save reloads through the
+ * three-way merge (#30): nothing either tab wrote is dropped without the writer being shown it.
+ * #29 (a tab never hears of another tab's save) is still open, and asserted as it is.
  */
 
 const FIRST = 'This is a sample article.'
@@ -66,7 +67,7 @@ test('a second tab learns of another tab’s save only when its own save is refu
   await expect(blockWith(a, 'stays plain markdown. BBB')).toHaveCount(1)
 })
 
-test('the same block edited in two tabs: the stale tab’s copy replaces the other’s (#29)', async ({
+test('the same block edited in two tabs: the stale tab gets a conflict, not the file (#29, #30)', async ({
   page: a,
   context,
   app,
@@ -74,25 +75,35 @@ test('the same block edited in two tabs: the stale tab’s copy replaces the oth
   const b = await context.newPage()
   await aSavedFirstParagraph(a, b, app)
 
-  // B edits the paragraph A just saved, starting from its stale copy (no AAA).
+  // B edits the paragraph A just saved, starting from its stale copy (no AAA); B has not heard
+  // of A's save (#29), so its save is refused.
   const refused = put(b, 409)
-  const overwrote = put(b, 200)
   await typeAtEnd(b, FIRST, ' BBB')
   await refused
-  // The reload keeps the block B is typing in, so B's copy wins that block and is saved.
-  await expect(notice(b)).toContainText('Reloaded: the file changed on disk.')
-  await overwrote
-  await expectFile(app.articlePath(), (file) => {
-    expect(file).toMatch(/render it again\. BBB/)
-    expect(file).not.toContain('AAA')
-  })
 
-  // A's text is gone from the file, and A is not told: no notice, and its screen still has it.
+  // Both tabs changed that paragraph. B now shows the file's version, with its own beside it,
+  // and its editor is closed: nothing of B's is saved over A's text until B chooses.
+  const conflict = b.getByRole('group', { name: 'Conflict' })
+  await expect(conflict).toContainText('BBB')
+  await expect(notice(b)).toContainText('Choose which version to keep')
+  await expect(editor(b)).toHaveCount(0)
+  await expect(blockWith(b, 'render it again. AAA')).toHaveCount(1)
+  expect(app.readArticle()).toMatch(/render it again\. AAA/)
+  expect(app.readArticle()).not.toContain('BBB')
+
+  // Keeping both writes both, A's first.
+  const merged = put(b, 200)
+  await conflict.getByRole('button', { name: 'Keep both' }).click()
+  await merged
+  await expect(conflict).toHaveCount(0)
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toMatch(/render it again\. AAA\n\nThis is a sample article\.[^\n]*BBB/)
+  })
+  // A is still not told (#29): it keeps showing its own text and no notice.
   await expect(notice(a)).toHaveCount(0)
-  await expect(blockWith(a, 'render it again. AAA')).toHaveCount(1)
 })
 
-test('a block finished before its autosave is dropped by the reload a refused save causes (#30)', async ({
+test('a block finished before its autosave survives the reload a refused save causes (#30)', async ({
   page: a,
   context,
   app,
@@ -112,6 +123,7 @@ test('a block finished before its autosave is dropped by the reload a refused sa
   })
   const sent = b.waitForRequest((request) => request.method() === 'PUT')
   const refused = put(b, 409)
+  const saved = put(b, 200)
   await typeAtEnd(b, SECOND, ' BBB')
   expect((await sent).postData()).toContain('stays plain markdown. BBB')
   await b.keyboard.press('Escape')
@@ -119,9 +131,14 @@ test('a block finished before its autosave is dropped by the reload a refused sa
   release()
   await refused
 
-  // The reload takes the disk's copy of every block that is not open, B's finished edit included.
-  await expect(notice(b)).toContainText('Reloaded: the file changed on disk.')
+  // The reload merges: A's paragraph comes in, and B's finished edit, which the disk never had,
+  // stays — and says so.
+  await expect(notice(b)).toContainText('Your unsaved text was kept.')
   await expect(blockWith(b, 'render it again. AAA')).toHaveCount(1)
-  await expect(blockWith(b, 'stays plain markdown. BBB')).toHaveCount(0)
-  expect(app.readArticle()).not.toContain('BBB')
+  await expect(blockWith(b, 'stays plain markdown. BBB')).toHaveCount(1)
+  await saved
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toMatch(/render it again\. AAA/)
+    expect(file).toContain('stays plain markdown. BBB')
+  })
 })

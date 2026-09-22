@@ -162,7 +162,7 @@ test('a heading typed under a paragraph is not duplicated by a reload and a blur
   await expect(blockWith(page, 'A heading typed inline')).toHaveCount(1)
 })
 
-test('a block deleted from outside while it was being edited is saved again', async ({
+test('a block deleted from outside while open, with nothing unsaved in it, goes; undo brings it back', async ({
   page,
   app,
 }) => {
@@ -175,21 +175,106 @@ test('a block deleted from outside while it was being edited is saved again', as
   await page.keyboard.type(' MINE')
   await saved
 
-  // Another writer removes that whole paragraph. The reducer keeps the open editor's text, so
-  // the live text goes back to exactly what was last saved — and autosave must still write it,
-  // because the disk has moved on and no longer has it.
-  // The blank line after it goes too, so restoring the paragraph reproduces the saved file
-  // byte for byte — which is exactly when a text-keyed autosave check calls it a repeat.
+  // Another writer removes that whole paragraph. Everything the editor holds was saved, so only
+  // the disk changed it since: the three-way merge takes the deletion and the editor closes.
+  // (Before #30 the reload could not tell saved from unsaved, and put the paragraph back.)
+  // The blank line after it goes too.
   writeFileSync(
     app.articlePath(),
     app.readArticle().replace(/^Results arrive as ghost diffs.*\n\n/m, ''),
   )
-  await expect(notice(page)).toContainText('was kept')
+  await expect(notice(page)).toContainText('Reloaded: the file changed on disk.')
+  await expect(editor(page)).toHaveCount(0)
+  await expect(blockWith(page, 'reject the rest. MINE')).toHaveCount(0)
+
+  // In a single tab, undo is the way back, and autosave writes what it brings back.
+  await page.getByRole('main').click({ position: { x: 5, y: 5 } })
+  await page.keyboard.press(`${mod}+z`)
+  await expect(blockWith(page, 'reject the rest. MINE')).toHaveCount(1)
   await expectFile(app.articlePath(), (file) => {
     expect(file).toContain('reject the rest. MINE')
   })
 })
 
+/**
+ * Type ` BBB` at the end of "Every paragraph, list…", let autosave send it but hold the PUT, and
+ * press Esc: the block is finished but not on disk — what pressing Esc within the 750 ms debounce
+ * leaves, without depending on timing. Returns the release for the held save.
+ */
+async function finishedButNotSaved(page: Page): Promise<() => void> {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/docs/**', async (route) => {
+    if (route.request().method() === 'PUT') await held
+    await route.continue()
+  })
+  await openArticle(page)
+  const sent = page.waitForRequest((request) => request.method() === 'PUT')
+  await page.getByText('Every paragraph, list').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' BBB')
+  expect((await sent).postData()).toContain('stays plain markdown. BBB')
+  await page.keyboard.press('Escape')
+  await expect(editor(page)).toHaveCount(0)
+  return release
+}
+
+test('a finished block survives an outside change that lands before its autosave (#30)', async ({
+  page,
+  app,
+}) => {
+  const release = await finishedButNotSaved(page)
+  writeFileSync(app.articlePath(), withHeading(app, '## Why blocks, from outside'))
+  await expect(page.getByRole('heading', { name: 'Why blocks, from outside' })).toBeVisible()
+  await expect(notice(page)).toContainText('Your unsaved text was kept.')
+  await expect(blockWith(page, 'stays plain markdown. BBB')).toHaveCount(1)
+
+  // The held save carries the old base and is refused; the merged text is saved after it.
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  release()
+  await saved
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('## Why blocks, from outside')
+    expect(file).toContain('stays plain markdown. BBB')
+  })
+})
+
+test('a finished block the outside change also rewrote is a conflict, not a loss (#30)', async ({
+  page,
+  app,
+}) => {
+  const release = await finishedButNotSaved(page)
+  writeFileSync(
+    app.articlePath(),
+    app.readArticle().replace('stays plain markdown.', 'stays plain markdown. OUTSIDE'),
+  )
+  const conflict = page.getByRole('group', { name: 'Conflict' })
+  await expect(conflict).toContainText('BBB')
+  await expect(blockWith(page, 'stays plain markdown. OUTSIDE')).toHaveCount(1)
+  await expect(blockWith(page, 'BBB')).toHaveCount(0)
+
+  // The held save is refused, and nothing is saved over the outside change meanwhile.
+  const refused = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 409,
+  )
+  release()
+  await refused
+  expect(app.readArticle()).toContain('stays plain markdown. OUTSIDE')
+  expect(app.readArticle()).not.toContain('BBB')
+
+  // The writer keeps their own version: it replaces the outside one, in the file too.
+  await conflict.getByRole('button', { name: 'Keep mine' }).click()
+  await expect(conflict).toHaveCount(0)
+  await expect(blockWith(page, 'stays plain markdown. BBB')).toHaveCount(1)
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('stays plain markdown. BBB')
+    expect(file).not.toContain('OUTSIDE')
+  })
+})
 test('a file deleted from outside is not recreated from memory', async ({ page, app }) => {
   await openArticle(page)
   rmSync(app.articlePath())
@@ -255,21 +340,28 @@ test('a save that loses the race with an outside change gets a 409 and keeps bot
 // another program edits a block *and* puts a paragraph in front of it, so the edited block's old
 // ID ends up on the inserted paragraph — and whatever trusts that ID lands on the wrong side.
 
-test('a block deleted from outside comes back under its heading, not above it', async ({
+test('a paragraph deleted from outside while its edit is unsaved: keep both puts it under its heading', async ({
   page,
   app,
 }) => {
+  // Hold the save, so ` MINE` is typed but not on disk when the outside change lands.
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/docs/**', async (route) => {
+    if (route.request().method() === 'PUT') await held
+    await route.continue()
+  })
   await openArticle(page)
+  const sent = page.waitForRequest((request) => request.method() === 'PUT')
   await page.getByText('Every paragraph, list').click()
   await page.keyboard.press(blockEnd)
-  const saved = page.waitForResponse(
-    (response) => response.request().method() === 'PUT' && response.status() === 200,
-  )
   await page.keyboard.type(' MINE')
-  await saved
+  await sent
 
   // The paragraph being edited goes; the heading above it is reworded and gets a paragraph in
-  // front of it, which inherits the heading's ID.
+  // front of it, which inherits the heading's ID. Both sides changed that stretch: a conflict.
   writeFileSync(
     app.articlePath(),
     app
@@ -277,10 +369,20 @@ test('a block deleted from outside comes back under its heading, not above it', 
       .replace(/^Every paragraph, list.*\n\n/m, '')
       .replace('## Why blocks\n', 'Inserted from outside.\n\n## Why blocks, reworded\n'),
   )
-  await expect(notice(page)).toContainText('was kept')
+  const conflict = page.getByRole('group', { name: 'Conflict' })
+  await expect(conflict).toContainText('MINE')
+  const refused = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 409,
+  )
+  release()
+  await refused
+
+  // Keeping both adds the writer's paragraph after the disk's version of the stretch: under the
+  // reworded heading, not above it where the inherited ID would put it.
+  await conflict.getByRole('button', { name: 'Keep both' }).click()
   await expectFile(app.articlePath(), (file) => {
     expect(file).toContain(
-      '## Why blocks, reworded\n\nEvery paragraph, list, and code fence is a block.',
+      'Inserted from outside.\n\n## Why blocks, reworded\n\nEvery paragraph, list, and code fence is a block.',
     )
     expect(file).toContain('stays plain markdown. MINE\n\n- Blocks are slices')
   })
@@ -311,7 +413,7 @@ test('an open new-block slot stays under the block it was opened after', async (
   })
 })
 
-test('an editor rescued into a fence stays on the fence, not on an earlier block saying the same', async ({
+test('a paragraph removed from outside while open, with nothing unsaved, goes; its twin stays', async ({
   page,
   app,
 }) => {
@@ -325,23 +427,16 @@ test('an editor rescued into a fence stays on the fence, not on an earlier block
   await page.keyboard.type('is a block')
   await saved
 
-  // Another program removes that paragraph and opens a fence above it that it never closes, so
-  // the text put back is swallowed by the fence.
-  writeFileSync(
-    app.articlePath(),
-    app
-      .readArticle()
-      .replace(/^Select some text, type.*\n\nis a block\n/m, '```text\nnever closed\n'),
-  )
-  await expect(notice(page)).toContainText('was kept')
-  // The editor follows the text into the fence…
-  await expect(editor(page)).toContainText('never closed')
-  await expect(editor(page)).not.toContainText('Every paragraph, list')
-  // …and the one paragraph that was always there is untouched.
-  await page.keyboard.press('Escape')
-  await expectFile(app.articlePath(), (file) => {
-    expect(file).toContain('Every paragraph, list, and code fence is a block.')
-    // The fence runs to the end of the file, so the text put back is its last line.
-    expect(file).toMatch(/```text\nnever closed\n[^`]*\n\nis a block\n$/)
-  })
+  // Another program removes that paragraph and opens a fence above it that it never closes.
+  // Only the disk changed the paragraph since the save, so the merge takes the disk's text: the
+  // editor closes (it used to be put back into the fence), and the one paragraph that was always
+  // there is untouched — the editor did not land on it either.
+  const outside = app
+    .readArticle()
+    .replace(/^Select some text, type.*\n\nis a block\n/m, '```text\nnever closed\n')
+  writeFileSync(app.articlePath(), outside)
+  await expect(notice(page)).toContainText('Reloaded: the file changed on disk.')
+  await expect(editor(page)).toHaveCount(0)
+  await expect(blockWith(page, 'Every paragraph, list, and code fence is a block.')).toHaveCount(1)
+  expect(app.readArticle()).toBe(outside)
 })

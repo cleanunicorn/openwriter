@@ -105,10 +105,10 @@ directory keeps the name `.zen/`.
   to the document when the editor has nothing left to undo.
 - **The focused editor's text (the draft) is part of every save and every job snapshot,** so
   autosave and jobs never miss what is being typed.
-- **A reload folds the open editor's text in before reconciling,** so that what autosave has
+- **A reload folds the open editor's text in before it merges,** so that what autosave has
   already written to the file is matched instead of added a second time — which is how a new
-  block came back doubled. `foldDraft` in `doc-reducer.ts` holds the two rules that make it
-  work, and says why each is load-bearing.
+  block came back doubled. Since #30 the reload is a three-way merge ("A reload is a three-way
+  merge" below), and `foldIn` in `doc-reducer.ts` does the fold under stored IDs.
 - **Blocks that exist only in a derived document get IDs the store cannot mint** (`live1`, not
   `b3`). `liveDoc` is the job snapshot and folds the open editor in, but nothing reserves the IDs
   it would mint from the document's counter, so a snapshot could show the agent the slot's text as
@@ -133,8 +133,8 @@ directory keeps the name `.zen/`.
   is searched inside those source lines. markdown-it has no inline source maps; the fallback is
   the start of the line.
 - **Saving:** 750 ms debounce, only when the text differs from disk, full text plus the base
-  hash. A stale base is a 409 and triggers the same reconcile as a watcher event. Disk wins except
-  in the focused block. A file deleted from outside pauses autosave and is never recreated.
+  hash. A stale base is a 409 and triggers the same reload as a watcher event: a three-way merge
+  (below). A file deleted from outside pauses autosave and is never recreated.
 - **`fs.watch` on the document's directory** (sees save-by-rename), debounced, compared by
   content hash; hashes the server itself wrote are ignored, which is also why another tab's save
   is never reported (see "Two tabs on one document"). No `chokidar` needed so far.
@@ -151,22 +151,65 @@ directory keeps the name `.zen/`.
 
 ## Two tabs on one document (issue #5)
 
-- **Documented as unsupported rather than fixed, because the fix that looks obvious makes it
-  worse.** The watcher ignores the hash of every server write, so another tab's save never
-  reaches a tab as `doc.changed`, and the stale tab only learns of it from its own 409 (#29).
-  Emitting `doc.changed` from the PUT route fixes the staleness, but it starts a save ping-pong.
-  When both tabs have an editor open on the same block, each reload keeps the local draft, and
-  the `lastSeen` key (base hash plus text) re-arms the autosave. So each tab saves its own copy
-  and reloads the other, for as long as both editors stay open. A real fix needs a tie-break
-  (an origin id on the event, and a "changed elsewhere" notice), so it is left to #29.
-- **What the README says happens is tested, bugs included** (`e2e/two-tabs.spec.ts`). Different
-  blocks merge on the stale tab's refused save. For the same block, the stale copy wins and the
-  other tab is not told (#29). A block finished with `Esc` before its autosave is lost on the
-  reload, because the `external` reconcile protects only the open draft (#30, which also happens
-  in one tab with an outside editor). The two bug tests assert today's behaviour, so a fix has
-  to change them on purpose rather than pass by accident.
-- **Undo is not offered as the recovery for #30.** It restores the whole pre-reload snapshot,
-  which reverts the other side's change as well, and the next autosave writes that result.
+- **Documented rather than fixed at first, because the fix that looks obvious makes it worse.**
+  The watcher ignores the hash of every server write, so another tab's save never reaches a tab
+  as `doc.changed`, and the stale tab only learns of it from its own 409 (#29, still open).
+  Emitting `doc.changed` from the PUT route fixes the staleness, but on its own it starts a save
+  ping-pong: when both tabs have an editor open on the same block, each reload kept the local
+  draft, and the `lastSeen` key (base hash plus text) re-armed the autosave. The three-way merge
+  (#30, next section) is the tie-break the ping-pong needed: a reload that finds the disk changed
+  the block an editor has open closes that editor and shows a conflict, so there is no draft left
+  to save back.
+- **What the README says happens is tested** (`e2e/two-tabs.spec.ts`). Different blocks merge on
+  the stale tab's refused save. For the same block the stale tab gets a conflict and the file
+  keeps the other tab's text until the writer chooses; the other tab is still not told (#29). A
+  block finished with `Esc` before its autosave survives the reload (#30).
+
+## A reload is a three-way merge (issue #30)
+
+- **base = the text last loaded or saved, mine = the live document, theirs = the disk.** Before,
+  a reload (a watcher event, a reconnect, or a 409's body) reconciled the disk text against the
+  document and the disk won everywhere except the open editor, so a block finished with `Esc` but
+  not saved yet (the 750 ms debounce) was replaced by the disk's older copy with a generic notice.
+  With a base, "changed here" and "changed there" can be told apart. `merge3` in
+  `src/shared/blocks/merge.ts` is pure and has property tests; the reducer only folds the editor
+  in, merges, and reconciles IDs against the merged text.
+- **Compared block by block, each block with the whitespace in front of it.** The tokens joined
+  are the text byte for byte, and the merged text is slices of the three inputs joined, so
+  nothing is re-rendered (golden rule 5) and merging an untouched side gives the other side
+  exactly. The gap goes with the block after it because that is where the editor's own
+  operations put it (a delete takes the gap after the block, an insert brings the separator in
+  front of it). Changes to base ranges that only touch at a boundary merge cleanly — edits of two
+  adjacent paragraphs, or an insertion next to an edit — and two insertions at one place collide.
+- **A stretch both sides changed takes the side that already holds everything the other wrote;
+  failing that it is a conflict.** So the same edit on both sides, or a disk that has this tab's
+  new block plus more, merges without a word; and an edit whose block the other side deleted
+  keeps the edit (no text is lost that way; the deletion is what gives). Line-level merging
+  inside a block was rejected: prose paragraphs are one line, so it would buy nothing but noise.
+- **A conflict shows the disk's version in the document and keeps the writer's aside**
+  (`Conflict` in `doc-reducer.ts`, a card after the passage: Keep mine / Take theirs / Keep
+  both). The other way round — the writer's text in place with autosave paused — was rejected:
+  a paused autosave holds every other edit hostage to one decision, and forgetting to choose
+  would still be a silent overwrite the moment it resumed. Keep both adds only the blocks the
+  writer wrote (`written`), after the disk's version, because the blocks of the passage the
+  writer left alone are already there. A resolve works on the text and reconciles, so front
+  matter and block kinds stay what the splitter says.
+- **The open editor closes when the disk changed what it holds** (a conflict, or a disk change
+  to a block the writer had not changed). Keeping it open would put the draft back over the
+  disk's text on the next save — the silent overwrite of #29 and its ping-pong. What it held is
+  in the document or in the conflict, and the undo step of the reload is the document as it was
+  on screen, the editor's text included. This replaces the older rescues that put the editor's
+  text back into the disk's version whatever the disk had done: a paragraph deleted outside
+  while open with nothing unsaved in it now goes (undo brings it back), and one with unsaved
+  text becomes a conflict. `e2e/external-change.spec.ts` and the reducer tests were changed on
+  purpose for this, each scenario kept.
+- **The save on its way is a base too** (`sentText`, set by `save()` through a `sending`
+  action). When a reload brings exactly that text back (a reconnect's re-check can see this
+  tab's own write before the PUT answers), it is this tab's own, and merging it against the
+  last saved text would make every keystroke typed since a conflict with itself.
+- **An unsettled conflict counts as unsaved:** the unload guard warns, a workspace switch waits,
+  and a page reload keeps it in `sessionStorage` with the rest of the document's identity
+  (`state/session.ts`). Its text is in neither the document nor the file.
 
 ## Jobs
 

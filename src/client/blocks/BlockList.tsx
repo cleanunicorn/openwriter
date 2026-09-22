@@ -23,6 +23,7 @@ import { dispatchDoc } from '../state/app.ts'
 import { type DocState, NEW_BLOCK_ID } from '../state/doc-reducer.ts'
 import { Block, type Decoration } from './Block.tsx'
 import { BlockEditor } from './BlockEditor.tsx'
+import { ConflictCard, conflictAnchor } from './ConflictCard.tsx'
 import { clickToOffset } from './click-to-offset.ts'
 
 type Props = {
@@ -52,6 +53,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
     focusCursor,
     pendingNew,
     selectedIds,
+    conflicts,
   } = state
   const assetBase = docRef.kind === 'article' ? `/api/docs/article/${docRef.slug}/assets/` : null
   const sensors = useSensors(
@@ -135,6 +137,21 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
     if (from !== -1 && to !== -1) dispatchDoc(docRef, { type: 'move', from, to })
   }
 
+  // Each conflict's card sits right after the file's version of the passage it is about.
+  const present = doc.blocks.map((block) => block.id)
+  const cardsAfter = (afterId: string | null) =>
+    conflicts.map((conflict, index) =>
+      conflictAnchor(conflict.blockIds, conflict.afterId, present) === afterId ? (
+        <ConflictCard
+          key={conflict.id}
+          docRef={docRef}
+          conflict={conflict}
+          index={index}
+          total={conflicts.length}
+        />
+      ) : null,
+    )
+
   const newSlot = (afterId: string | null) =>
     pendingNew !== null && pendingNew.afterId === afterId && focusedId === NEW_BLOCK_ID ? (
       <div className="block is-focused" data-testid="block" data-block-id={NEW_BLOCK_ID}>
@@ -161,6 +178,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
         {/* biome-ignore lint/a11y/noStaticElementInteractions: mouse entry into edit mode; keyboard users tab to blocks */}
         <div className="blocks" onMouseDown={onMouseDown}>
           {newSlot(null)}
+          {cardsAfter(null)}
           {rowsAfter?.(null)}
           {doc.blocks.map((block) => (
             <Fragment key={block.id}>
@@ -175,6 +193,7 @@ export function BlockList({ state, decorate, rowsAfter }: Props) {
                 assetBase={assetBase}
                 decoration={decorate?.(block.id)}
               />
+              {cardsAfter(block.id)}
               {rowsAfter?.(block.id)}
               {newSlot(block.id)}
             </Fragment>

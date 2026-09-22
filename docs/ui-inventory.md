@@ -78,6 +78,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | "Carries the last N turns …" and New conversation | R, under the composer | shows what the next message sends the agent, and lets the writer start clean |
 | Prompt pill ("Ask the agent"): "Instruction for the agent", scope, `/skill`, `Ctrl/Cmd+I`, type-to-pill, Escape | C at the selection | anchored to what is selected; it never takes focus by appearing |
 | Ghost diff: Accept, Reject, Accept all, Reject all; keys `Enter`/`a`, `Backspace`/`Delete`/`r`, with `Ctrl/Cmd` for the whole job | C on the text | a decision sits on the text it changes |
+| Conflict card ("Conflict", or "Conflict N of M"): Keep mine, Take theirs, Keep both | C, after the file's version of the passage | a reload found a passage this tab and the file both changed; the choice sits on the text it is about, and nothing is saved over the file until it is made |
 | Pending and queued marks on blocks | C | spatial feedback; the transcript has the detail |
 | Margin selection, shift-click, the drag handle | C | the writing surface |
 | Click-to-edit, Escape or click away to render, arrows across blocks, Enter to split, Backspace to merge, paste or drop an image | C | the writing surface (not part of this redesign) |

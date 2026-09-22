@@ -1,4 +1,3 @@
-import { diffWordsWithSpace } from 'diff'
 import { type KeyboardEvent, type ReactNode, useMemo } from 'react'
 import { docKey } from '../../shared/api-types.ts'
 import type { Job } from '../../shared/jobs/job-types.ts'
@@ -7,6 +6,7 @@ import { changedSinceRequest } from '../../shared/jobs/scheduler.ts'
 import { START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
 import type { Decoration } from '../blocks/Block.tsx'
 import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
+import { SourceDiff } from '../blocks/SourceDiff.tsx'
 import type { DocState } from '../state/doc-reducer.ts'
 import {
   acceptAll,
@@ -93,20 +93,6 @@ function Ghost(props: {
           Reject
         </button>
       </div>
-    </div>
-  )
-}
-
-/** Inline word diff of the markdown source, always against the block's current text. */
-function SourceDiff({ current, proposed }: { current: string; proposed: string }) {
-  const parts = useMemo(() => diffWordsWithSpace(current, proposed), [current, proposed])
-  return (
-    <div className="ghost-diff">
-      {parts.map((part, index) => {
-        const Tag = part.added ? 'ins' : part.removed ? 'del' : 'span'
-        // biome-ignore lint/suspicious/noArrayIndexKey: diff parts are positional
-        return <Tag key={index}>{part.value}</Tag>
-      })}
     </div>
   )
 }
