@@ -147,7 +147,7 @@ describe('a write admitted under one workspace, finished under another', () => {
       snapshot: { blocks: [], gaps: [''] },
     })
     expect(res.status).toBe(409)
-    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [] })
+    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [], tabs: [] })
   })
 })
 

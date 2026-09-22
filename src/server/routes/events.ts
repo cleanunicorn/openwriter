@@ -1,21 +1,28 @@
 import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { TabIdSchema } from '../../shared/jobs/job-types.ts'
 import type { EventHub } from '../sse.ts'
 
 export function mountEventRoutes(app: Hono, events: EventHub): void {
   app.get('/api/events', (c) =>
     streamSSE(c, async (stream) => {
+      // Which tab this is, so a tab that loads later knows whose jobs still have a tab to apply
+      // them. Anything that is not a tab ID is simply not counted.
+      const tab = TabIdSchema.safeParse(c.req.query('tab'))
       const unsubscribe = events.subscribe((event) => {
         // A client that went away mid-write must not become an unhandled rejection.
         void stream.writeSSE({ data: JSON.stringify(event) }).catch(() => {})
       })
       let dropped = false
-      const untrack = events.trackStream(() => {
-        // Immediately: nothing emitted after the drop may still reach this client.
-        dropped = true
-        unsubscribe()
-        void stream.close()
-      })
+      const untrack = events.trackStream(
+        () => {
+          // Immediately: nothing emitted after the drop may still reach this client.
+          dropped = true
+          unsubscribe()
+          void stream.close()
+        },
+        tab.success ? tab.data : null,
+      )
       const stop = () => {
         unsubscribe()
         untrack()

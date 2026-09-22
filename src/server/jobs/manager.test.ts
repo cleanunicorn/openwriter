@@ -69,6 +69,31 @@ const runToReady = async (id: string): Promise<Job> => {
   return t.jobs.get(id)
 }
 
+describe('the tab that asked', () => {
+  it('is recorded on the job and kept in job.json, so a reloaded tab can find its own jobs', async () => {
+    const job = await start(
+      request('fake:upper', byText('## Why blocks'), { owner: 'tab-12345678' }),
+    )
+    expect(job.owner).toBe('tab-12345678')
+    const file = JSON.parse(readFileSync(path.join(jobDir(job.id), 'job.json'), 'utf8'))
+    expect(file.job.owner).toBe('tab-12345678')
+    // It is the server's bookkeeping, not the agent's: nothing in the contract files names it.
+    for (const name of readdirSync(jobDir(job.id)).filter((entry) => entry !== 'job.json')) {
+      if (!name.includes('.')) continue
+      expect(readFileSync(path.join(jobDir(job.id), name), 'utf8')).not.toContain('tab-12345678')
+    }
+  })
+
+  it('is null for a request that names none, and a malformed one is refused', async () => {
+    expect((await start(request('fake:upper', byText('## Why blocks')))).owner).toBeNull()
+    const bad = await t.send('POST', '/api/jobs', {
+      ...request('fake:upper', byText('## A table')),
+      owner: '../not a tab',
+    })
+    expect(bad.status).toBe(400)
+  })
+})
+
 describe('the job file contract', () => {
   it('runs a job whose snapshot holds a block that exists only in the open editor', async () => {
     // The client names such a block `live<n>` (doc-reducer `liveDoc`): the store never mints

@@ -15,7 +15,7 @@ import { loadSkills } from '../skills.ts'
 import type { EventHub } from '../sse.ts'
 
 export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
-  app.get('/api/jobs', (c) => c.json({ jobs: jobs.list() }))
+  app.get('/api/jobs', (c) => c.json({ jobs: jobs.list(), tabs: context.events.connectedTabs() }))
   // A job snapshots a document of the workspace it was asked in; it must not start in another.
   app.post('/api/jobs', async (c) => {
     const pinned = pinWorkspace(

@@ -196,8 +196,8 @@ directory keeps the name `.zen/`.
   the same. Cancel is idempotent and keeps whatever output exists; a proposal that is already
   complete stays reviewable if cancel races with completion.
 - **Restart and reload.** On server start every unsettled job on disk becomes `stale` with its
-  output kept; a dismissed job does not come back. A page reload does the same for that page's
-  jobs (OD3).
+  output kept; a dismissed job does not come back. A page reload keeps the tab's jobs
+  ("Block identity across a page reload", which replaced OD3).
 - **The fake adapter reads and writes the real file contract** and picks its scenario from a
   `fake:<name>` token in the instruction, so the demo and the tests share it. With
   `--fake-control` it stops at a checkpoint until `POST /api/__fake/release`; the route is mounted
@@ -412,6 +412,52 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **`job.json` lives in that directory too,** so it is re-validated with zod on every read and
   never trusted for anything the in-memory job does not already know.
 
+## Block identity across a page reload (issue #2)
+
+- **Identity lives in the tab's `sessionStorage`, not on the server.** Block IDs are minted by
+  each tab's own counter, so two tabs on one article have two ID spaces: a server-side ID map
+  keyed by (workspace, document, hash) would have to pick one tab's IDs, or become a document
+  model the server does not otherwise have. `sessionStorage` is exactly the scope that has to
+  survive: one tab, across its reloads. The article on disk is untouched (golden rule 6); the job
+  snapshots already carry the IDs on the server side.
+- **Read once, written on `pagehide`** (`state/session.ts` rules, `state/tab.ts` browser side).
+  The page removes the keys as it starts and writes them again as it goes, so a tab *duplicated*
+  while this one is open copies nothing and gets IDs and jobs of its own. A crash that skips
+  `pagehide` loses the session: the jobs go stale with their output kept, as before. What is kept:
+  the tab ID; each ready document's blocks with the open editor committed (the text autosave
+  wrote) and its counter; held requests, the `inserted` map (order of a partly accepted result),
+  conversation starts and composer drafts. zod-validated on read; a document whose gaps do not fit
+  its blocks, repeats an ID or holds a `live<n>` is dropped, and a counter behind its IDs is moved
+  past them.
+- **Only unchanged text keeps its ID after a reload** (`reattach`, the strict half of
+  `reconcile`). `reconcile` hands a changed run's first block the run's old ID, which is right for
+  an edit the writer is watching; after an absence of unknown length that block can be unrelated
+  text, and a proposal would sit on it. A fresh ID leaves the job without its target, and
+  `checkTargets` marks it stale with its output kept.
+- **A job knows which tab asked** (`owner`, the tab ID, in the request and in `job.json`; never in
+  the agent's files). The tab that asked re-adopts its unsettled jobs after a reload when its
+  document's identity came back; a research job needs none.
+- **Another tab's job is shown, never applied.** Its targets and ops name the other tab's blocks,
+  so here it gets no ghost diff, no pending decoration, no Accept, no claim in the scheduler
+  (except an `article` job's barrier, which is about the whole document, not IDs), and no stale
+  report from `checkTargets`; it can be cancelled or rejected, which needs no IDs. The row says
+  "started in another tab". This also fixes a two-tab bug that predates the change: a job started
+  in one tab arrived by SSE in the other and was reviewable there against that tab's IDs.
+- **Liveness decides who may stale a job.** Each event stream names its tab
+  (`/api/events?tab=<id>`, validated; anything else is not counted) and `GET /api/jobs` returns
+  the tabs with an open stream. A tab that starts marks stale only the unsettled jobs nobody can
+  apply: its own without identity, another tab's whose tab is gone, and ownerless ones from before
+  this change. Opening a second tab therefore no longer stales the first tab's work. A tab that
+  closes for good leaves its jobs until the next tab starts, which stales them.
+- **A kept session is for one workspace.** It records the root it was written for and is dropped
+  when the server is on another (a switch made meanwhile in another tab), and on this tab's own
+  switch; the same slugs would name other articles there.
+- **Held requests wait for their document.** After a reload a held request's document may still
+  be loading; `pump` starts it only once the document is ready (the store subscription pumps
+  again), drops it with a notice if the document failed to load, and `checkTargets` no longer
+  judges a held request against a document that has no blocks yet. Every document the tab had open
+  is preloaded, so a job or request about a document not on screen finds its blocks.
+
 ## Job retention (issue #4)
 
 - **Finished means `settled`, `failed`, `cancelled` or `stale`** (`isFinished`, shared). `ready`
@@ -550,7 +596,7 @@ codex exec --json --skip-git-repo-check --ephemeral
   workspace-wide write default is not shipped without the user's say.
 - **OD3 — a page reload counts as a restart for jobs.** Block IDs are session-scoped, so open
   reviews become stale (output kept) and queued requests are dropped; a `beforeunload` guard warns
-  first. Keeping IDs across a reload is a deferred follow-up.
+  first. *Superseded by issue #2:* see "Block identity across a page reload".
 - **OD4 — PR screenshots are committed under `docs/screenshots/`.**
 - **OD5 — `npm start` opens a gitignored copy of the sample** (`.openwrite/sample-workspace/`),
   created on first run, so the tracked sample that every test copies stays pristine. Delete

@@ -78,6 +78,12 @@ export const TurnSchema = z.object({
 })
 export type Turn = z.infer<typeof TurnSchema>
 
+/**
+ * One browser tab, for as long as it lives — a reload keeps it (client/state/session.ts). Block IDs
+ * are that tab's own, so a job can only be applied by the tab that asked for it.
+ */
+export const TabIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
+
 /** What the client sends to start a job: the live document's snapshot plus the instruction. */
 export const JobRequestSchema = z.object({
   doc: DocRefSchema,
@@ -89,6 +95,8 @@ export const JobRequestSchema = z.object({
   snapshot: SnapshotSchema,
   /** Earlier turns about the same document, oldest first; absent on a conversation's first turn. */
   conversation: z.array(TurnSchema).max(20).optional(),
+  /** The tab that asked; its block IDs are the ones in `targets` and `snapshot`. */
+  owner: TabIdSchema.optional(),
 })
 export type JobRequest = z.infer<typeof JobRequestSchema>
 
@@ -105,6 +113,11 @@ export const JobSchema = z.object({
   reason: FailureReasonSchema.nullable(),
   error: z.string().nullable(),
   targets: z.array(z.string()),
+  /**
+   * The tab whose block IDs `targets` and the ops name; null for a job from before tabs were
+   * recorded. Another tab shows the job but never applies it.
+   */
+  owner: z.string().nullable().default(null),
   /** Raw text of every block at request time, for "changed since request". */
   snapshotRaws: z.record(z.string(), z.string()),
   result: ResultSchema.nullable(),
@@ -120,7 +133,11 @@ export const JobSchema = z.object({
 })
 export type Job = z.infer<typeof JobSchema>
 
-export const JobsResponseSchema = z.object({ jobs: z.array(JobSchema) })
+export const JobsResponseSchema = z.object({
+  jobs: z.array(JobSchema),
+  /** Tabs with an open event stream now: a job whose owner is not among them has no tab to apply it. */
+  tabs: z.array(z.string()).default([]),
+})
 
 export const DecisionsRequestSchema = z.object({
   accepted: z.array(z.number().int().min(0)),

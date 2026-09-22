@@ -139,11 +139,11 @@ test('R4: after a dropped event stream, a tab follows the switch it missed', asy
   await openArticle(other)
 
   // The second tab loses its stream and cannot reconnect while the first one switches.
-  await other.route('**/api/events', (route) => route.abort())
+  await other.route(/\/api\/events(\?|$)/, (route) => route.abort())
   await dropEventStreams(app)
   await newWorkspace(page)
   await expect(empty(page)).toBeVisible()
-  await other.unroute('**/api/events')
+  await other.unroute(/\/api\/events(\?|$)/)
 
   // It reconnects on its own (EventSource retries), sees the server on another workspace, and
   // follows — it does not re-read "its" article from the new root as an outside change.

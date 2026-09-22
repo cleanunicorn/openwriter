@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { DocRef } from '../../shared/api-types.ts'
 import { parseHerdrAttachHint } from '../../shared/jobs/herdr-hint.ts'
-import { isActive, type Job } from '../../shared/jobs/job-types.ts'
+import { isActive, isUnsettled, type Job } from '../../shared/jobs/job-types.ts'
 import { otherDocLabel, reviewLabel } from '../doc-label.ts'
 import { openDoc, useApp } from '../state/app.ts'
 import {
@@ -9,6 +9,7 @@ import {
   cancelJob,
   dismissJob,
   dropHeld,
+  isMine,
   setResearchJob,
   useJobs,
 } from '../state/jobs.ts'
@@ -140,10 +141,14 @@ function JobRow({ job }: { job: Job }) {
             Open notes
           </button>
         )}
-        {job.state === 'ready' && job.scope !== 'research' && (
+        {job.state === 'ready' && job.scope !== 'research' && isMine(job) && (
           <button type="button" className="link" onClick={() => void openDoc(job.doc)}>
             {review}
           </button>
+        )}
+        {/* Its ops name the other tab's blocks: it is reviewed there, or rejected from here. */}
+        {isUnsettled(job.state) && job.scope !== 'research' && !isMine(job) && (
+          <span className="tray-state">started in another tab</span>
         )}
         {!active && (
           <button type="button" className="link" onClick={() => void dismissJob(job.id)}>

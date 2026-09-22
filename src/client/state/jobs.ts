@@ -26,6 +26,15 @@ import {
   store,
 } from './app.ts'
 import { liveDoc } from './doc-reducer.ts'
+import {
+  dropRestore,
+  persistOnHide,
+  restoreSettled,
+  tabId,
+  takeRestoredJobs,
+  wasRestored,
+} from './tab.ts'
+import { sessionOf, stillApplicable } from './session.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
 /** A request the scheduler holds back until the jobs ahead of it are settled. */
@@ -68,7 +77,12 @@ const jobsStore = createStore<JobsState>(emptyJobs())
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
 
-const createdHere = new Set<string>()
+/**
+ * A job this tab asked for — before a reload too, since the tab ID survives it. Block IDs are the
+ * tab's own, so only this tab can put a job's ops on its blocks; another tab's job is shown here,
+ * and can be cancelled or rejected, but never accepted, decorated or counted as a claim.
+ */
+export const isMine = (job: Job): boolean => job.owner === tabId
 let deciding = 0
 /** jobId → op indices whose decision is on its way to the server. */
 const inFlight = new Map<string, Set<number>>()
@@ -76,6 +90,8 @@ const inFlight = new Map<string, Set<number>>()
 const posting = new Map<string, Claim>()
 let heldCounter = 0
 let firstSync = true
+/** A held request is waiting for its document to load (after a reload) before it can start. */
+let waitingForDoc = false
 
 const claimOfJob = (job: Job): Claim => ({
   id: job.id,
@@ -92,7 +108,10 @@ const claimOfHeld = (held: HeldRequest): Claim => ({
 const unsettledClaims = (state: JobsState): Claim[] => [
   ...state.order.flatMap((id) => {
     const job = state.jobs[id]
-    return job !== undefined && isUnsettled(job.state) ? [claimOfJob(job)] : []
+    // Another tab's targets are IDs of *its* blocks and mean nothing here; its article-scope job
+    // still rewrites the whole document, so that one still holds its barrier.
+    if (job === undefined || !isUnsettled(job.state)) return []
+    return isMine(job) || job.scope === 'article' ? [claimOfJob(job)] : []
   }),
   ...posting.values(),
 ]
@@ -101,7 +120,8 @@ function upsert(job: Job): void {
   // The POST response can arrive after newer SSE events for the same job; never go backwards.
   const known = jobsStore.get().jobs[job.id]
   if (known !== undefined && known.revision >= job.revision && known !== job) return
-  const answered = job.scope === 'research' && job.state === 'ready' && known?.state !== 'ready'
+  const answered =
+    isMine(job) && job.scope === 'research' && job.state === 'ready' && known?.state !== 'ready'
   jobsStore.set((state) => ({
     ...state,
     jobs: { ...state.jobs, [job.id]: job },
@@ -138,9 +158,9 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
       ...request,
       targets,
       snapshot,
+      owner: tabId,
       ...(conversation.length > 0 ? { conversation } : {}),
     })
-    createdHere.add(job.id)
     upsert(job)
   } catch (error) {
     dispatchDoc(request.doc, {
@@ -155,9 +175,29 @@ function pump(): void {
   const state = jobsStore.get()
   // While a decision is being applied the document is about to change: a job started now would
   // snapshot the text from before the accept. The decision pumps again when it is done.
+  if (state.held.length === 0) waitingForDoc = false
   if (state.held.length === 0 || deciding > 0) return
+  // A request kept across a reload can be about a document that is still loading: it starts once
+  // its blocks are back (`startJobs` pumps again), never against a document that is not there.
+  const status = (held: HeldRequest) => docStateOf(held.request.doc)?.status
+  const unloadable = state.held.filter((held) => {
+    const now = status(held)
+    return now === 'error' || now === 'missing'
+  })
+  if (unloadable.length > 0) {
+    for (const held of unloadable) dropHeld(held.id)
+    notifyFailure('A queued instruction was dropped', new Error('its document could not be loaded'))
+    pump()
+    return
+  }
+  const loaded = (held: HeldRequest) => status(held) === 'ready'
+  waitingForDoc = state.held.some((held) => !loaded(held))
   const unsettled = unsettledClaims(state)
-  const ready = new Set(startable(state.held.map(claimOfHeld), unsettled).map((claim) => claim.id))
+  const ready = new Set(
+    startable(state.held.map(claimOfHeld), unsettled)
+      .map((claim) => claim.id)
+      .filter((id) => state.held.some((held) => held.id === id && loaded(held))),
+  )
   const starting = state.held.filter((held) => ready.has(held.id))
   const stillHeld = state.held.filter((held) => !ready.has(held.id))
   const waiting = stillHeld.map((held, index) => ({
@@ -258,7 +298,8 @@ export async function decide(
   const pending = inFlight.get(id) ?? new Set<number>()
   inFlight.set(id, pending)
   const fresh = (index: number) => job.decisions[String(index)] === undefined && !pending.has(index)
-  const accepted = [...new Set(wantAccepted)].filter(fresh)
+  // Another tab's ops name its blocks, not these: they can be rejected here, never applied.
+  const accepted = isMine(job) ? [...new Set(wantAccepted)].filter(fresh) : []
   const rejected = [...new Set(wantRejected)].filter(
     (index) => fresh(index) && !accepted.includes(index),
   )
@@ -393,7 +434,7 @@ export function claimsOn(
   const queued = new Set<string>()
   for (const id of state.order) {
     const job = state.jobs[id]
-    if (job === undefined || docKey(job.doc) !== key) continue
+    if (job === undefined || !isMine(job) || docKey(job.doc) !== key) continue
     if (isActive(job.state)) {
       for (const target of job.targets) pending.add(target)
     }
@@ -411,7 +452,8 @@ function checkTargets(): void {
   const { jobs, order, held } = jobsStore.get()
   for (const id of order) {
     const job = jobs[id]
-    if (job === undefined || !isUnsettled(job.state) || reportedStale.has(id)) continue
+    if (job === undefined || !isMine(job) || !isUnsettled(job.state) || reportedStale.has(id))
+      continue
     const docState = docStateOf(job.doc)
     if (docState === undefined || docState.status !== 'ready') continue
     const ids = docState.doc.blocks.map((block) => block.id)
@@ -427,7 +469,8 @@ function checkTargets(): void {
   }
   for (const request of held) {
     const docState = docStateOf(request.request.doc)
-    if (docState === undefined) continue
+    // A document still loading has no blocks yet — after a reload, its held requests wait for it.
+    if (docState === undefined || docState.status !== 'ready') continue
     const ids = docState.doc.blocks.map((block) => block.id)
     if (lostItsTargets(request.request.scope, request.request.targets, ids)) {
       dropHeld(request.id)
@@ -439,17 +482,38 @@ function checkTargets(): void {
   }
 }
 
+const LOST_IDS =
+  'The page that asked for this job was reloaded or closed, and its blocks could not be kept. Its output is kept here.'
+
+/** Put back what the reload kept of the jobs state: held requests, inserted blocks, drafts. */
+function restoreJobsState(): void {
+  const kept = takeRestoredJobs()
+  if (kept === null) return
+  // A request about a document whose blocks did not come back names IDs nothing answers to.
+  const held = kept.held.filter((request) => wasRestored(request.request.doc))
+  for (const request of held) {
+    const n = Number(request.id.replace(/^held-/, ''))
+    if (Number.isInteger(n)) heldCounter = Math.max(heldCounter, n)
+  }
+  jobsStore.set((state) => ({
+    ...state,
+    held: [...state.held, ...held],
+    inserted: { ...kept.inserted, ...state.inserted },
+    threadStarts: { ...kept.threadStarts, ...state.threadStarts },
+    drafts: { ...kept.drafts, ...state.drafts },
+  }))
+}
+
 async function sync(): Promise<void> {
-  const { jobs } = await api.jobs()
+  if (firstSync) {
+    // Whether the kept block IDs are for the open workspace is known once `start` has asked.
+    await restoreSettled
+    restoreJobsState()
+  }
+  const { jobs, tabs } = await api.jobs()
   for (const job of jobs) {
-    // A page reload regenerated every block ID, so reviews from before it cannot be applied.
-    if (firstSync && isUnsettled(job.state) && !createdHere.has(job.id)) {
-      upsert(
-        await api.staleJob(
-          job.id,
-          'The page was reloaded before this job was reviewed. Its output is kept here.',
-        ),
-      )
+    if (firstSync && isUnsettled(job.state) && !stillApplicable(job, tabId, wasRestored, tabs)) {
+      upsert(await api.staleJob(job.id, LOST_IDS))
     } else {
       upsert(job)
     }
@@ -467,7 +531,7 @@ async function sync(): Promise<void> {
  */
 export async function resetJobs(): Promise<void> {
   jobsStore.set(emptyJobs)
-  createdHere.clear()
+  dropRestore()
   inFlight.clear()
   posting.clear()
   reportedStale.clear()
@@ -501,12 +565,27 @@ export function startJobs(): void {
       }
     },
   })
-  store.subscribe(checkTargets)
+  store.subscribe(() => {
+    checkTargets()
+    if (waitingForDoc) pump()
+  })
+  // A reload keeps this tab's block IDs and the requests it still holds (state/session.ts).
+  persistOnHide(() => {
+    const root = store.get().workspaces?.active.root
+    if (root === undefined) return null
+    const { held, inserted, threadStarts, drafts } = jobsStore.get()
+    return sessionOf(root, Object.values(store.get().docs), {
+      held,
+      inserted,
+      threadStarts,
+      drafts,
+    })
+  })
   window.addEventListener('beforeunload', (event) => {
     const { held, jobs } = jobsStore.get()
+    // A reload keeps them, but closing the tab does not: nobody could apply them afterwards.
     const open =
-      held.length > 0 ||
-      Object.values(jobs).some((job) => createdHere.has(job.id) && isUnsettled(job.state))
+      held.length > 0 || Object.values(jobs).some((job) => isMine(job) && isUnsettled(job.state))
     // A dirty document counts too: autosave is debounced, so the last keystrokes may still be
     // on their way when the tab closes.
     if (open || hasUnsavedChanges()) event.preventDefault()

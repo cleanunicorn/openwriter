@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reconcile, serialise } from './index.ts'
+import { reattach, reconcile, serialise } from './index.ts'
 import { setup } from './test-helpers.ts'
 
 const ids = (doc: { blocks: { id: string }[] }) => doc.blocks.map((block) => block.id)
@@ -50,5 +50,28 @@ describe('reconcile', () => {
     const next = reconcile(doc, 'Intro\n\nA\n', mint)
     expect(next.blocks[0]?.id).not.toBe('b1')
     expect(next.blocks[1]?.id).toBe('b2')
+  })
+})
+
+describe('reattach', () => {
+  it('keeps every ID when the text is the same', () => {
+    const { doc, mint } = setup('A\n\nB\n\nC\n')
+    expect(ids(reattach(doc, 'A\n\nB\n\nC\n', mint))).toEqual(['b1', 'b2', 'b3'])
+  })
+
+  it('never hands an old ID to changed text, not even the first block of a changed run', () => {
+    const { doc, mint } = setup('A\n\nB\n\nC\n')
+    expect(ids(reattach(doc, 'A\n\nSomething else\n\nC\n', mint))).toEqual(['b1', 'b4', 'b3'])
+  })
+
+  it('keeps unchanged blocks around an insertion and a deletion', () => {
+    const { doc, mint } = setup('A\n\nB\n\nC\n')
+    expect(ids(reattach(doc, 'New\n\nA\n\nC\n', mint))).toEqual(['b4', 'b1', 'b3'])
+  })
+
+  it('takes the new text byte for byte', () => {
+    const { doc, mint } = setup('A\n\nB\n')
+    const text = '---\nx: 1\n---\n\nA\r\n\r\nB  \n'
+    expect(serialise(reattach(doc, text, mint))).toBe(text)
   })
 })

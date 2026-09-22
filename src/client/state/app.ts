@@ -20,6 +20,7 @@ import {
   isDirty,
   liveText,
 } from './doc-reducer.ts'
+import { acceptRestore, restoredRefs, tabId, takeRestoredDoc } from './tab.ts'
 import { createStore, useStoreSlice } from './store.ts'
 
 export type PaletteMode =
@@ -269,7 +270,9 @@ async function load(ref: DocRef): Promise<void> {
   try {
     const doc = await api.doc(ref)
     if (session !== docSession) return
-    dispatchDoc(ref, { type: 'loaded', ...doc })
+    // The first load after a page reload puts the blocks' IDs back (state/session.ts).
+    const restore = takeRestoredDoc(ref)
+    dispatchDoc(ref, { type: 'loaded', ...doc, ...(restore === undefined ? {} : { restore }) })
   } catch (error) {
     if (session !== docSession) return
     dispatchDoc(ref, { type: 'failed', error: (error as Error).message })
@@ -296,6 +299,17 @@ export async function openDoc(ref: DocRef): Promise<void> {
   }))
   if (window.location.hash !== refToHash(ref)) window.history.replaceState(null, '', refToHash(ref))
   if (!known) await load(ref)
+}
+
+/**
+ * Load a document without putting it on screen: one that was open before a page reload, so its
+ * blocks get their IDs back before a job or a held request about it needs them.
+ */
+function preload(ref: DocRef): void {
+  const key = docKey(ref)
+  if (store.get().docs[key] !== undefined) return
+  store.set((state) => ({ ...state, docs: { ...state.docs, [key]: initialDocState(ref) } }))
+  void load(ref)
 }
 
 export async function refreshArticles(): Promise<void> {
@@ -544,7 +558,9 @@ export async function resync(): Promise<void> {
 }
 
 export function connectEvents(): () => void {
-  const source = new EventSource('/api/events')
+  // The stream says which tab it is: the server lists the tabs that are open, and another tab
+  // leaves this one's jobs alone while it is (state/jobs.ts, `sync`).
+  const source = new EventSource(`/api/events?tab=${encodeURIComponent(tabId)}`)
   source.addEventListener('hello', () => {
     void resync().catch((error: unknown) =>
       notifyFailure('Could not check for outside changes', error),
@@ -581,14 +597,19 @@ export async function start(): Promise<void> {
   store.set((state) => ({ ...state, boot: 'loading' }))
   try {
     await Promise.all([refreshArticles(), refreshConfig(), refreshSkills(), refreshWorkspaces()])
+    // What a reload kept is for the workspace the tab showed; the server may be on another now.
+    acceptRestore(store.get().workspaces?.active.root ?? null)
     const fromHash = hashToRef(window.location.hash)
     const first = store.get().articles[0]
     const initial =
       fromHash ?? (first === undefined ? null : ({ kind: 'article', slug: first.slug } as const))
     if (initial !== null) await openDoc(initial)
+    for (const ref of restoredRefs()) preload(ref)
     store.set((state) => ({ ...state, boot: 'ready' }))
     announceSkillErrors()
   } catch (error) {
+    // Nothing is restored into a page that did not start; its jobs go stale as before.
+    acceptRestore(null)
     store.set((state) => ({ ...state, boot: { error: (error as Error).message } }))
     return
   }

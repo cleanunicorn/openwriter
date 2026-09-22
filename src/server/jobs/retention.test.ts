@@ -46,6 +46,7 @@ function jobFile(state: JobState, updatedAt: string, dismissed = false, id?: str
       reason: null,
       error: null,
       targets: [],
+      owner: null,
       snapshotRaws: {},
       result: null,
       rawOutput: null,

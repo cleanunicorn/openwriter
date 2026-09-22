@@ -19,6 +19,7 @@ function job(overrides: Partial<Job> = {}): Job {
     reason: null,
     error: null,
     targets: [],
+    owner: null,
     snapshotRaws: {},
     result: { summary: `summary ${id}`, ops: [], assets: [], notes: '' },
     rawOutput: null,

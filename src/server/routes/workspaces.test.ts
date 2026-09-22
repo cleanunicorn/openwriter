@@ -146,7 +146,7 @@ describe('opening another workspace', () => {
     ).toEqual(['second-post'])
     expect((await json(t.get('/api/docs/strategy'))).text).toBe('the second strategy')
     expect((await json(t.get('/api/config'))).config.concurrency).toBe(5)
-    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [] })
+    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [], tabs: [] })
     expect((await json(t.get('/api/health'))).workspace).toBe(path.basename(second))
   })
 
@@ -250,7 +250,7 @@ describe('opening another workspace', () => {
     })
     expect((await open(second)).status).toBe(200)
     expect(t.context.workspace.root).toBe(second)
-    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [] })
+    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [], tabs: [] })
   })
 
   // R8: the list was written after the retarget, so a failed write 500'd a server that had

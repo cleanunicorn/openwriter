@@ -76,8 +76,9 @@ rerun without asking. The exceptions are in
    it. Hugo front matter and shortcodes (`{{< … >}}`, `{{% … %}}`) pass through
    unmodified, and a paired shortcode spanning several blocks stays one block.
 6. **Nothing proprietary in the article.** The file on disk is plain markdown.
-   Block IDs live in memory only. The ID marker comments exist only in a job's
-   `article.md` snapshot, never in the article.
+   Block IDs live in memory only (and, across a reload, in the tab's
+   `sessionStorage`). The ID marker comments exist only in a job's `article.md`
+   snapshot, never in the article.
 7. **Agents propose; the writer approves.** Nothing an agent produces enters
    the article until it is accepted. An agent writes only inside its own
    `.zen/jobs/<id>/` directory. `result.json` is validated with zod, and
@@ -273,7 +274,8 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
 src/client/           Vite + React
   index.html main.tsx App.tsx   entry points and the shell (global keys, notices, overlays)
   api.ts                every request, zod-parsed against src/shared/api-types.ts
-  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions, clear finished), describe-clear
+  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions, clear finished), describe-clear,
+                        session (pure: what a reload keeps, which jobs a tab may still apply), tab (the tab ID; sessionStorage, pagehide)
   blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
   render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
   shell/                Shell (the two edge panels and their handles), LeftPanel, RightPanel,
@@ -391,9 +393,10 @@ document, and the full select → prompt → review → accept flow with the fak
 adapter, including two overlapping jobs, plus the shell: panel toggle and
 persistence, reaching an article from the left panel, the agent panel's
 composer, and a follow-up turn carrying the earlier one (`panels.spec.ts`,
-`agent-panel.spec.ts`). `two-tabs.spec.ts` pins down what the README says
-about two tabs on one article, known bugs #29 and #30 included; a fix for
-either flips its test on purpose.
+`agent-panel.spec.ts`), and a reload mid-job keeping block identity, queued
+requests and reviews (`reload.spec.ts`). `two-tabs.spec.ts` pins down what the
+README says about two tabs on one article, known bugs #29 and #30 included; a
+fix for either flips its test on purpose.
 
 **Writing tests here:**
 
