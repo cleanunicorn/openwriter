@@ -55,3 +55,22 @@ export function reconcile(oldDoc: Doc, newText: string, mintId: MintId): Doc {
   }
   return { blocks: slices.map((slice, index) => ({ ...slice, id: ids[index] ?? mintId() })), gaps }
 }
+
+/**
+ * The strict half of `reconcile`, for identity restored across a page reload: an old ID goes
+ * back only onto a block whose text (and kind) is unchanged; everything else gets a new ID.
+ *
+ * `reconcile`'s inheritance — a changed run's first block keeps the run's old ID — is right while
+ * the writer watches a live edit or an outside change land. After a reload the tab was away for an
+ * unknown time, and that first block can be unrelated text: a job aimed at the old ID would show
+ * its proposal on it. A fresh ID instead leaves the job without its target, and it goes stale
+ * with its output kept.
+ */
+export function reattach(oldDoc: Doc, newText: string, mintId: MintId): Doc {
+  const { slices, gaps } = splitText(newText)
+  const ids = new Array<string | undefined>(slices.length).fill(undefined)
+  for (const [oldIndex, newIndex] of lcsPairs(oldDoc.blocks, slices)) {
+    ids[newIndex] = oldDoc.blocks[oldIndex]?.id
+  }
+  return { blocks: slices.map((slice, index) => ({ ...slice, id: ids[index] ?? mintId() })), gaps }
+}

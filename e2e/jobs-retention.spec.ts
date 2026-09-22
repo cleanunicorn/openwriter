@@ -20,8 +20,8 @@ test('Clear finished jobs deletes a failed job and keeps one awaiting review, in
   app,
   context,
 }) => {
-  // A second tab on the same server hears about the clear through its event stream. It opens
-  // first: a tab that loads later marks every job it did not start as stale (a reload).
+  // A second tab on the same server hears about the clear through its event stream. It shows the
+  // other tab's jobs, and leaves them to that tab.
   const other = await context.newPage()
   await openArticle(other)
   await openArticle(page)

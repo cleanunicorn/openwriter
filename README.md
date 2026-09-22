@@ -367,7 +367,7 @@ the server creates `<workspace>/.zen/jobs/<id>/`:
 | `targets.json` | server | `{ "scope", "blockIds", "selection" }` — `selection` has the selected text and, for a selection made in edit mode, `from`/`to` offsets into the block |
 | `strategy.md`, `brief.md` | server | copies of the workspace strategy and the article's brief |
 | `conversation.md` | server | only on a follow-up turn: the earlier turns about the same document, oldest first, with what came of each. At most 6 turns: 600, 300 and 1500 characters for instruction, summary and research notes, 8000 for the file. Named in `instruction.md`'s Context list; absent on a first turn. |
-| `job.json`, `progress.log` | server | lifecycle state (`version: 1`), the settings the job was launched with, bounded progress log |
+| `job.json`, `progress.log` | server | lifecycle state (`version: 1`, including `owner`: the browser tab that asked, never shown to the agent), the settings the job was launched with, bounded progress log |
 | `result.json` | agent | the proposal (below) |
 | `assets/` | agent | generated files, referenced from markdown as `assets/<file>` |
 | `result.invalid.json`, `repair.md` | server | only after a rejected result: the rejected output and the repair instructions |
@@ -401,7 +401,14 @@ repair attempt; after that the job fails and the raw output is shown in the agen
 
 Job states: `queued → running → validating → (repairing →) ready → settled`, or `failed`
 (`missing-cli`, `missing-tool`, `auth`, `timeout`, `invalid-result`, `exit`), `cancelled`,
-`stale`. A stale job (deleted target, app restart, page reload) keeps its output visible.
+`stale`. A stale job (deleted target, app restart) keeps its output visible.
+
+A page reload keeps the tab's block IDs and its queued requests (in the tab's `sessionStorage`,
+never in the article), so a running job, a queued request, or a proposal waiting for review is
+still there after it. A block whose text changed on disk while the page was away gets a new ID,
+and a job aimed at it goes stale. A job belongs to the tab that asked for it: another tab shows it
+("started in another tab") but only that tab can accept it; once that tab is closed, the next tab
+to open marks it stale.
 
 ### Job retention
 

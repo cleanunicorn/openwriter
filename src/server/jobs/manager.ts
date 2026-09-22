@@ -231,6 +231,7 @@ export class JobManager {
       reason: null,
       error: null,
       targets: request.targets,
+      owner: request.owner ?? null,
       snapshotRaws: Object.fromEntries(
         request.snapshot.blocks.map((block) => [block.id, block.raw]),
       ),

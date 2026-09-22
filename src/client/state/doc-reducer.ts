@@ -9,6 +9,7 @@ import {
   type MintId,
   mergeWithPrevious,
   moveBlock,
+  reattach,
   reconcile,
   replaceBlock,
   serialise,
@@ -52,7 +53,14 @@ export type DocState = {
 }
 
 export type DocAction =
-  | { type: 'loaded'; text: string; hash: string | null; exists: boolean }
+  | {
+      type: 'loaded'
+      text: string
+      hash: string | null
+      exists: boolean
+      /** The document's identity from before a page reload (state/session.ts), to put back. */
+      restore?: { doc: Doc; nextId: number }
+    }
   | { type: 'failed'; error: string }
   | { type: 'focus'; id: string; cursor: FocusCursor }
   | { type: 'draft'; id: string; text: string }
@@ -522,8 +530,14 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       // A brief or strategy that was never written is an empty document, created on first save.
       if (!action.exists && state.ref.kind === 'article')
         return { ...state, status: 'missing', error: null }
-      const { mint, next } = minter({ ...state, nextId: 1 })
-      const doc = createDoc(action.text, mint)
+      // After a reload the blocks get back the IDs they had, but only where their text is exactly
+      // what it was: a job aimed at a block that changed meanwhile loses its target and goes stale.
+      const { restore } = action
+      const { mint, next } = minter({ ...state, nextId: restore?.nextId ?? 1 })
+      const doc =
+        restore === undefined
+          ? createDoc(action.text, mint)
+          : reattach(restore.doc, action.text, mint)
       return {
         ...initialDocState(state.ref),
         status: 'ready',

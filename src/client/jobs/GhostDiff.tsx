@@ -8,7 +8,15 @@ import { START_ANCHOR } from '../../shared/jobs/validate-ops.ts'
 import type { Decoration } from '../blocks/Block.tsx'
 import { RenderedBlock } from '../blocks/RenderedBlock.tsx'
 import type { DocState } from '../state/doc-reducer.ts'
-import { acceptAll, claimsOn, decide, rejectAll, undecided, useJobs } from '../state/jobs.ts'
+import {
+  acceptAll,
+  claimsOn,
+  decide,
+  isMine,
+  rejectAll,
+  undecided,
+  useJobs,
+} from '../state/jobs.ts'
 import { keepFocus } from '../keep-focus.ts'
 
 const focusNextGhost = () =>
@@ -130,6 +138,8 @@ export function useGhosts(state: DocState | null): {
     for (const jobId of jobsState.order) {
       const job = jobsState.jobs[jobId]
       if (job === undefined || job.state !== 'ready' || job.result === null) continue
+      // Another tab's proposal names that tab's blocks; shown here it would sit on the wrong ones.
+      if (!isMine(job)) continue
       if (docKey(job.doc) !== docKey(state.ref)) continue
       const open = undecided(job)
       const total = job.result.ops.length

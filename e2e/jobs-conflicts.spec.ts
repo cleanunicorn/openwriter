@@ -3,7 +3,6 @@ import { expect, test } from './fixtures.ts'
 import {
   acceptButton,
   answer,
-  articleHeading,
   ask,
   blockStart,
   blockWith,
@@ -165,26 +164,6 @@ test('deleting a target block marks the job stale and keeps its output', async (
   await tray(page).getByRole('button').first().click()
   await expect(tray(page)).toContainText('stale')
   await expect(tray(page)).toContainText('A target block was deleted')
-  await expect(ghosts(page)).toHaveCount(0)
-})
-
-test('a page reload counts as a restart: the review becomes stale, its output stays visible', async ({
-  page,
-  app,
-}) => {
-  await openArticle(page)
-  await selectWord(page, blockWith(page, 'Why blocks'), 'Why blocks')
-  await ask(page, 'fake:upper')
-  await expectWaiting(app, 1)
-  await release(app)
-  await expect(ghosts(page)).toHaveCount(1)
-
-  await page.reload()
-  await expect(articleHeading(page)).toBeVisible()
-  await tray(page).getByRole('button').first().click()
-  await expect(tray(page)).toContainText('stale')
-  await tray(page).getByText('Show the agent’s output').click()
-  await expect(tray(page)).toContainText('WHY BLOCKS')
   await expect(ghosts(page)).toHaveCount(0)
 })
 
