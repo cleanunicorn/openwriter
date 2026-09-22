@@ -45,10 +45,9 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
       if (error instanceof InvalidConfigError) throw new HttpError(409, error.message)
       throw error
     }
-    // Only a moved content directory invalidates what the watcher tracks. Resetting on every save
-    // would make each panel toggle or theme switch blind the watcher to outside changes until the
-    // open document is saved again (issue #14 §4 is the remaining case: a real contentDir change).
-    if (config.contentDir !== contentDirBefore) context.watcher.reset()
+    // Only a moved content directory changes where the tracked documents live; the watcher
+    // follows them there. Any other save (a panel toggle, a theme) leaves it alone.
+    if (config.contentDir !== contentDirBefore) context.watcher.follow()
     events.emit({ type: 'config.changed' })
     return c.json(configBody())
   })

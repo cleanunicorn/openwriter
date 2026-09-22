@@ -87,6 +87,30 @@ test('the content directory can point outside the workspace, and says so', async
   await expect(page.getByText('Text in the Hugo site.')).toBeVisible()
 })
 
+test('an open article is still watched after the content directory moves', async ({
+  page,
+  app,
+}) => {
+  // The same article, byte for byte, under a second content directory.
+  const moved = path.join(app.workspace, 'site', 'content', 'posts', 'hello-openwrite')
+  mkdirSync(moved, { recursive: true })
+  writeFileSync(path.join(moved, 'index.md'), app.readArticle())
+  await openArticle(page)
+  await openSettings(page)
+  const form = page.getByRole('form', { name: 'Settings' })
+  await form.getByLabel('Content directory').fill('site/content')
+  await form.getByRole('button', { name: 'Save' }).click()
+  await expect(form.getByRole('status', { name: 'Settings status' })).toHaveText('Saved.')
+  await form.getByRole('button', { name: 'Close' }).click()
+
+  // Nothing reads the article again, so only the watcher can see this.
+  writeFileSync(
+    path.join(moved, 'index.md'),
+    app.readArticle().replace('## Why blocks', '## Why blocks, in the new place'),
+  )
+  await expect(page.getByRole('heading', { name: 'Why blocks, in the new place' })).toBeVisible()
+})
+
 test('settings is a modal dialog: focus, Escape, Tab, and no keys reach the document behind it', async ({
   page,
 }) => {

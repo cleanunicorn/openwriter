@@ -62,6 +62,63 @@ describe('watching across a content directory change', () => {
   })
 })
 
+describe('open documents across a content directory change, before anything reads them again', () => {
+  const changed = (seen: ServerEvent[]) => seen.filter((event) => event.type === 'doc.changed')
+  const moveContentDir = async () => {
+    const moved = path.join(t.workspace, 'site', 'content', 'posts', 'hello-openwrite')
+    mkdirSync(moved, { recursive: true })
+    writeFileSync(path.join(moved, 'index.md'), '# Moved\n')
+    const { config } = await json(t.get('/api/config'))
+    const res = await t.send('PUT', '/api/config', { ...config, contentDir: 'site/content' })
+    expect(res.status).toBe(200)
+    return path.join(moved, 'index.md')
+  }
+
+  it('says at once that an open article now resolves to a different file', async () => {
+    // The client keeps the article open and reads nothing on `config.changed`, so the server is
+    // the one that knows the slug now means another file. It says so the way it says every
+    // other outside change: one `doc.changed`, carrying the new file's hash.
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    await t.get('/api/docs/article/hello-openwrite')
+    await moveContentDir()
+    await expect.poll(() => changed(seen).length, { timeout: 3000 }).toBe(1)
+    const disk = await json(t.get('/api/docs/article/hello-openwrite'))
+    expect(changed(seen)[0]).toMatchObject({
+      ref: { kind: 'article', slug: 'hello-openwrite' },
+      hash: disk.hash,
+    })
+  })
+
+  it('keeps watching an open article at its new path', async () => {
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    await t.get('/api/docs/article/hello-openwrite')
+    const moved = await moveContentDir()
+    await expect.poll(() => changed(seen).length, { timeout: 3000 }).toBe(1)
+
+    // Nothing reads the article again: the watcher alone has to notice.
+    writeFileSync(moved, '# Moved and changed outside\n')
+    await expect.poll(() => changed(seen).length, { timeout: 3000 }).toBe(2)
+    // The old location is no longer this document's business.
+    writeFileSync(article(), 'old location changed\n')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(changed(seen)).toHaveLength(2)
+  })
+
+  it('keeps watching an open document whose path did not move with it', async () => {
+    // strategy.md lives at the workspace root, whatever `contentDir` says; forgetting it on a
+    // content directory change blinded the watcher to it for no reason at all.
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    await t.get('/api/docs/strategy')
+    await moveContentDir()
+    writeFileSync(path.join(t.workspace, 'strategy.md'), '# Strategy, changed outside\n')
+    await expect.poll(() => changed(seen).length, { timeout: 3000 }).toBe(1)
+    expect(changed(seen)[0]).toMatchObject({ ref: { kind: 'strategy' } })
+  })
+})
+
 describe('watching across a settings save', () => {
   it('keeps watching an open document when the content directory did not change', async () => {
     const seen: ServerEvent[] = []
