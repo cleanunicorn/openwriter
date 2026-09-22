@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Every entry point is listed by hand rather than left to knip's plugin detection, so a reader
+  // can see what counts as "used" and a new entry point fails `npm run knip` until it is added.
+  "entry": [
+    // The server, src/server/main.ts, is not listed: knip reads it from the package.json `start`
+    // and `dev` scripts (`node src/server/main.ts`), and listing it again is a config hint, which
+    // this repo treats as an error (below).
+    // The client: Vite's root is src/client; index.html loads main.tsx.
+    "src/client/index.html",
+    "src/client/main.tsx",
+    // Scripts run by path from package.json, playwright.config.ts (e2e-server.ts), by hand
+    // (screenshots.ts, verify-adapter.ts), and their unit tests.
+    "scripts/*.ts",
+    // Playwright specs; fixtures.ts, helpers.ts and start-server.ts are reached from them.
+    "e2e/*.spec.ts",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    // Unit tests (vitest.config.ts includes src/**/*.test.ts and scripts/**/*.test.ts).
+    "src/**/*.test.ts",
+    // The fake agent the adapter and job tests spawn by path (`node echo-agent.ts <mode>`),
+    // so nothing imports it.
+    "src/server/adapters/fixtures/echo-agent.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "e2e/**/*.ts", "*.config.ts"],
+  // The config files above are listed as entries themselves, so the plugins that would also
+  // find them (and flag the explicit entries as redundant) are off.
+  "vite": false,
+  "vitest": false,
+  "playwright": false,
+  // A POSIX system tool two tests shell out to (to make a FIFO), not an npm binary.
+  "ignoreBinaries": ["mkfifo"],
+  // A redundant entry or a stale ignore fails the run, so this file stays accurate.
+  "treatConfigHintsAsErrors": true
+}

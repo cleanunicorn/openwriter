@@ -13,7 +13,7 @@ import type {
   ProgressEvent,
 } from './types.ts'
 
-export const HERDR_SESSION = 'openwrite-jobs'
+const HERDR_SESSION = 'openwrite-jobs'
 
 /** How the adapter reaches herdr; replaced by a stub in tests. */
 export type HerdrCli = {
@@ -34,7 +34,7 @@ function cleanEnv(): NodeJS.ProcessEnv {
   return env
 }
 
-export function realHerdrCli(command: string): HerdrCli {
+function realHerdrCli(command: string): HerdrCli {
   return {
     run: (args, timeoutMs) =>
       new Promise((resolve, reject) => {

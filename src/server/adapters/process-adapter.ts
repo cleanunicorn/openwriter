@@ -53,7 +53,7 @@ const lastLine = (text: string): string | undefined =>
     .pop()
 
 /** One progress line in the tray: whitespace collapsed, at most this many characters. */
-export const PROGRESS_LINE_MAX = 200
+const PROGRESS_LINE_MAX = 200
 export const clipProgress = (text: string): string =>
   text.replace(/\s+/g, ' ').trim().slice(0, PROGRESS_LINE_MAX)
 

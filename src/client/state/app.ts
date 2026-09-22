@@ -337,7 +337,7 @@ export async function refreshArticles(): Promise<void> {
   store.set((state) => ({ ...state, articles }))
 }
 
-export async function refreshWorkspaces(): Promise<void> {
+async function refreshWorkspaces(): Promise<void> {
   const session = docSession
   const workspaces = await api.workspaces()
   if (session !== docSession) return
@@ -542,7 +542,7 @@ async function onDocChanged(ref: DocRef, hash: string | null, fromTab: boolean):
  * one this tab shows — or when this tab is waiting on a `moved` decision, which it may settle.
  * True when it did. Before the tab knows its workspace there is nothing to compare.
  */
-export async function followServer(): Promise<boolean> {
+async function followServer(): Promise<boolean> {
   const known = store.get().workspaces?.active.root
   if (known === undefined) return false
   const { active } = await api.workspaces()

@@ -109,7 +109,7 @@ export const SkillInfoSchema = z.object({
 })
 export type SkillInfo = z.infer<typeof SkillInfoSchema>
 /** A workspace skill file that was not loaded: its path in the workspace, and why, for the writer. */
-export const SkillProblemSchema = z.object({ file: z.string(), error: z.string() })
+const SkillProblemSchema = z.object({ file: z.string(), error: z.string() })
 export type SkillProblem = z.infer<typeof SkillProblemSchema>
 export const SkillsResponseSchema = z.object({
   skills: z.array(SkillInfoSchema),

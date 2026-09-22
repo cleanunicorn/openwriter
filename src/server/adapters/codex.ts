@@ -90,7 +90,7 @@ export function readCodexLine(line: string): LineRead {
   return {}
 }
 
-export const codexSpec: CliSpec = {
+const codexSpec: CliSpec = {
   name: 'codex',
   command: 'codex',
   buildArgs: buildCodexArgs,

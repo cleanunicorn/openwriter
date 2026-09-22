@@ -7,7 +7,7 @@ import type { Skill } from '../skills.ts'
 import type { Workspace } from '../workspace.ts'
 
 /** The snapshot with every block wrapped in an ID marker. Markers exist only here, never in the article. */
-export function renderArticleSnapshot(request: JobRequest): string {
+function renderArticleSnapshot(request: JobRequest): string {
   const targets = new Set(request.targets)
   const parts = request.snapshot.blocks.map(
     (block) =>

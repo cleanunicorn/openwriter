@@ -20,7 +20,7 @@ import {
 /** ID of the editor slot for a block that does not exist yet (Enter on an empty last line). */
 export const NEW_BLOCK_ID = 'new'
 
-export type Draft = { id: string; text: string }
+type Draft = { id: string; text: string }
 
 /**
  * A passage this tab and the file both changed, differently, found by a reload (the three-way
@@ -42,7 +42,7 @@ export type Conflict = {
 }
 export type ConflictChoice = 'mine' | 'theirs' | 'both'
 
-export type PendingNew = { afterId: string | null }
+type PendingNew = { afterId: string | null }
 export type FocusCursor = number | 'start' | 'end'
 
 export type DocState = {
@@ -228,7 +228,7 @@ const RELOADED_FROM_TAB = 'Reloaded: another tab saved this file.'
 const BLOCK_KEPT = 'The file changed on disk. The block you are editing was kept.'
 /** Changes of this tab's that were not saved yet survived the reload (#30). */
 const TEXT_KEPT = 'The file changed on disk. Your unsaved text was kept.'
-export const CONFLICT_NOTICE =
+const CONFLICT_NOTICE =
   'The file changed on disk in a passage you had changed too. Choose which version to keep.'
 
 /**
@@ -552,7 +552,7 @@ function reloaded(
 }
 
 /** What a page reload kept of a document (state/session.ts), to put back on the first load. */
-export type Restore = {
+type Restore = {
   doc: Doc
   nextId: number
   conflicts?: Conflict[]

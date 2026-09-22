@@ -7,7 +7,7 @@ export class InvalidConfigError extends Error {}
 
 export type LoadedConfig = { config: Config; error: string | null }
 
-export const configPath = (workspace: string) => path.join(workspace, '.zen', 'config.json')
+const configPath = (workspace: string) => path.join(workspace, '.zen', 'config.json')
 
 /** Read and validate `.zen/config.json`. An invalid file yields defaults plus the error. */
 export function loadConfig(workspace: string): LoadedConfig {

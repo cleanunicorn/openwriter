@@ -5,14 +5,14 @@ import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
 import { type Scope, ScopeSchema } from './scope.ts'
 
-export { type Scope, ScopeSchema }
+export type { Scope }
 
 /**
  * queued → running → validating → (repairing →) ready → settled, or failed | cancelled | stale.
  * `ready` means the process finished and the writer has not decided every op yet; process state
  * and review decisions are separate things.
  */
-export const JobStateSchema = z.enum([
+const JobStateSchema = z.enum([
   'queued',
   'running',
   'validating',
@@ -25,7 +25,7 @@ export const JobStateSchema = z.enum([
 ])
 export type JobState = z.infer<typeof JobStateSchema>
 
-export const FailureReasonSchema = z.enum([
+const FailureReasonSchema = z.enum([
   'missing-cli',
   'missing-tool',
   'auth',
@@ -35,7 +35,7 @@ export const FailureReasonSchema = z.enum([
 ])
 export type FailureReason = z.infer<typeof FailureReasonSchema>
 
-export const SelectionSchema = z.object({
+const SelectionSchema = z.object({
   blockId: BlockIdSchema,
   text: z.string(),
   /** UTF-16 offsets into the block's raw text; present only for a selection made in edit mode. */
@@ -50,7 +50,7 @@ export const SnapshotSchema = z.object({
 export type Snapshot = z.infer<typeof SnapshotSchema>
 
 /** How an earlier turn of the conversation ended, as the writer saw it. */
-export const TurnOutcomeSchema = z.enum([
+const TurnOutcomeSchema = z.enum([
   'still running',
   'awaiting review',
   'accepted',
@@ -68,7 +68,7 @@ export type TurnOutcome = z.infer<typeof TurnOutcomeSchema>
  * One earlier turn of the right panel's conversation. The caps are loose on purpose: the server
  * re-bounds whatever arrives when it writes `conversation.md` (shared/jobs/conversation.ts).
  */
-export const TurnSchema = z.object({
+const TurnSchema = z.object({
   instruction: z.string().max(20000),
   scope: ScopeSchema,
   skill: z.string().max(200).nullable(),
@@ -96,7 +96,7 @@ export const JobRequestSchema = z.object({
 })
 export type JobRequest = z.infer<typeof JobRequestSchema>
 
-export const DecisionSchema = z.enum(['accepted', 'rejected'])
+const DecisionSchema = z.enum(['accepted', 'rejected'])
 
 export const JobSchema = z.object({
   id: z.string(),
