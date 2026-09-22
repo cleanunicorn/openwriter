@@ -114,8 +114,8 @@ palette (`Cmd/Ctrl+K`). Renaming, removing and deleting are in the palette only:
 | Command | What it does |
 | --- | --- |
 | `Switch to workspace: <name>` | opens one you have opened before |
-| `Open workspace…` | opens one by its absolute path |
-| `New workspace…` | scaffolds a new one at a path you name, and opens it |
+| `Open workspace…` | opens one in the workspaces folder, by its name |
+| `New workspace…` | scaffolds a new one in the workspaces folder under a name you give, and opens it |
 | `Rename workspace: <name>` | changes the label you see, nothing on disk |
 | `Remove workspace from the list: <name>` | forgets it; every file stays where it is |
 | `Delete workspace from disk: <name>` | deletes it, after you type its name (see below) |
@@ -132,7 +132,13 @@ hand-edited into something invalid, the editor starts with no remembered workspa
 than refusing to start. Nothing in it is secret, and you can edit or delete it by hand.
 
 **Creating** a workspace scaffolds `strategy.md`, `.zen/config.json`, `content/posts/` and
-`sources/` at a path you name, and refuses a directory that already has something in it.
+`sources/` in a new folder of the **workspaces folder**, `.openwrite/workspaces/` in this repo
+(gitignored). You give a name — lowercase letters, digits and hyphens, such as `my-blog` — never
+a path: the editor cannot be asked to create or open a workspace anywhere else on disk, so `/`,
+`..` and absolute paths are refused, and so is a symlink sitting at that name. A name that
+already has something in it is refused too. To work on a directory elsewhere, such as a Hugo
+site, start the server on it with `--workspace`; it is remembered, and you can switch back to it
+from the list.
 
 **Removing a workspace from the list** deletes nothing on disk. **Renaming** changes the label
 you see, nothing else.

@@ -55,10 +55,14 @@ async function move(call: () => Promise<WorkspacesResponse>): Promise<void> {
   await adopt(await call())
 }
 
-export const openWorkspace = (path: string): Promise<void> => move(() => api.openWorkspace(path))
+/** One in the server's workspaces folder, by name. */
+export const openWorkspace = (name: string): Promise<void> => move(() => api.openWorkspace(name))
 
-export const createWorkspace = (path: string): Promise<void> =>
-  move(() => api.createWorkspace(path))
+/** One the list remembers, by id. */
+export const switchWorkspace = (id: string): Promise<void> => move(() => api.switchWorkspace(id))
+
+export const createWorkspace = (name: string): Promise<void> =>
+  move(() => api.createWorkspace(name))
 
 /** These three change the list, never the workspace that is open, so nothing is re-loaded. */
 export const renameWorkspace = async (id: string, label: string): Promise<void> =>

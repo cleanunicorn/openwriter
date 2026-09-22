@@ -169,6 +169,7 @@ describe('the workspace the server started on', () => {
       const again = createApp({
         workspace: t.workspace,
         workspacesFile: t.workspacesFile,
+        workspacesDir: t.workspacesDir,
         fakeControl: false,
         allowedHosts: () => [],
       })

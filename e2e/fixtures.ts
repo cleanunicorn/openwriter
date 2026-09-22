@@ -7,6 +7,8 @@ export type App = {
   url: string
   /** Absolute path of this test's own copy of the sample workspace. */
   workspace: string
+  /** This server's own folder of created workspaces; removed with the server's state. */
+  workspacesDir: string
   articlePath: (slug?: string) => string
   readArticle: (slug?: string) => string
 }
@@ -15,12 +17,13 @@ export type App = {
 export const test = base.extend<{ app: App }>({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright requires an object pattern here
   app: async ({}, use) => {
-    const { url, workspace, child } = await startE2eServer()
+    const { url, workspace, workspacesDir, child } = await startE2eServer()
     const articlePath = (slug = 'hello-openwrite') =>
       path.join(workspace, 'content', 'posts', slug, 'index.md')
     await use({
       url,
       workspace,
+      workspacesDir,
       articlePath,
       readArticle: (slug) => readFileSync(articlePath(slug), 'utf8'),
     })

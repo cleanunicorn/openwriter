@@ -97,10 +97,12 @@ export const api = {
       headers: root === undefined ? undefined : { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) },
     }),
   workspaces: () => request(WorkspacesResponseSchema, '/api/workspaces'),
-  openWorkspace: (path: string) =>
-    request(WorkspacesResponseSchema, '/api/workspaces/open', { method: 'POST', body: { path } }),
-  createWorkspace: (path: string) =>
-    request(WorkspacesResponseSchema, '/api/workspaces', { method: 'POST', body: { path } }),
+  openWorkspace: (name: string) =>
+    request(WorkspacesResponseSchema, '/api/workspaces/open', { method: 'POST', body: { name } }),
+  switchWorkspace: (id: string) =>
+    request(WorkspacesResponseSchema, `/api/workspaces/${id}/open`, { method: 'POST' }),
+  createWorkspace: (name: string) =>
+    request(WorkspacesResponseSchema, '/api/workspaces', { method: 'POST', body: { name } }),
   renameWorkspace: (id: string, label: string) =>
     request(WorkspacesResponseSchema, `/api/workspaces/${id}`, {
       method: 'PATCH',

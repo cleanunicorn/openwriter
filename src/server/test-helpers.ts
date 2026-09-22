@@ -11,6 +11,8 @@ export type TestApp = CreatedApp & {
   workspace: string
   /** This test's own known-workspace list; never the developer's `~/.config`. */
   workspacesFile: string
+  /** This test's own folder of created workspaces, beside the list. */
+  workspacesDir: string
   get: (url: string) => Promise<Response>
   send: (method: string, url: string, body?: unknown) => Promise<Response>
   cleanup: () => void
@@ -26,9 +28,11 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
   // outlive that. Defaulted here so no existing caller has to know about it.
   const state = mkdtempSync(path.join(os.tmpdir(), 'openwrite-test-state-'))
   const workspacesFile = path.join(state, 'workspaces.json')
+  const workspacesDir = path.join(state, 'workspaces')
   const created = createApp({
     workspace,
     workspacesFile,
+    workspacesDir,
     fakeControl: false,
     adapterOverride: 'fake',
     allowedHosts: () => [HOST],
@@ -38,6 +42,7 @@ export function createTestApp(overrides: Partial<AppOptions> = {}): TestApp {
     ...created,
     workspace,
     workspacesFile,
+    workspacesDir,
     get: async (url) => created.app.request(url, { headers: { host: HOST } }),
     send: async (method, url, body = {}) =>
       created.app.request(url, {

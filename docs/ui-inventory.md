@@ -42,7 +42,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | `ask-research` | Research question… | R composer ("Ask about: research") | an agent request; the palette's own prompt stays too |
 | `export-markdown` | Export: markdown + assets (zip) | L·A | the clearest action on the article |
 | `export-html` | Export: standalone HTML + assets (zip) | L·A | the same |
-| `workspace-open-path` | Open workspace… | L·W | workspace navigation |
+| `workspace-open-name` | Open workspace… | L·W | workspace navigation |
 | `workspace-new` | New workspace… | L·W | workspace navigation |
 | `theme` | Theme: switch to … | L·A | a one-click quick toggle; Settings keeps the exact choice |
 | `settings` | Settings… | L·A (opens S) | the dialog stays modal: it is a form over `.zen/config.json` |

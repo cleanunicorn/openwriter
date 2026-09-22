@@ -16,6 +16,8 @@ export type StartOptions = {
   workspace: string
   /** Where the known-workspace list lives; resolved from XDG in `main()` only. */
   workspacesFile: string
+  /** Where the editor creates new workspaces; `<repo>/.openwrite/workspaces` in `main()`. */
+  workspacesDir: string
   /** 0 picks a free port. Undefined tries SERVER_PORT and the ports after it. */
   port?: number
   dev?: boolean
@@ -53,6 +55,7 @@ export async function startServer(options: StartOptions): Promise<RunningServer>
   const { app, dispose } = createApp({
     workspace: options.workspace,
     workspacesFile: options.workspacesFile,
+    workspacesDir: options.workspacesDir,
     clientDir: options.dev ? undefined : path.join(REPO_ROOT, 'dist', 'client'),
     adapterOverride: options.adapterOverride,
     fakeControl: options.fakeControl ?? false,
@@ -140,6 +143,7 @@ async function main(): Promise<void> {
   const server = await startServer({
     workspace,
     workspacesFile: workspacesFile(),
+    workspacesDir: path.join(REPO_ROOT, '.openwrite', 'workspaces'),
     port,
     dev: values.dev,
     adapterOverride: values.adapter,

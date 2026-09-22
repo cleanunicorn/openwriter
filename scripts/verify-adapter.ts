@@ -97,6 +97,7 @@ const before = { workspace: treeHash(workspace), outside: treeHash(outside) }
 const { jobs, dispose } = createApp({
   workspace,
   workspacesFile: path.join(workspace, '..', 'workspaces.json'),
+  workspacesDir: path.join(workspace, '..', 'workspaces'),
   fakeControl: false,
   allowedHosts: () => [],
 })

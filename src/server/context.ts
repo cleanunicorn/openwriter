@@ -12,6 +12,12 @@ export type AppOptions = {
    * the developer's own `~/.config`.
    */
   workspacesFile: string
+  /**
+   * The one folder the HTTP routes create workspaces in and open them from by name
+   * (`<repo>/.openwrite/workspaces` in `main()`). Required for the same reason as `workspacesFile`:
+   * no test may create workspaces in the developer's own folder. Created on first use.
+   */
+  workspacesDir: string
   /** Built client (dist/client). Absent in the dev flow, where Vite serves the client. */
   clientDir?: string
   /** Adapter forced from the command line (`--adapter fake`); never persisted. */

@@ -59,6 +59,7 @@ function sampleState(): SampleState {
     skills,
     workspaces: {
       active: { root: '/tmp/active', label: 'sample' },
+      home: '/tmp/workspaces',
       entries: [
         entry('aaaaaaaaaaaa', 'From Hugo'),
         entry('bbbbbbbbbbbb', 'doomed'),

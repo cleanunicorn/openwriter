@@ -412,6 +412,7 @@ describe('nothing inside a job run can take the server down', () => {
     const restarted = createApp({
       workspace: t.workspace,
       workspacesFile: t.workspacesFile,
+      workspacesDir: t.workspacesDir,
       fakeControl: false,
       allowedHosts: () => [],
     })
@@ -633,6 +634,7 @@ describe('staleness and restart', () => {
     const restarted = createApp({
       workspace: t.workspace,
       workspacesFile: t.workspacesFile,
+      workspacesDir: t.workspacesDir,
       fakeControl: false,
       allowedHosts: () => [],
     })
@@ -652,6 +654,7 @@ describe('staleness and restart', () => {
     const again = createApp({
       workspace: t.workspace,
       workspacesFile: t.workspacesFile,
+      workspacesDir: t.workspacesDir,
       fakeControl: false,
       allowedHosts: () => [],
     })

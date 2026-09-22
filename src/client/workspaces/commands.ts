@@ -8,17 +8,18 @@ import {
   forgetWorkspace,
   openWorkspace,
   renameWorkspace,
+  switchWorkspace,
 } from './switch.ts'
 
 const report = (what: string, run: () => Promise<void>) => () =>
   void run().catch((error: unknown) => notifyFailure(what, error))
 
-const askForPath = (label: string, placeholder: string, run: (path: string) => Promise<void>) =>
+const askForName = (label: string, placeholder: string, run: (name: string) => Promise<void>) =>
   setPalette({
     kind: 'input',
     label,
     placeholder,
-    submit: (path) => report(label, () => run(path))(),
+    submit: (name) => report(label, () => run(name))(),
   })
 
 registerCommands((state) => {
@@ -32,15 +33,15 @@ registerCommands((state) => {
       id: `workspace-open:${entry.id}`,
       title: `Switch to workspace: ${entry.label}`,
       hint: known(entry),
-      run: report('Could not open that workspace', () => openWorkspace(entry.path)),
+      run: report('Could not open that workspace', () => switchWorkspace(entry.id)),
     })),
     {
-      id: 'workspace-open-path',
+      id: 'workspace-open-name',
       title: 'Open workspace…',
-      hint: 'by its path on disk',
+      hint: `by its name in ${workspaces.home}`,
       run: () =>
-        askForPath('Workspace path', 'Absolute path of the workspace to open', (path) =>
-          openWorkspace(path),
+        askForName('Workspace name', 'Name of a workspace in the workspaces folder', (name) =>
+          openWorkspace(name),
         ),
     },
     {
@@ -48,8 +49,10 @@ registerCommands((state) => {
       title: 'New workspace…',
       hint: 'scaffold and open it',
       run: () =>
-        askForPath('New workspace path', 'Absolute path of a new or empty directory', (path) =>
-          createWorkspace(path),
+        askForName(
+          'New workspace name',
+          'Lowercase letters, digits and hyphens, e.g. my-blog',
+          (name) => createWorkspace(name),
         ),
     },
     ...workspaces.entries.map((entry) => ({

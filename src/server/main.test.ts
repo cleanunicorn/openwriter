@@ -6,14 +6,16 @@ import { startServer } from './main.ts'
 
 const workspace = mkdtempSync(path.join(os.tmpdir(), 'openwrite-main-'))
 const workspacesFile = path.join(workspace, '..', `openwrite-main-list-${process.pid}.json`)
+const workspacesDir = path.join(workspace, '..', `openwrite-main-workspaces-${process.pid}`)
 afterAll(() => {
   rmSync(workspace, { recursive: true, force: true })
   rmSync(workspacesFile, { force: true })
+  rmSync(workspacesDir, { recursive: true, force: true })
 })
 
 describe('startServer', () => {
   it('binds the loopback interface only and answers on its own host', async () => {
-    const server = await startServer({ workspace, workspacesFile, port: 0 })
+    const server = await startServer({ workspace, workspacesFile, workspacesDir, port: 0 })
     try {
       expect(server.address).toBe('127.0.0.1')
       expect(server.url).toBe(`http://127.0.0.1:${server.port}`)
@@ -26,7 +28,7 @@ describe('startServer', () => {
   })
 
   it('answers 404 for unknown API routes', async () => {
-    const server = await startServer({ workspace, workspacesFile, port: 0 })
+    const server = await startServer({ workspace, workspacesFile, workspacesDir, port: 0 })
     try {
       expect((await fetch(`${server.url}/api/nope`)).status).toBe(404)
     } finally {

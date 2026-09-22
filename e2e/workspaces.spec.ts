@@ -1,34 +1,28 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import os from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from './fixtures.ts'
+import { type App, expect, test } from './fixtures.ts'
 import {
   answer,
   articleHeading,
   blockWith,
   editor,
+  notice,
   openArticle,
   openPalette,
   runCommand,
 } from './helpers.ts'
-
-/** Somewhere of this test's own to put another workspace. */
-let base: string
-test.beforeEach(() => {
-  base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-spec-'))
-})
-test.afterEach(() => rmSync(base, { recursive: true, force: true }))
 
 const empty = (page: import('@playwright/test').Page) => page.getByText('No article yet')
 
 /** Make a second workspace through the palette and end up in it. */
 async function createSecond(
   page: import('@playwright/test').Page,
+  app: App,
   name = 'second',
 ): Promise<string> {
-  const root = path.join(base, name)
+  const root = path.join(app.workspacesDir, name)
   await runCommand(page, 'new workspace')
-  await answer(page, 'New workspace path', root)
+  await answer(page, 'New workspace name', name)
   await expect(empty(page)).toBeVisible()
   return root
 }
@@ -36,7 +30,7 @@ async function createSecond(
 test('the palette creates another workspace, opens it, and comes back', async ({ page, app }) => {
   await openArticle(page)
 
-  const second = await createSecond(page)
+  const second = await createSecond(page, app)
   expect(existsSync(path.join(second, 'strategy.md'))).toBe(true)
   expect(existsSync(path.join(second, 'content', 'posts'))).toBe(true)
   expect(existsSync(path.join(second, 'sources'))).toBe(true)
@@ -49,12 +43,25 @@ test('the palette creates another workspace, opens it, and comes back', async ({
   await expect(articleHeading(page)).toBeVisible()
 })
 
+test('a new workspace is a name in the workspaces folder, never a path', async ({ page, app }) => {
+  await openArticle(page)
+  for (const typed of ['/', '../escape', path.join(path.dirname(app.workspacesDir), 'elsewhere')]) {
+    await runCommand(page, 'new workspace')
+    await answer(page, 'New workspace name', typed)
+    await expect(notice(page)).toContainText('lowercase letters, digits and hyphens')
+  }
+  // Nothing was scaffolded anywhere, and the writer is still in the workspace they were in.
+  expect(existsSync(path.join(path.dirname(app.workspacesDir), 'escape'))).toBe(false)
+  expect(existsSync(path.join(path.dirname(app.workspacesDir), 'elsewhere'))).toBe(false)
+  await expect(articleHeading(page)).toBeVisible()
+})
+
 test('an article written in one workspace does not follow the writer to the next', async ({
   page,
   app,
 }) => {
   await openArticle(page)
-  await createSecond(page)
+  await createSecond(page, app)
 
   // Same slug, different workspace: the new one's article is its own, not the old one's text.
   await runCommand(page, 'new article')
@@ -90,9 +97,9 @@ test('switching waits for the save it has not finished yet', async ({ page, app 
   await expect(editor(page)).toBeVisible()
   await editor(page).pressSequentially(' — and a late thought')
 
-  const second = path.join(base, 'second')
+  const second = path.join(app.workspacesDir, 'second')
   await runCommand(page, 'new workspace')
-  await answer(page, 'New workspace path', second)
+  await answer(page, 'New workspace name', 'second')
   // Longer than the latency above: the switch is *supposed* to be waiting for the save.
   await expect(empty(page)).toBeVisible({ timeout: 15000 })
 
@@ -108,7 +115,7 @@ test('an entry can be renamed, and removed from the list without deleting anythi
   app,
 }) => {
   await openArticle(page)
-  const second = await createSecond(page)
+  const second = await createSecond(page, app)
 
   await runCommand(page, `rename workspace: ${path.basename(app.workspace)}`)
   await answer(page, `New name for ${path.basename(app.workspace)}`, 'The first one')
@@ -131,11 +138,11 @@ test('an entry can be renamed, and removed from the list without deleting anythi
 
 test.describe('deleting a workspace from disk', () => {
   /** Leave `doomed` on disk, in the list, and not the workspace that is open. */
-  async function ready(page: import('@playwright/test').Page): Promise<string> {
+  async function ready(page: import('@playwright/test').Page, app: App): Promise<string> {
     await openArticle(page)
-    const doomed = path.join(base, 'doomed')
+    const doomed = path.join(app.workspacesDir, 'doomed')
     await runCommand(page, 'new workspace')
-    await answer(page, 'New workspace path', doomed)
+    await answer(page, 'New workspace name', 'doomed')
     await expect(empty(page)).toBeVisible()
     await runCommand(page, 'switch to workspace')
     await expect(articleHeading(page)).toBeVisible()
@@ -146,8 +153,8 @@ test.describe('deleting a workspace from disk', () => {
 
   // Surrounding space is trimmed, as it is for every other palette input — a stray space is not
   // evidence of an accident, and the name that was typed still is. A different name is not.
-  test('the wrong name deletes nothing and leaves the prompt open', async ({ page }) => {
-    const doomed = await ready(page)
+  test('the wrong name deletes nothing and leaves the prompt open', async ({ page, app }) => {
+    const doomed = await ready(page, app)
     await runCommand(page, 'delete workspace from disk: doomed')
     for (const wrong of ['Doomed', 'doome', 'yes']) {
       await prompt(page).fill(wrong)
@@ -158,8 +165,8 @@ test.describe('deleting a workspace from disk', () => {
     expect(existsSync(doomed)).toBe(true)
   })
 
-  test('Escape deletes nothing', async ({ page }) => {
-    const doomed = await ready(page)
+  test('Escape deletes nothing', async ({ page, app }) => {
+    const doomed = await ready(page, app)
     await runCommand(page, 'delete workspace from disk: doomed')
     await prompt(page).fill('doomed')
     await page.keyboard.press('Escape')
@@ -168,8 +175,8 @@ test.describe('deleting a workspace from disk', () => {
     expect(existsSync(doomed)).toBe(true)
   })
 
-  test('moving the focus away deletes nothing', async ({ page }) => {
-    const doomed = await ready(page)
+  test('moving the focus away deletes nothing', async ({ page, app }) => {
+    const doomed = await ready(page, app)
     await runCommand(page, 'delete workspace from disk: doomed')
     await prompt(page).fill('doomed')
     await prompt(page).blur()
@@ -179,7 +186,7 @@ test.describe('deleting a workspace from disk', () => {
   })
 
   test('typing the name exactly deletes it, and only it', async ({ page, app }) => {
-    const doomed = await ready(page)
+    const doomed = await ready(page, app)
     await runCommand(page, 'delete workspace from disk: doomed')
     await prompt(page).fill('doomed')
     await page.keyboard.press('Enter')

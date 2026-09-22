@@ -1,5 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
 import { decodeWorkspaceHeader, WORKSPACE_HEADER } from '../src/shared/api-types.ts'
@@ -386,27 +385,22 @@ test('each workspace keeps its own panels across a switch', async ({ page, app }
   await expectFile(configPath(app), (text) => expect(JSON.parse(text).ui.leftPanel).toBe(true))
 
   // A second workspace starts with both panels closed, whatever the first one had.
-  const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-panels-'))
-  try {
-    const second = path.join(base, 'second')
-    await runCommand(page, 'new workspace')
-    await answer(page, 'New workspace path', second)
-    await expect(page.getByText('No article yet')).toBeVisible()
-    await expect(leftPanel(page)).toHaveCount(0)
-    await page.keyboard.press(`${mod}+Alt+b`)
-    await expect(rightPanel(page)).toBeVisible()
-    await expectFile(path.join(second, '.zen', 'config.json'), (text) =>
-      expect(JSON.parse(text).ui).toEqual({ leftPanel: false, rightPanel: true }),
-    )
+  const second = path.join(app.workspacesDir, 'second')
+  await runCommand(page, 'new workspace')
+  await answer(page, 'New workspace name', 'second')
+  await expect(page.getByText('No article yet')).toBeVisible()
+  await expect(leftPanel(page)).toHaveCount(0)
+  await page.keyboard.press(`${mod}+Alt+b`)
+  await expect(rightPanel(page)).toBeVisible()
+  await expectFile(path.join(second, '.zen', 'config.json'), (text) =>
+    expect(JSON.parse(text).ui).toEqual({ leftPanel: false, rightPanel: true }),
+  )
 
-    await runCommand(page, `switch to workspace: ${path.basename(app.workspace)}`)
-    await expect(articleHeading(page)).toBeVisible()
-    await expect(leftPanel(page)).toBeVisible()
-    await expect(rightPanel(page)).toHaveCount(0)
-    expect(savedUi(app)).toEqual({ leftPanel: true, rightPanel: false })
-  } finally {
-    rmSync(base, { recursive: true, force: true })
-  }
+  await runCommand(page, `switch to workspace: ${path.basename(app.workspace)}`)
+  await expect(articleHeading(page)).toBeVisible()
+  await expect(leftPanel(page)).toBeVisible()
+  await expect(rightPanel(page)).toHaveCount(0)
+  expect(savedUi(app)).toEqual({ leftPanel: true, rightPanel: false })
 })
 
 test("the edge handles are 24px targets that never sit on a block's drag handle", async ({
@@ -496,20 +490,15 @@ test('a panel toggle still on its way lands in its own workspace, never the next
   await expect(leftPanel(page)).toBeVisible()
 
   // The switch starts while the toggle's save is still held on its way to the server.
-  const base = mkdtempSync(path.join(os.tmpdir(), 'openwrite-panels-'))
-  try {
-    const second = path.join(base, 'second')
-    await runCommand(page, 'new workspace')
-    await answer(page, 'New workspace path', second)
-    releaseFirst()
-    await expect(page.getByText('No article yet')).toBeVisible()
+  const second = path.join(app.workspacesDir, 'second')
+  await runCommand(page, 'new workspace')
+  await answer(page, 'New workspace name', 'second')
+  releaseFirst()
+  await expect(page.getByText('No article yet')).toBeVisible()
 
-    expect(savedUi(app).leftPanel).toBe(true)
-    const next = JSON.parse(readFileSync(path.join(second, '.zen', 'config.json'), 'utf8'))
-    expect(next.ui?.leftPanel ?? false).toBe(false)
-  } finally {
-    rmSync(base, { recursive: true, force: true })
-  }
+  expect(savedUi(app).leftPanel).toBe(true)
+  const next = JSON.parse(readFileSync(path.join(second, '.zen', 'config.json'), 'utf8'))
+  expect(next.ui?.leftPanel ?? false).toBe(false)
 })
 
 test('a toggle made before the page knows its workspace still says which workspace it is for', async ({

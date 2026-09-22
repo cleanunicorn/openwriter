@@ -460,14 +460,26 @@ codex exec --json --skip-git-repo-check --ephemeral
   not stop the editor from starting, the same rule `loadConfig` follows.
 - **The file is named `workspace-list.ts`, not `workspaces.ts`.** A file one letter away from the
   existing `workspace.ts` in the same directory is a readability trap.
-- **Erase takes an id; open takes a path.** Opening an arbitrary readable directory is the
-  feature. Deleting one is not: the root that is deleted is read from the list the server owns,
-  so a root the list does not own cannot be expressed in the request at all. The verb is `erase`
+- **No workspace route takes a filesystem path** (replaces "open takes a path"). Creating
+  scaffolded, and opening switched the editor to, whatever absolute path the request named —
+  `/` included — and in `npm run dev` that request can come from anyone on the network. Now
+  `New workspace…` and `Open workspace…` take a *name* (kebab case, at most 64 characters, so it
+  cannot spell `..`, a separator or an absolute path), resolved inside one folder the server owns:
+  `<repo>/.openwrite/workspaces/` (`AppOptions.workspacesDir`, injected like `workspacesFile` so
+  no test writes the real one). A symlink at `<home>/<name>` is refused, not followed, and the
+  created directory's realpath is checked before anything is written into it. Switching to a
+  remembered workspace goes by **id** (`POST /api/workspaces/:id/open`), as erase already did.
+  A root outside the folder — a Hugo site — enters the list only through `--workspace` /
+  `OPENWRITE_WORKSPACE`, which only the local user can type. The erase verb stays `erase`
   rather than a second `DELETE`, because two delete verbs — one meaning "forget", one meaning
   "destroy" — is how an accident happens.
-- **`EraseWorkspaceRequestSchema` is the only strict schema in the project.** A plain `z.object`
-  strips unknown keys, so a body carrying a `path` would be silently ignored rather than refused.
-  On the destructive route that difference is worth one departure from the surrounding style.
+- **The workspace request bodies are strict** (`z.strictObject`): erase, open and create. A
+  plain `z.object` strips unknown keys, so a body carrying a `path` would be silently ignored
+  rather than refused; on the routes that decide which directory the editor touches, a refusal
+  is the clearer answer.
+- **An absolute `contentDir` is still allowed** (OD1). It is the other way a request can point
+  the editor outside the workspace, and it is the Hugo feature; restricting it is the writer's
+  call, not a side effect of this fix.
 - **`rm -r` is the delete, and a test is why.** `rmSync(root, { recursive: true, force: true })`
   unlinks a symlink instead of walking through it — proven by a real decoy inside a workspace
   pointing at a directory outside it, not by Node's documentation. The top is checked separately:

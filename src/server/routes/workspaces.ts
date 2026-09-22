@@ -61,11 +61,37 @@ function validRoot(raw: string): string {
   return realpathSync(raw)
 }
 
+/**
+ * `<home>/<name>`, and nowhere else. The schema already made `name` kebab case, which cannot spell
+ * `..`, a separator or an absolute path; this guards what a name cannot: a symlink planted at
+ * `<home>/<name>`, whatever it points at, is refused rather than followed. The home is created on
+ * first use and resolved to its real location, and it may never be the filesystem root.
+ */
+function homeChild(home: string, name: string): string {
+  mkdirSync(home, { recursive: true })
+  const realHome = realpathSync(home)
+  if (path.dirname(realHome) === realHome) {
+    throw new HttpError(400, 'the workspaces folder cannot be the root of the filesystem')
+  }
+  const root = path.join(realHome, name)
+  if (path.dirname(root) !== realHome) throw new HttpError(400, `not a workspace name: ${name}`)
+  try {
+    if (lstatSync(root).isSymbolicLink()) {
+      throw new HttpError(400, `${name} is a link, not a workspace folder; nothing was opened`)
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+  return root
+}
+
 function scaffold(root: string): void {
   if (existsSync(root) && readdirSync(root).length > 0) {
-    throw new HttpError(400, `${root} already has something in it; pick an empty or new directory`)
+    throw new HttpError(400, `${root} already has something in it; pick another name`)
   }
   mkdirSync(root, { recursive: true })
+  // A link swapped in between the check and the mkdir would be followed by the writes below.
+  if (realpathSync(root) !== root) throw new HttpError(400, `${root} moved while it was created`)
   writeFileSync(path.join(root, 'strategy.md'), STRATEGY)
   saveConfig(root, DEFAULT_CONFIG)
   mkdirSync(path.join(root, 'content', 'posts'), { recursive: true })
@@ -74,6 +100,7 @@ function scaffold(root: string): void {
 
 export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
   const { workspace, workspaces, watcher, events } = context
+  const home = context.options.workspacesDir
 
   // One mutation at a time. Opening, creating and erasing all read the list, change the world and
   // write it back; two of them interleaving across the `await` in `quiesce` would lose one of the
@@ -90,6 +117,7 @@ export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: Jo
       root: workspace.root,
       label: workspaces.findByPath(workspace.root)?.label ?? path.basename(workspace.root),
     },
+    home: realpathOrSelf(home),
     entries: workspaces.entries(),
   })
 
@@ -114,26 +142,38 @@ export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: Jo
 
   app.get('/api/workspaces', (c) => c.json(body()))
 
+  // No route here takes a filesystem path. A workspace is reached by a name inside `home` or by
+  // the id of one the list already remembers; any other root enters the list only through the
+  // command line (`--workspace`), which only the local user can type.
   app.post('/api/workspaces/open', async (c) => {
-    const { path: raw } = await parseBody(c, OpenWorkspaceRequestSchema)
-    const root = validRoot(raw)
+    const { name } = await parseBody(c, OpenWorkspaceRequestSchema)
     return c.json(
       await serialised(async () => {
-        await switchTo(root)
+        await switchTo(validRoot(homeChild(home, name)))
+        return body()
+      }),
+    )
+  })
+
+  app.post('/api/workspaces/:id/open', async (c) => {
+    const id = c.req.param('id')
+    return c.json(
+      await serialised(async () => {
+        const entry = workspaces.find(id)
+        if (entry === undefined) throw new HttpError(404, 'that workspace is not in the list')
+        await switchTo(validRoot(entry.path))
         return body()
       }),
     )
   })
 
   app.post('/api/workspaces', async (c) => {
-    const { path: raw, label } = await parseBody(c, CreateWorkspaceRequestSchema)
-    if (!path.isAbsolute(raw)) {
-      throw new HttpError(400, `the workspace path must be absolute: ${raw}`)
-    }
+    const { name, label } = await parseBody(c, CreateWorkspaceRequestSchema)
     return c.json(
       await serialised(async () => {
-        scaffold(raw)
-        await switchTo(validRoot(raw), label)
+        const root = homeChild(home, name)
+        scaffold(root)
+        await switchTo(validRoot(root), label)
         return body()
       }),
       201,

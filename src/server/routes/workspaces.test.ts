@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -16,6 +17,8 @@ import { createTestApp, json, type TestApp } from '../test-helpers.ts'
 import { WorkspaceList } from '../workspace-list.ts'
 
 const SAMPLE = path.resolve(import.meta.dirname, '..', '..', '..', 'sample-workspace')
+/** An absolute path a create request names; the server must never make it. */
+const ANYWHERE = path.join(os.tmpdir(), `openwrite-anywhere-${process.pid}`)
 
 let t: TestApp
 let base: string
@@ -28,15 +31,29 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true })
 })
 
-/** Another workspace on disk, a copy of the sample, like the one the writer would switch to. */
+/**
+ * Another workspace on disk, a copy of the sample, like the one the writer would switch to. It
+ * lives in the server's workspaces folder, the only place the HTTP routes open by name.
+ */
 const another = (name: string, edit?: (root: string) => void): string => {
-  const root = path.join(base, name)
+  const root = path.join(t.workspacesDir, name)
+  mkdirSync(t.workspacesDir, { recursive: true })
   cpSync(SAMPLE, root, { recursive: true })
   edit?.(root)
   return root
 }
 
-const open = (root: string) => t.send('POST', '/api/workspaces/open', { path: root })
+/** Open a workspace in the workspaces folder by its name. */
+const open = (root: string) => t.send('POST', '/api/workspaces/open', { name: path.basename(root) })
+
+/** Switch to a remembered workspace by its id — the one way back to a root outside the folder. */
+const switchBack = async (root: string) => {
+  const { entries } = await json(t.get('/api/workspaces'))
+  const entry = entries.find((candidate: { path: string }) => candidate.path === root)
+  return t.send('POST', `/api/workspaces/${entry.id}/open`)
+}
+
+const create = (body: unknown) => t.send('POST', '/api/workspaces', body)
 
 describe('the known-workspace list over HTTP', () => {
   it('lists the workspace the server started on as the active one', async () => {
@@ -110,7 +127,7 @@ describe('opening another workspace', () => {
     const second = another('second')
     await open(second)
     expect((await json(t.get('/api/workspaces'))).entries).toHaveLength(2)
-    await open(t.workspace)
+    expect((await switchBack(t.workspace)).status).toBe(200)
     const listed = await json(t.get('/api/workspaces'))
     expect(listed.active.root).toBe(t.workspace)
     expect(listed.entries).toHaveLength(2)
@@ -118,7 +135,7 @@ describe('opening another workspace', () => {
   })
 
   it('opening the workspace that is already open changes nothing', async () => {
-    const res = await open(t.workspace)
+    const res = await switchBack(t.workspace)
     expect(res.status).toBe(200)
     expect((await json(res)).active.root).toBe(t.workspace)
     expect((await json(t.get('/api/workspaces'))).entries).toHaveLength(1)
@@ -135,19 +152,45 @@ describe('opening another workspace', () => {
     expect((await t.get('/api/docs/article/..%2F..%2Fetc')).status).toBe(400)
   })
 
+  it('refuses to switch to an id the list does not have', async () => {
+    expect((await t.send('POST', '/api/workspaces/deadbeef0000/open')).status).toBe(404)
+    expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
+  })
+
   it.each([
-    ['a relative path', () => 'content'],
-    ['a directory that is not there', () => path.join(base, 'nope')],
-    ['a file', () => path.join(base, 'a-file')],
-  ])('refuses %s', async (_name, make) => {
-    writeFileSync(path.join(base, 'a-file'), 'not a workspace')
-    const res = await open(make())
+    ['the filesystem root', { name: '/' }],
+    ['an absolute path', { name: '/etc' }],
+    ['a parent directory', { name: '..' }],
+    ['a traversal', { name: '../escape' }],
+    ['a nested path', { name: 'a/b' }],
+    ['an empty name', { name: '' }],
+    ['a name that is not there', { name: 'nope' }],
+    ['a file', { name: 'a-file' }],
+    ['a body that names a path of its own', { path: '/' }],
+    ['a body that carries a path beside the name', { name: 'second', path: '/' }],
+  ])('refuses %s', async (_name, request) => {
+    another('second')
+    writeFileSync(path.join(t.workspacesDir, 'a-file'), 'not a workspace')
+    const res = await t.send('POST', '/api/workspaces/open', request)
     expect(res.status).toBe(400)
+    expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
+    expect((await json(t.get('/api/workspaces'))).entries).toHaveLength(1)
+  })
+
+  it('refuses a link in the workspaces folder that points outside it', async () => {
+    const outside = path.join(base, 'outside')
+    cpSync(SAMPLE, outside, { recursive: true })
+    mkdirSync(t.workspacesDir, { recursive: true })
+    symlinkSync(outside, path.join(t.workspacesDir, 'sneaky'))
+    const res = await t.send('POST', '/api/workspaces/open', { name: 'sneaky' })
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('link')
     expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
   })
 
   it('refuses a directory it cannot read', async () => {
-    const locked = path.join(base, 'locked')
+    mkdirSync(t.workspacesDir, { recursive: true })
+    const locked = path.join(t.workspacesDir, 'locked')
     mkdirSync(locked)
     chmodSync(locked, 0o000)
     try {
@@ -160,13 +203,14 @@ describe('opening another workspace', () => {
 })
 
 describe('creating a workspace', () => {
-  it('scaffolds it, remembers it, and opens it', async () => {
-    const root = path.join(base, 'fresh')
-    const res = await t.send('POST', '/api/workspaces', { path: root, label: 'Fresh' })
+  it('scaffolds it in the workspaces folder, remembers it, and opens it', async () => {
+    const res = await create({ name: 'fresh', label: 'Fresh' })
     expect(res.status).toBe(201)
     const listed = await json(res)
+    const root = path.join(t.workspacesDir, 'fresh')
     expect(listed.active.root).toBe(root)
     expect(listed.active.label).toBe('Fresh')
+    expect(listed.home).toBe(t.workspacesDir)
 
     expect(existsSync(path.join(root, 'strategy.md'))).toBe(true)
     expect(existsSync(path.join(root, '.zen', 'config.json'))).toBe(true)
@@ -176,17 +220,47 @@ describe('creating a workspace', () => {
     expect((await json(t.get('/api/config'))).config.contentDir).toBe('content')
   })
 
-  it('refuses a directory that already has something in it, and writes nothing', async () => {
+  it('refuses a name that already has something in it, and writes nothing', async () => {
     const root = another('taken')
     const before = readFileSync(path.join(root, 'strategy.md'), 'utf8')
-    const res = await t.send('POST', '/api/workspaces', { path: root })
+    const res = await create({ name: 'taken' })
     expect(res.status).toBe(400)
     expect(readFileSync(path.join(root, 'strategy.md'), 'utf8')).toBe(before)
     expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
   })
 
-  it('refuses a relative path', async () => {
-    expect((await t.send('POST', '/api/workspaces', { path: 'somewhere' })).status).toBe(400)
+  // The reported hole: a path was scaffolded wherever the request said, `/` included. The table is
+  // built before `beforeEach`, so the paths it names are fixed ones that must never appear.
+  it.each([
+    ['the filesystem root', { name: '/' }],
+    ['an absolute path', { name: ANYWHERE }],
+    ['a parent directory', { name: '..' }],
+    ['a traversal', { name: '../escape' }],
+    ['a nested path', { name: 'a/b' }],
+    ['a hidden name', { name: '.zen' }],
+    ['upper case', { name: 'Fresh' }],
+    ['a name too long to be a folder', { name: 'a'.repeat(65) }],
+    ['the old body, a path', { path: ANYWHERE }],
+    ['a path beside the name', { name: 'fresh', path: '/' }],
+  ])('refuses %s and creates nothing', async (_name, request) => {
+    const res = await create(request)
+    expect(res.status).toBe(400)
+    expect(existsSync(ANYWHERE)).toBe(false)
+    expect(existsSync(path.join(path.dirname(t.workspacesDir), 'escape'))).toBe(false)
+    expect(existsSync(path.join(t.workspacesDir, 'fresh'))).toBe(false)
+    expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
+  })
+
+  it('refuses a link planted at the name, and writes nothing where it points', async () => {
+    const outside = path.join(base, 'outside')
+    mkdirSync(outside)
+    mkdirSync(t.workspacesDir, { recursive: true })
+    symlinkSync(outside, path.join(t.workspacesDir, 'fresh'))
+    const res = await create({ name: 'fresh' })
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('link')
+    expect(readdirSync(outside)).toEqual([])
+    expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
   })
 })
 
