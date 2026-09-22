@@ -15,7 +15,7 @@ import {
   UnsafeSvgError,
 } from '../assets.ts'
 import type { ServerContext } from '../context.ts'
-import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
+import { fileResponse, HttpError, parseBody, pathTail, pinWorkspace } from '../http.ts'
 import { resolveWithin } from '../paths.ts'
 
 function refFrom(kind: string, slug: string | undefined): DocRef {
@@ -46,13 +46,24 @@ async function readLimited(request: Request, limit: number): Promise<Uint8Array>
 export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext): void {
   app.get('/api/articles', (c) => c.json({ articles: workspace.listArticles() }))
 
+  // Every route below that reads or writes a document checks, after its last await, that the
+  // workspace it was admitted under is still the one open (`pinWorkspace`).
   app.post('/api/articles', async (c) => {
+    const pinned = pinWorkspace(
+      c,
+      workspace,
+      'The workspace changed before the article was created.',
+    )
     const { title } = await parseBody(c, NewArticleRequestSchema)
+    pinned()
     return c.json(workspace.createArticle(title), 201)
   })
 
+  // A read is pinned too: a tab that has not heard of a switch would otherwise load the other
+  // workspace's document of the same slug into its own state, and save its edits there.
   app.get('/api/docs/:kind/:slug?', (c) => {
     const ref = refFrom(c.req.param('kind'), c.req.param('slug'))
+    pinWorkspace(c, workspace, 'The workspace changed; this document belongs to another one.')()
     const doc = workspace.readDoc(ref)
     watcher.remember(ref, doc.hash)
     return c.json(doc)
@@ -60,7 +71,9 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
 
   app.put('/api/docs/:kind/:slug?', async (c) => {
     const ref = refFrom(c.req.param('kind'), c.req.param('slug'))
+    const pinned = pinWorkspace(c, workspace, 'The workspace changed before this was saved.')
     const { text, baseHash } = await parseBody(c, SaveRequestSchema)
+    pinned()
     const hash = workspace.writeDoc(ref, text, baseHash)
     watcher.remember(ref, hash)
     return c.json({ hash })
@@ -68,6 +81,7 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
 
   // Image paste/drop: the body is the image, the name travels in a header.
   app.post('/api/docs/article/:slug/assets', async (c) => {
+    const pinned = pinWorkspace(c, workspace, 'The workspace changed before the image was stored.')
     const contentType = (c.req.header('content-type') ?? '').split(';')[0]?.trim() ?? ''
     const extension = extensionForImage(contentType)
     if (extension === undefined) throw new HttpError(415, 'only images can be pasted or dropped')
@@ -94,6 +108,7 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
       if (error instanceof UnsafeSvgError) throw new HttpError(400, error.message)
       throw error
     }
+    pinned()
     const bundle = workspace.bundleDir(c.req.param('slug'))
     const name = storeWithoutOverwrite(bundle, fileName, safe.data)
     return c.json({ name, removed: safe.removed }, 201)

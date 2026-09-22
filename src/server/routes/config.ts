@@ -1,9 +1,8 @@
 import type { Hono } from 'hono'
-import { decodeWorkspaceHeader, WORKSPACE_HEADER } from '../../shared/api-types.ts'
 import { ConfigSchema } from '../../shared/config-schema.ts'
 import { InvalidConfigError, saveConfig } from '../config.ts'
 import type { ServerContext } from '../context.ts'
-import { HttpError, parseBody } from '../http.ts'
+import { HttpError, parseBody, pinWorkspace } from '../http.ts'
 import { Workspace } from '../workspace.ts'
 
 export function mountConfigRoutes(app: Hono, context: ServerContext): void {
@@ -25,13 +24,15 @@ export function mountConfigRoutes(app: Hono, context: ServerContext): void {
   app.get('/api/config', (c) => c.json(configBody()))
 
   app.put('/api/config', async (c) => {
+    const pinned = pinWorkspace(
+      c,
+      workspace,
+      'The workspace changed before these settings were saved.',
+    )
     const config = await parseBody(c, ConfigSchema)
     // From here to the write there is no await, so no switch can fall in between: a write meant for
     // the workspace that was open before a switch is refused, never saved into the new one.
-    const header = c.req.header(WORKSPACE_HEADER)
-    if (header !== undefined && decodeWorkspaceHeader(header) !== workspace.root) {
-      throw new HttpError(409, 'The workspace changed before these settings were saved.')
-    }
+    pinned()
     // Validate what the value resolves to BEFORE it is written: a saved bad value would make
     // every later load fail.
     const problem = Workspace.contentDirProblemFor(workspace.root, config.contentDir)

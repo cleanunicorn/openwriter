@@ -29,10 +29,8 @@ export const WorkspacesFileSchema = z.object({
   version: z.literal(1).default(1),
   entries: z.array(WorkspaceEntrySchema).default([]),
 })
-export type WorkspacesFile = z.infer<typeof WorkspacesFileSchema>
 
 export const ActiveWorkspaceSchema = z.object({ root: z.string(), label: z.string() })
-export type ActiveWorkspace = z.infer<typeof ActiveWorkspaceSchema>
 
 export const WorkspacesResponseSchema = z.object({
   active: ActiveWorkspaceSchema,

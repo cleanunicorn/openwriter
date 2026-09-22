@@ -638,6 +638,61 @@ codex exec --json --skip-git-repo-check --ephemeral
   `path.isAbsolute` and refuses the filesystem root itself (`assertErasablePath`), because it is
   the one route that deletes and should not rely on a parse it does not see.
 
+## Workspace switch safety (issue #15, R1–R5, R10)
+
+- **A request is pinned to the workspace it was admitted under** (`pinWorkspace` in
+  `src/server/http.ts`). "Everything after `quiesce` is one synchronous block" protects the
+  switch, not the route on the other side: a `PUT` that entered under A and was still awaiting
+  its body resumed after the switch against B, because `retarget` moves the shared object in
+  place. The route now takes the root before its first `await` and checks it after the last one.
+  Pinned: the document read and save, new article, image upload, settings save, both exports,
+  and job creation — every route that reads or writes a workspace after awaiting a body.
+- **Every request from the page also names the workspace the tab shows**
+  (`x-openwrite-workspace`, set once in `api.ts`'s `request()` and on the export's own `fetch`).
+  Pinning alone cannot catch a tab that has not heard of a switch yet: its request arrives after
+  the switch and is admitted under B. The refusal is a 409 with `workspaceChanged: true`
+  (`WorkspaceMovedSchema`), distinct from the document conflict, so the client follows the server
+  instead of reconciling another workspace's text into its own. A header that does not decode is
+  refused, not ignored. The header stays optional for requests typed by hand; the pin does not.
+- **`null === null` stays the rule for "absent on both sides".** The sweep found six nullable
+  hash comparisons (`writeDoc`, the watcher, `onDocChanged`, `resync`, and the reducer's `saved`
+  and `external`). Each is correct *within one workspace* — a brief nobody wrote yet is created
+  on its first save exactly because both hashes are null. What was missing was the workspace
+  identity beside them, which the pin and the header now supply; changing the comparison would
+  have broken creation instead.
+- **A switch whose save fails does not happen.** `flush` resolves even when the save failed (it
+  shows a notice and retries by itself), so `move` checks what is still dirty after flushing and
+  refuses with the documents' names. The alternative, switching anyway, discards the only copy:
+  there is no local draft store. A writer whose disk is gone cannot switch until the retry lands,
+  which is the lesser harm; the unload guard still warns before a reload.
+- **Another tab's unsaved text stops the follow and asks** (`moved`). A late save would write
+  the old workspace's text into the new one (and is now refused), and following discards it.
+  So a tab that hears of a switch while it holds unsaved text stays on its workspace, pauses
+  autosave, ignores every event about the new workspace (documents, settings, jobs — they would
+  land on the wrong documents), and shows a warning that stays until the writer chooses: *go back
+  and save* (switch the server back and save there; other tabs follow as they would any switch)
+  or *discard and follow*. A browser-storage rescue was rejected: it would keep article text
+  outside the file, a second copy with its own staleness rules, for a case two buttons settle.
+- **The tab that switches ignores `workspace.changed` while its switch is under way**
+  (`switching`), rather than comparing roots. The server emits the event before it answers, and
+  the store learns the new root only when the answer arrives, so the root comparison was always
+  false for the asking tab and it adopted twice — clearing whatever was typed in between.
+- **The document is inert while this tab switches.** The switch saves first and may wait up to
+  `quiesce`'s budget for jobs; text typed meanwhile would be cleared by the adopt. Golden rule 8
+  is about the writer's work being blocked by agents; here the writer asked to leave the document,
+  and the status line says why it is still.
+- **A reconnect checks the workspace before the documents.** `resync` on `hello` now asks for
+  the open workspace first and, when it is not the tab's, hands it to the same handler as the
+  live event; only then does it sync jobs and compare documents. Without it, a switch made while
+  the stream was down made B's article of the same slug arrive as an outside change to A's.
+- **A failure with no document open gets a notice of its own** (`AppState.notice`). It used to
+  go to `console.error`, and the workspace commands — erase among them — are reachable from an
+  empty workspace.
+- **The erase confirmation carries a warning that stays** (`warning` on the `confirm` palette
+  mode, in `--warn`, naming the path it deletes). The placeholder that carried it vanished on the
+  first keystroke. Palette hints wrap (`overflow-wrap: anywhere`) instead of overflowing: a
+  workspace path from `--workspace` can be one long word.
+
 ## Shell and panels (ui-rethink)
 
 - **"No sidebar" is superseded.** The writer asked for two auto-hide, toggleable panels: left for

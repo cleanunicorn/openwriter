@@ -64,6 +64,7 @@ const SURFACES = [
   'src/client/jobs/PromptPill.tsx',
   'src/client/jobs/GhostDiff.tsx',
   'src/client/settings/Settings.tsx',
+  'src/client/workspaces/WorkspaceStatus.tsx',
   'src/client/App.tsx',
 ]
 

@@ -53,7 +53,8 @@ export type JobsState = {
 export type ComposerDraft = { text: string; scope: 'article' | 'research' }
 export const EMPTY_DRAFT: ComposerDraft = { text: '', scope: 'article' }
 
-const jobsStore = createStore<JobsState>({
+/** A fresh object each time: the store at start, and again after a workspace switch. */
+const emptyJobs = (): JobsState => ({
   jobs: {},
   order: [],
   held: [],
@@ -62,6 +63,8 @@ const jobsStore = createStore<JobsState>({
   drafts: {},
   threadStarts: {},
 })
+
+const jobsStore = createStore<JobsState>(emptyJobs())
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
 
@@ -463,15 +466,7 @@ async function sync(): Promise<void> {
  * there cannot be applied and is marked stale with its output kept.
  */
 export async function resetJobs(): Promise<void> {
-  jobsStore.set(() => ({
-    jobs: {},
-    order: [],
-    held: [],
-    inserted: {},
-    researchJobId: null,
-    drafts: {},
-    threadStarts: {},
-  }))
+  jobsStore.set(emptyJobs)
   createdHere.clear()
   inFlight.clear()
   posting.clear()

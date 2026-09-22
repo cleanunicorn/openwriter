@@ -107,6 +107,27 @@ body {
   padding-left: 12px;
 }
 
+.notice p {
+  margin: 0;
+}
+
+/* Unsaved text is at stake (another tab moved the workspace): the warning colour, not the accent. */
+.notice.notice-warn {
+  border-left-color: var(--warn);
+  color: var(--fg);
+}
+
+.notice .notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+}
+
+.link.warn {
+  color: var(--warn);
+}
+
 .doc-label {
   font-family: system-ui, sans-serif;
   text-transform: uppercase;
@@ -400,6 +421,19 @@ body {
   outline: none;
 }
 
+/* The typed confirmation of the one irreversible command: marked, and its warning stays put. */
+.palette-input.is-destructive {
+  border-bottom: 2px solid var(--warn);
+}
+
+.palette-warning {
+  margin: 0;
+  padding: 10px 16px 12px;
+  color: var(--warn);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
 .palette-list {
   max-height: 320px;
   overflow-y: auto;
@@ -413,6 +447,17 @@ body {
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+/* A hint can be an absolute path of any length: it wraps inside the palette, never past it. */
+.palette-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.palette-hint {
+  flex: 0 1 45%;
+  text-align: right;
 }
 
 .palette-item.is-active {

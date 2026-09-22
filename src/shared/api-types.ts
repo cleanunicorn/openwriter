@@ -46,6 +46,16 @@ export const DocResponseSchema = z.object({
   exists: z.boolean(),
 })
 
+/**
+ * The body of a 409 for a request meant for a workspace that is no longer open: a switch happened
+ * while it was on its way (this tab or another), or the tab has not heard of one yet. Nothing was
+ * read or written; the client keeps what it has and follows the server instead.
+ */
+export const WorkspaceMovedSchema = z.object({
+  error: z.string(),
+  workspaceChanged: z.literal(true),
+})
+
 export const SaveRequestSchema = z.object({ text: z.string(), baseHash: z.string().nullable() })
 export const SaveResponseSchema = z.object({ hash: z.string() })
 

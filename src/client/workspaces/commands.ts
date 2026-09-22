@@ -14,12 +14,17 @@ import {
 const report = (what: string, run: () => Promise<void>) => () =>
   void run().catch((error: unknown) => notifyFailure(what, error))
 
-const askForName = (label: string, placeholder: string, run: (name: string) => Promise<void>) =>
+const askForName = (
+  label: string,
+  placeholder: string,
+  failure: string,
+  run: (name: string) => Promise<void>,
+) =>
   setPalette({
     kind: 'input',
     label,
     placeholder,
-    submit: (name) => report(label, () => run(name))(),
+    submit: (name) => report(failure, () => run(name))(),
   })
 
 registerCommands((state) => {
@@ -40,8 +45,11 @@ registerCommands((state) => {
       title: 'Open workspace…',
       hint: `by its name in ${workspaces.home}`,
       run: () =>
-        askForName('Workspace name', 'Name of a workspace in the workspaces folder', (name) =>
-          openWorkspace(name),
+        askForName(
+          'Workspace name',
+          'Name of a workspace in the workspaces folder',
+          'Could not open that workspace',
+          (name) => openWorkspace(name),
         ),
     },
     {
@@ -52,6 +60,7 @@ registerCommands((state) => {
         askForName(
           'New workspace name',
           'Lowercase letters, digits and hyphens, e.g. my-blog',
+          'Could not create the workspace',
           (name) => createWorkspace(name),
         ),
     },
@@ -82,7 +91,8 @@ registerCommands((state) => {
         setPalette({
           kind: 'confirm',
           label: `Delete ${entry.label} from disk`,
-          placeholder: `Type ${entry.label} to delete it — this cannot be undone`,
+          placeholder: `Type ${entry.label} to delete it`,
+          warning: `This deletes ${entry.path} and everything in it. It cannot be undone.`,
           phrase: entry.label,
           submit: report('Could not delete that workspace', () =>
             eraseWorkspace(entry.id, entry.label),
