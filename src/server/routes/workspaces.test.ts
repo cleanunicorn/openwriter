@@ -285,7 +285,8 @@ describe('opening another workspace', () => {
     expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
   })
 
-  it('refuses a directory it cannot read', async () => {
+  // POSIX only: on Windows `chmod` cannot make a directory unreadable.
+  it.skipIf(process.platform === 'win32')('refuses a directory it cannot read', async () => {
     mkdirSync(t.workspacesDir, { recursive: true })
     const locked = path.join(t.workspacesDir, 'locked')
     mkdirSync(locked)

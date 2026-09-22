@@ -11,6 +11,7 @@ import {
   blockTexts,
   blockWith,
   boundingBox,
+  SUBPIXEL,
   configPath,
   editor,
   expectFile,
@@ -142,8 +143,8 @@ test('docked panels leave the column 680px wide and uncovered', async ({ page })
   const left = await boundingBox(leftPanel(page))
   const right = await boundingBox(rightPanel(page))
   expect(column.width).toBe(680)
-  expect(left.x + left.width).toBeLessThanOrEqual(column.x - 44)
-  expect(column.x + column.width).toBeLessThanOrEqual(right.x)
+  expect(left.x + left.width).toBeLessThanOrEqual(column.x - 44 + SUBPIXEL)
+  expect(column.x + column.width).toBeLessThanOrEqual(right.x + SUBPIXEL)
 })
 
 test('a block still moves by drag with the left panel docked', async ({ page }) => {
@@ -154,7 +155,7 @@ test('a block still moves by drag with the left panel docked', async ({ page }) 
   await first.hover()
   const grip = await boundingBox(first.getByTestId('drag-handle'))
   const panel = await boundingBox(leftPanel(page))
-  expect(grip.x).toBeGreaterThanOrEqual(panel.x + panel.width)
+  expect(grip.x).toBeGreaterThanOrEqual(panel.x + panel.width - SUBPIXEL)
   const before = await blockTexts(page)
   await keyboardMove(page, first, 'ArrowDown')
   const after = await blockTexts(page)
@@ -307,8 +308,8 @@ for (const width of [1500, 1280, 900, 390]) {
     expect(column.width).toBeGreaterThanOrEqual(Math.min(680, width - 96))
 
     const right = await boundingBox(rightPanel(page))
-    const beside = column.x + column.width <= right.x
-    const below = column.y + column.height <= right.y
+    const beside = column.x + column.width <= right.x + SUBPIXEL
+    const below = column.y + column.height <= right.y + SUBPIXEL
     expect(beside || below).toBe(true)
     expect(await rightPanel(page).getAttribute('data-layout')).toBe(
       width >= 1156 ? 'docked' : 'stacked',
@@ -318,7 +319,7 @@ for (const width of [1500, 1280, 900, 390]) {
     expect(layout).toBe(width >= 1436 ? 'docked' : 'overlay')
     if (layout === 'docked') {
       const box = await boundingBox(left)
-      expect(box.x + box.width).toBeLessThanOrEqual(column.x)
+      expect(box.x + box.width).toBeLessThanOrEqual(column.x + SUBPIXEL)
     }
   })
 }
@@ -427,10 +428,10 @@ test("the edge handles are 24px targets that never sit on a block's drag handle"
       )
       for (const grip of grips) {
         const overlaps =
-          grip.x < handleBox.x + handleBox.width &&
-          handleBox.x < grip.x + grip.width &&
-          grip.y < handleBox.y + handleBox.height &&
-          handleBox.y < grip.y + grip.height
+          grip.x < handleBox.x + handleBox.width - SUBPIXEL &&
+          handleBox.x < grip.x + grip.width - SUBPIXEL &&
+          grip.y < handleBox.y + handleBox.height - SUBPIXEL &&
+          handleBox.y < grip.y + grip.height - SUBPIXEL
         expect(overlaps).toBe(false)
       }
     }

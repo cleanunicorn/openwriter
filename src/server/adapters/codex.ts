@@ -1,10 +1,10 @@
-import path from 'node:path'
 import { z } from 'zod'
 import {
   type CliSpec,
   type LineRead,
   clipProgress,
   createProcessAdapter,
+  jobRelative,
   parseLine,
   substitute,
 } from './process-adapter.ts'
@@ -48,7 +48,7 @@ export function buildCodexArgs(jobDir: string, options: AdapterOptions): string[
  * The prompt therefore says where the workspace is and how the paths in instruction.md map.
  */
 export function codexPrompt(jobDir: string, options: AdapterOptions): string {
-  const jobRel = path.relative(options.workspace, jobDir)
+  const jobRel = jobRelative(options.workspace, jobDir)
   return [
     `Your working directory is the job directory: ${jobDir}`,
     `The workspace root is ${options.workspace}. You may read it (for example sources/), but you can only write in your working directory.`,

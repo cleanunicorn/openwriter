@@ -6,6 +6,7 @@ import {
   answer,
   articleHeading,
   ask,
+  blocks,
   blockWith,
   dropEventStreams,
   expectOneWaiting,
@@ -67,15 +68,25 @@ test("the tray drops the old workspace's jobs on a switch, in every tab, and fin
   expect(await waitingJobs(app)).toEqual([])
   expect((await fetch(`${app.url}/api/jobs/${first}`)).status).toBe(404)
 
-  // A reconnect re-reads the jobs from the server: still only the new workspace's (none).
+  // A reconnect re-reads the jobs from the server: still only the new workspace's (none). Both
+  // tabs are waited for, so the assertion follows a real re-read and the next job's events find
+  // the streams open again.
+  const rereads = [page, other].map((tab) =>
+    tab.waitForResponse(
+      (response) => response.request().method() === 'GET' && response.url().endsWith('/api/jobs'),
+    ),
+  )
   await dropEventStreams(app)
+  await Promise.all(rereads)
   await expect(tray(page)).toHaveCount(0)
 
   // The second workspace's own job shows, and it is the only one.
   await runCommand(page, 'new article')
   await answer(page, 'Article title', 'Hello, openwrite')
   await expect(articleHeading(page)).toBeVisible()
-  await selectWord(page, blockWith(page, 'Hello, openwrite'), 'Hello')
+  // The heading's block by its role: the front matter line shows the same title, and a match by
+  // text alone sometimes sent the job to the front matter instead.
+  await selectWord(page, blocks(page).filter({ has: articleHeading(page) }), 'Hello')
   await ask(page, 'fake:upper a job of the second workspace')
   const second = await expectOneWaiting(app)
   expect(second).not.toBe(first)

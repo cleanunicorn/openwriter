@@ -7,6 +7,7 @@ import {
   articleHeading,
   blockWith,
   boundingBox,
+  SUBPIXEL,
   dropEventStreams,
   editor,
   notice,
@@ -234,7 +235,7 @@ test('a long workspace path in the palette stays inside it', async ({ page, app 
   const option = page.getByRole('option', { name: new RegExp(long) })
   await expect(option).toContainText(path.join(app.workspacesDir, long))
   const box = await boundingBox(option)
-  expect(box.x + box.width).toBeLessThanOrEqual(palette.x + palette.width)
+  expect(box.x + box.width).toBeLessThanOrEqual(palette.x + palette.width + SUBPIXEL)
   const list = page.getByRole('listbox', { name: 'Commands' })
   expect(await list.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true)
 })

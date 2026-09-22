@@ -1,4 +1,3 @@
-import path from 'node:path'
 import { z } from 'zod'
 import {
   type CliSpec,
@@ -6,6 +5,7 @@ import {
   assertNoBypass,
   clipProgress,
   createProcessAdapter,
+  jobRelative,
   parseLine,
   substitute,
 } from './process-adapter.ts'
@@ -47,7 +47,7 @@ export function claudeConfinement(jobRel: string, allow: string[]): string[] {
  * `claude --help` 2.1.278 — see DECISIONS.md, "Real agents".
  */
 export function buildClaudeArgs(jobDir: string, options: AdapterOptions): string[] {
-  const jobRel = path.relative(options.workspace, jobDir)
+  const jobRel = jobRelative(options.workspace, jobDir)
   const base = options.config.baseArgs
     ? substitute(options.config.baseArgs, jobDir, options.workspace)
     : [

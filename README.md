@@ -452,11 +452,88 @@ npm run lint
 npm run typecheck
 npm run knip         # unused exports, files and dependencies (entry points: knip.jsonc)
 npm test             # Vitest; one file: npm test -- src/server/paths.test.ts
-npm run test:e2e     # Playwright; first run: npx playwright install --with-deps chromium
+npm run test:e2e     # Playwright, Chromium; first run: npx playwright install --with-deps chromium
                      # the smoke server takes a free port; OPENWRITE_E2E_PORT=<port> pins one
+npm run test:e2e:all # the same suite on Chromium, Firefox and WebKit (what CI runs);
+                     # first run: npx playwright install --with-deps chromium firefox webkit
 npm run build
 node scripts/screenshots.ts   # regenerates docs/screenshots/ (light and dark)
 ```
 
 Every check uses the sample workspace, temp directories, and the `fake` adapter. No test needs
 network, keys, or an agent CLI.
+
+CI runs the e2e suite on all three engines, one job each (`.github/workflows/ci.yml`).
+`npm run test:e2e` stays on Chromium so a machine without the other two browsers can run the
+gate; run `npm run test:e2e:all` before a change that touches the editor, the shell, pasting or
+layout. A test that only one engine can run is scoped with `browserName` and a comment saying
+why (so far: none is skipped; `paste-splitting.spec.ts` grants the clipboard permission only in
+Chromium, the one engine that has it).
+
+## Windows
+
+**Not supported yet.** The app itself has never been started on Windows, and the e2e suite does
+not run there. What *is* checked: CI runs the unit suite on `windows-latest` (`unit (windows)`),
+and it passes — 930 tests on 2026-09-22, with 5 POSIX-only tests skipped there (see the last item below). The
+rest of this section comes from reading the code. WSL 2 (which is Linux) is the way to use
+openwrite on a Windows machine today.
+
+What should work as is:
+
+- **npm scripts** use only `node …` and `&&`, which `cmd.exe` runs.
+- **The path guard** (`src/server/paths.ts`, `resolveWithin`) splits on both `/` and `\`, refuses
+  `..` in either form (also percent-encoded) and refuses drive-absolute and UNC paths.
+- **Line endings in the block model**: splitting and serialising keep CRLF, lone CR and a BOM
+  byte for byte (`src/shared/blocks/round-trip.test.ts`). `.gitattributes` checks the repo out
+  with LF, so a `core.autocrlf=true` checkout does not break the byte-comparing tests or Biome.
+
+Made portable without being run on Windows:
+
+- **Cancel** stops the agent's process tree with `taskkill /T /F`; POSIX signals a process group
+  (`src/server/adapters/spawn.ts`). Agents start with `windowsHide`, so no console window opens.
+- **claude's write rule** `Edit(.zen/jobs/<id>/**)` and codex's path rewriting use `/` whatever
+  the platform (`jobRelative` in `src/server/adapters/process-adapter.ts`); with `\` the only
+  write rule would have matched nothing.
+- **A skill's `requires:`** is looked up with each `PATHEXT` extension (`findOnPath` in
+  `src/server/skills.ts`), so `agg.exe` counts as `agg`.
+- **`--open`** hands the URL to `explorer.exe` (`src/server/main.ts`).
+- **Job files without `O_NOFOLLOW`**: Node has no such flag on Windows, and `undefined | flags`
+  quietly dropped it. `src/server/jobs/job-io.ts` now `lstat`s first and refuses a symlink there;
+  the symlink tests in `job-io.test.ts` pass on the Windows runner.
+- **Directory watches use the long path** (`watchDirectory` in `src/server/watcher.ts`). Watching a
+  path in 8.3 short form (`C:\Users\RUNNER~1\…`, which `os.tmpdir()` is on GitHub's runners)
+  made libuv abort the whole process with an assertion in `fs-event.c`; the first Windows CI run
+  lost four test files to it.
+
+Known limitations:
+
+- **`claude` and `codex` installed with npm are `.cmd` shims**, and an agent is started without a
+  shell, which cannot run one: the job fails as "missing CLI" (a `command` set to `codex.cmd`
+  fails with `EINVAL`). Point `command` in settings at a real `.exe` (claude's native installer
+  ships `claude.exe`). A shell is not used on purpose: the arguments carry the writer's text.
+- **The symlink check on Windows is check-then-open**: a link swapped in between is followed. The
+  skills reader (`src/server/skills.ts`, `readLocalSkillFile`) relies on its `realpath` check alone
+  there. Creating a file symlink on Windows needs Developer Mode or an administrator, which
+  narrows who can try.
+- **A save replaces the file by rename** (`src/server/workspace.ts`, `writeDoc`; also the config and
+  the workspace list). Windows refuses that while another program holds the file open without
+  delete sharing (some editors, antivirus, sync clients): the save fails with a notice and is
+  retried.
+- **Editing a block of a CRLF file writes it back with LF.** CodeMirror joins lines with `\n`
+  (`src/client/blocks/BlockEditor.tsx`), so a multi-line block that is opened and changed comes
+  back LF inside a CRLF file. Untouched blocks, and an untouched file, stay byte-identical. This
+  holds on every platform; CRLF files are simply more common on Windows.
+- **codex's sandbox flags** (`-s workspace-write`, `exclude_slash_tmp`) are Unix concepts; what
+  they confine on Windows is unverified. **herdr** is Unix-only.
+- **Reserved device names** (`con`, `nul`, `aux`, `com1`, …) pass the slug and workspace-name
+  checks (`src/shared/names.ts`) but cannot be created as files on Windows.
+- **The workspace list** lives in `~/.config/openwrite/`, not `%APPDATA%`.
+- **Five unit tests are POSIX-only** and skip on Windows, each with a comment: the two FIFO tests
+  (`job-io.test.ts`, `skills-workspace.test.ts`; Windows has no FIFOs, and the runner's MSYS
+  `mkfifo` makes a plain-file emulation), the two `chmod` tests (`routes/config.test.ts`,
+  `routes/workspaces.test.ts`; `chmod` cannot make a directory unwritable or unreadable there),
+  and the POSIX `PATH` case of `findOnPath` (`skills.test.ts`). The symlink tests need Developer
+  Mode or an administrator, which the runner has.
+- **The e2e suite is not run on Windows.** Its fixtures stop servers with `SIGTERM`, which there
+  ends them without cleanup (each test would leave its temp directories behind), and the reload
+  tests of #38 make the article directory read-only with `chmod`, which Windows cannot do.

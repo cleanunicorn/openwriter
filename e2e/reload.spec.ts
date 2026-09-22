@@ -15,6 +15,7 @@ import {
   jobState,
   notice,
   openArticle,
+  reloadArticle,
   release,
   selectWord,
   tray,
@@ -33,8 +34,7 @@ test('a job that was running when the page reloaded is still running, and its re
   await ask(page, 'fake:upper')
   const id = await expectOneWaiting(app)
 
-  await page.reload()
-  await expect(articleHeading(page)).toBeVisible()
+  await reloadArticle(page)
   await tray(page).getByRole('button', { name: '1 running' }).click()
   await expect(tray(page)).toContainText('running')
   await expect(blockWith(page, 'Why blocks')).toHaveClass(/is-pending/)
@@ -64,8 +64,7 @@ test('a proposal waiting for review survives a reload and can still be accepted'
   await release(app, await expectOneWaiting(app))
   await expect(ghosts(page)).toHaveCount(1)
 
-  await page.reload()
-  await expect(articleHeading(page)).toBeVisible()
+  await reloadArticle(page)
   await expect(ghosts(page)).toHaveCount(1)
   await acceptButton(ghosts(page)).click()
   await expectFile(app.articlePath(), (file) => {
@@ -85,8 +84,7 @@ test('a request queued behind another job is still queued after a reload, and st
   const first = await expectOneWaiting(app)
   await selectWord(page, paragraph, 'Results')
   await ask(page, 'fake:upper second, held behind the first')
-  await page.reload()
-  await expect(articleHeading(page)).toBeVisible()
+  await reloadArticle(page)
   await tray(page).getByRole('button', { name: '2 running' }).click()
   await expect(tray(page)).toContainText('queued behind another job')
   expect(await waitingJobs(app)).toEqual([first])
@@ -172,7 +170,7 @@ test('another open tab shows the job but leaves it to the tab that asked', async
   expect(await jobState(app, id)).toBe('ready')
 
   // The asking tab can still reload and accept it.
-  await page.reload()
+  await reloadArticle(page)
   await acceptButton(ghosts(page)).click()
   await expectFile(app.articlePath(), (file) => expect(file).toContain('## WHY BLOCKS\n'))
 })

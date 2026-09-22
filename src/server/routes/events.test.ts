@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { EventHub } from '../sse.ts'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
+import { RECONNECT_MS } from './events.ts'
 
 let t: TestApp
 beforeEach(() => {
@@ -17,6 +18,18 @@ async function connect(query: string): Promise<ReadableStreamDefaultReader<Uint8
   expect(new TextDecoder().decode(first.value)).toContain('event: hello')
   return reader
 }
+
+describe('the event stream', () => {
+  it('tells the browser to reconnect after one second, whatever its engine would pick', async () => {
+    const response = await t.get('/api/events')
+    const reader = response.body?.getReader()
+    if (reader === undefined) throw new Error('no stream')
+    const first = new TextDecoder().decode((await reader.read()).value)
+    expect(first).toContain(`retry: ${RECONNECT_MS}`)
+    t.context.events.dropStreams()
+    await reader.cancel()
+  })
+})
 
 describe('the tabs with an open event stream', () => {
   it('are listed beside the jobs, once each, and only while their stream is open', async () => {

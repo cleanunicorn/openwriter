@@ -242,11 +242,28 @@ export const catalogSignature = (catalog: SkillCatalog): string =>
 
 export type ToolLookup = (tool: string) => boolean
 
+/**
+ * Is `tool` on this PATH? On Windows a program is found by its name plus one of `PATHEXT`'s
+ * extensions (`agg` is `agg.exe`), so each is tried; elsewhere the name is the file.
+ */
+export function findOnPath(
+  tool: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const windows = platform === 'win32'
+  const extensions = windows
+    ? ['', ...(env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((ext) => ext !== '')]
+    : ['']
+  return (env.PATH ?? env.Path ?? '')
+    .split(windows ? ';' : ':')
+    .some(
+      (dir) => dir !== '' && extensions.some((ext) => existsSync(path.join(dir, `${tool}${ext}`))),
+    )
+}
+
 /** Is `tool` an executable on PATH? Injected in tests, so nothing has to be installed. */
-const onPath: ToolLookup = (tool) =>
-  (process.env.PATH ?? '')
-    .split(path.delimiter)
-    .some((dir) => dir !== '' && existsSync(path.join(dir, tool)))
+const onPath: ToolLookup = (tool) => findOnPath(tool, process.env)
 
 export const missingTools = (skill: Skill, lookup: ToolLookup = onPath): string[] =>
   skill.requires.filter((tool) => !lookup(tool))

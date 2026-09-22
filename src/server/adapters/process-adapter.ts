@@ -73,9 +73,22 @@ export function assertNoBypass(args: string[]): void {
     throw new Error(`refusing to build a command line with "${offending}"`)
 }
 
+/**
+ * The job directory relative to the workspace, always with `/`: it goes into permission globs
+ * (`Edit(.zen/jobs/<id>/**)`) and prompts, which are POSIX-style on every platform. On Windows
+ * `path.relative` gives backslashes, and claude's only write rule would then match nothing.
+ */
+export function jobRelative(
+  workspace: string,
+  jobDir: string,
+  paths: typeof path.posix = path,
+): string {
+  return paths.relative(workspace, jobDir).split(paths.sep).join('/')
+}
+
 /** `{jobDir}`, `{jobRel}` and `{workspace}` may be used in a `baseArgs` override. */
 export function substitute(args: string[], jobDir: string, workspace: string): string[] {
-  const jobRel = path.relative(workspace, jobDir)
+  const jobRel = jobRelative(workspace, jobDir)
   return args.map((arg) =>
     arg
       .replaceAll('{jobDir}', jobDir)

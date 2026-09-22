@@ -5,6 +5,7 @@ import {
   answer,
   articleHeading,
   boundingBox,
+  SUBPIXEL,
   editor,
   expectFile,
   expectOneWaiting,
@@ -380,7 +381,7 @@ test('a long document title in a turn is cut short, never crowding out the instr
   await expect(chip).toBeVisible()
   const panel = await boundingBox(agent(page))
   const chipBox = await boundingBox(chip)
-  expect(chipBox.x + chipBox.width).toBeLessThanOrEqual(panel.x + panel.width)
+  expect(chipBox.x + chipBox.width).toBeLessThanOrEqual(panel.x + panel.width + SUBPIXEL)
   const instruction = await boundingBox(tray(page).getByText('fake:upper tidy'))
   expect(instruction.width).toBeGreaterThan(40)
 })

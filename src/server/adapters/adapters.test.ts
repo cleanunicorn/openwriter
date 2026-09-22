@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { buildClaudeArgs, readClaudeLine } from './claude.ts'
 import { buildCodexArgs, codexPrompt, readCodexLine } from './codex.ts'
-import { BYPASS_FLAGS, type CliSpec, createProcessAdapter } from './process-adapter.ts'
+import { BYPASS_FLAGS, type CliSpec, createProcessAdapter, jobRelative } from './process-adapter.ts'
 import { jobDir, options, workspace } from './test-helpers.ts'
 import type { AdapterOptions } from './types.ts'
 
@@ -258,5 +258,14 @@ describe('process adapter: failures become reasons', () => {
     const handle = createProcessAdapter(spec('hang')).start(temp, options({ workspace: temp }))
     await handle.cancel()
     expect(await handle.done).toMatchObject({ ok: false, message: 'cancelled' })
+  })
+})
+
+describe('jobRelative', () => {
+  it('names the job directory with forward slashes, as the permission globs need, on Windows too', () => {
+    expect(jobRelative('/work/space', '/work/space/.zen/jobs/j1', path.posix)).toBe('.zen/jobs/j1')
+    expect(jobRelative('C:\\work\\space', 'C:\\work\\space\\.zen\\jobs\\j1', path.win32)).toBe(
+      '.zen/jobs/j1',
+    )
   })
 })

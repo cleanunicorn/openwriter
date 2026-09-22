@@ -1,8 +1,9 @@
-import { type FSWatcher, statSync, watch } from 'node:fs'
+import { type FSWatcher, statSync } from 'node:fs'
 import { PathEscapeError, resolveWithin } from './paths.ts'
 import { catalogSignature, LOCAL_SKILLS_DIR, loadSkills } from './skills.ts'
 import type { EventHub } from './sse.ts'
 import type { Workspace } from './workspace.ts'
+import { watchDirectory } from './watcher.ts'
 
 const DEBOUNCE_MS = 100
 
@@ -65,7 +66,7 @@ export class SkillsWatcher {
     this.stopWatching()
     if (target === undefined) return
     try {
-      const watcher = watch(target, () => this.schedule())
+      const watcher = watchDirectory(target, () => this.schedule())
       watcher.on('error', () => this.stopWatching())
       this.watcher = watcher
       this.watched = target

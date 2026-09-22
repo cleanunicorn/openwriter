@@ -19,7 +19,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
@@ -28,12 +27,48 @@ jobs:
       # Unit and Playwright suites use the fake adapter only; CI never calls a real agent.
       - run: npm test
       - run: npm run build
-      - run: npm run test:e2e
+
+  # One job per engine: they run side by side, so the three cost the wall time of the slowest,
+  # and each installs only its own browser and system libraries.
+  e2e:
+    name: e2e (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run build
+      - run: npx playwright test --project=${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.browser }}
           path: |
             test-results/
             playwright-report/
           retention-days: 7
+
+  # Windows is not a supported platform yet (README, "Windows"), but the unit suite runs there:
+  # it catches path, process and filesystem code that only works on POSIX.
+  unit-windows:
+    name: unit (windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test

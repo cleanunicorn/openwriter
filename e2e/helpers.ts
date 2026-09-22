@@ -23,13 +23,37 @@ export const notice = (page: Page): Locator => page.getByRole('status', { name: 
 export const articleHeading = (page: Page, title = 'Hello, openwrite'): Locator =>
   page.getByRole('heading', { name: title, level: 1 })
 
+/** Wait until the sample article is on screen and its layout has settled. */
+async function articleSettled(page: Page): Promise<void> {
+  await expect(articleHeading(page)).toBeVisible()
+  // The diagram renders asynchronously and shifts everything below it; wait for the layout to settle.
+  // Mermaid loads lazily and is the slowest thing on the page: WebKit under a full parallel run
+  // took longer than the default 5 s.
+  await expect(page.getByTestId('diagram').locator('svg')).toBeVisible({ timeout: 15_000 })
+}
+
 /** Open the app and wait until the sample article is on screen. */
 export async function openArticle(page: Page): Promise<void> {
   await page.goto('/')
-  await expect(articleHeading(page)).toBeVisible()
-  // The diagram renders asynchronously and shifts everything below it; wait for the layout to settle.
-  await expect(page.getByTestId('diagram').locator('svg')).toBeVisible()
+  await articleSettled(page)
 }
+
+/**
+ * Reload and wait as `openArticle` does. A click right after a bare reload can land while the
+ * diagram is still being drawn and pushes the target down: Firefox under load missed an Accept
+ * that way.
+ */
+export async function reloadArticle(page: Page): Promise<void> {
+  await page.reload()
+  await articleSettled(page)
+}
+
+/**
+ * Slack for comparing two layout edges. Engines round boxes differently: Firefox lays out in
+ * 1/60 px units, so two edges that touch can come back a few thousandths of a pixel apart
+ * (523.05005 against 523.04999 at 900px). Half a pixel still fails any real overlap.
+ */
+export const SUBPIXEL = 0.5
 
 /** The element's box in page coordinates; an element that is not rendered fails the test. */
 export async function boundingBox(locator: Locator) {
@@ -122,8 +146,25 @@ export async function selectWord(page: Page, block: Locator, word: string): Prom
   await expect(pill(page)).toBeVisible()
 }
 
+/**
+ * Let two animation frames pass. The pill re-reads its target one frame after the key or click
+ * that changed the selection; acting on it sooner races that update. In WebKit on CI a `fill`
+ * inside that frame moved the focus first, and the late update then closed the pill with the job
+ * unsent, or sent it with a target short.
+ */
+async function afterPillUpdate(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+      ),
+  )
+}
+
 /** Type an instruction into the pill and send it; the pill disappears and the writer carries on. */
 export async function ask(page: Page, instruction: string): Promise<void> {
+  await expect(pill(page)).toBeVisible()
+  await afterPillUpdate(page)
   await pill(page).fill(instruction)
   await page.keyboard.press('Enter')
   await expect(pill(page)).toHaveCount(0)

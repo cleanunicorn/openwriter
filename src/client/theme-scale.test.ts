@@ -140,7 +140,8 @@ function inlineSizes(): string[] {
     /(fontSize|lineHeight|fontWeight|letterSpacing|margin[\w-]*|padding[\w-]*|gap|top|right|bottom|left|inset|font-size|line-height|letter-spacing)\s*:\s*['"`]?(-?[\d.]+(px|rem)?)/g
   for (const file of sources(dir)) {
     const text = readFileSync(file, 'utf8')
-    const rel = path.relative(dir, file)
+    // With `/` on every platform, so the allow-list entries match on Windows too.
+    const rel = path.relative(dir, file).split(path.sep).join('/')
     const styles = [
       ...[...text.matchAll(/style=\{\{([\s\S]*?)\}\}/g)].map((m) => m[1] as string),
       ...[...text.matchAll(/cssText\s*=\s*(['"`])([\s\S]*?)\1/g)].map((m) => m[2] as string),
