@@ -9,6 +9,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { ServerEvent } from '../../shared/events.ts'
 import { createTestApp, HOST, json, type TestApp } from '../test-helpers.ts'
 
 let t: TestApp
@@ -142,6 +143,52 @@ describe('documents', () => {
       baseHash: brief.hash,
     })
     expect(ok.status).toBe(200)
+  })
+})
+
+describe('a save is announced to every tab (#29)', () => {
+  const URL = '/api/docs/article/hello-openwrite'
+  const TAB = 'tab-aaaaaaaa'
+  const listen = () => {
+    const seen: ServerEvent[] = []
+    t.context.events.subscribe((event) => seen.push(event))
+    return seen
+  }
+
+  it('emits one doc.changed naming the tab that saved, and the watcher adds none', async () => {
+    const seen = listen()
+    const doc = await json(t.get(URL))
+    const res = await t.send('PUT', URL, { text: `${doc.text}x\n`, baseHash: doc.hash, tab: TAB })
+    const { hash } = await json(res)
+    expect(seen).toEqual([
+      {
+        type: 'doc.changed',
+        ref: { kind: 'article', slug: 'hello-openwrite' },
+        hash,
+        origin: TAB,
+      },
+    ])
+    // The file watcher sees the same write; it knows the hash, so it says nothing more.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(seen.filter((event) => event.type === 'doc.changed')).toHaveLength(1)
+  })
+
+  it('announces a save that names no tab, without an origin', async () => {
+    const seen = listen()
+    const doc = await json(t.get(URL))
+    await t.send('PUT', URL, { text: `${doc.text}x\n`, baseHash: doc.hash })
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).not.toHaveProperty('origin')
+  })
+
+  it('announces nothing for a refused save, and refuses a malformed tab', async () => {
+    const seen = listen()
+    const doc = await json(t.get(URL))
+    const stale = await t.send('PUT', URL, { text: 'mine\n', baseHash: 'not-the-hash', tab: TAB })
+    expect(stale.status).toBe(409)
+    const bad = await t.send('PUT', URL, { text: 'mine\n', baseHash: doc.hash, tab: 'no spaces!' })
+    expect(bad.status).toBe(400)
+    expect(seen).toEqual([])
   })
 })
 

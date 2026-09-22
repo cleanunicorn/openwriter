@@ -61,48 +61,42 @@ with no auth.
 
 ### Two tabs on the same article
 
-**Edit an article in one tab at a time.** Nothing a tab writes is thrown away without the writer
-being shown it, but a second tab on the same document (article, `strategy.md` or brief) is not
-kept up to date as you type. This is what happens today; `e2e/two-tabs.spec.ts` checks each step:
+**Two tabs on one document (article, `strategy.md` or brief) are kept in step, and nothing either
+writes is thrown away without the writer being shown it.** `e2e/two-tabs.spec.ts` checks each
+step:
 
-1. **A tab never hears of another tab's save.** The server ignores file changes it made itself,
-   and every tab's save goes through the same server. So tab B keeps showing the old text, for
-   as long as it stays open, after tab A has saved
-   ([#29](https://github.com/cleanunicorn/openwriter/issues/29)).
-2. **B finds out when it saves.** Its save carries the file version it loaded, so the server
-   refuses it (409). B then reloads from disk, and a reload is a three-way merge: what only B
-   changed since its last save is kept, what only the file changed comes in, and a passage both
-   changed is a conflict (point 4).
-3. **Different blocks merge.** A's text comes in, B's changes stay, and the next save writes
-   both. A is still not told, and shows B's change only after a reload.
-4. **The same block: B gets a conflict, not the file.** If B edits the block A changed, B edits
-   its stale copy. When B's save is refused, B shows the file's version (A's), closes the editor
-   on it, and puts B's version in a card right after it: "Keep mine", "Take theirs" or "Keep
-   both". Until B chooses, nothing of B's is saved over A's text, and closing the tab asks first.
-   A is still not told.
-5. **A block you have just finished is kept.** If you press `Esc` (or click away) and a reload
-   comes before the autosave (750 ms), your edit stays ("Your unsaved text was kept.") and is
-   saved next. The same holds in a single tab when another program edits the file.
+1. **A save reaches every other tab at once.** Every save names the tab that made it; the server
+   tells all tabs, and the one that saved ignores its own. Tab B reloads A's text and says
+   "Reloaded: another tab saved this file.".
+2. **A reload is a three-way merge.** What only B changed since its last save is kept, what only
+   the file changed comes in, and a passage both changed is a conflict (point 4). So different
+   blocks merge, and editing a block A just saved starts from A's text.
+3. **A block you have just finished is kept.** If you press `Esc` (or click away) and another
+   tab's save arrives before your autosave (750 ms), your edit stays ("Your unsaved text was
+   kept.") and is saved next. The same holds in a single tab when another program edits the file.
+4. **Both tabs typing in the same block at once: a conflict, not a tug of war.** The tab that
+   hears of the other's save while its own text there is unsaved shows the file's version,
+   closes its editor on it, and puts its own version in a card right after it: "Keep mine",
+   "Take theirs" or "Keep both". Until it chooses, nothing of its own is saved over the other
+   tab's text, and closing the tab asks first. Because the editor closed, there is no draft left
+   to save back, so the two tabs do not keep overwriting each other.
 
-What to do instead:
+Good to know:
 
-- Keep each document open in one tab. To look at an article somewhere else, close it in the
-  first tab, or open a different document there.
-- If you did edit in two tabs, reload the other tab (`F5`) before you edit there again. A reload
-  always shows what is on disk.
-- Read any "Reloaded: the file changed on disk." notice you did not expect as a sign that a
-  second tab (or another program) is writing the same file.
-- Other programs are different. An editor or `git checkout` that changes the file is reported to
-  the tab at once, and goes through the same merge: your unsaved changes are kept, and a passage
-  you both changed is a conflict. A paragraph the other program changed or deleted while you had
-  it open, with nothing unsaved in it, simply takes the file's version; `Ctrl/Cmd+Z` undoes the
-  whole reload if you want it back.
+- A tab that was offline (a dropped connection, a laptop asleep) re-checks every open document
+  when it reconnects, through the same merge.
+- A paragraph another tab or program changed or deleted while you had it open, with nothing
+  unsaved in it, simply takes the file's version; `Ctrl/Cmd+Z` undoes the whole reload if you
+  want it back.
+- Choosing "Keep mine" replaces the other tab's version in the file; the other tab then takes
+  yours in, the same way.
 
 Switching workspaces is covered for several tabs; see [Managing workspaces](#managing-workspaces).
 The mechanics are in `DECISIONS.md` ("Editor", "Two tabs on one document", "A reload is a
 three-way merge"), `merge3` in `src/shared/blocks/merge.ts`, `save()` and `onDocChanged()` in
 `src/client/state/app.ts`, `reloaded` and `resolve` in `src/client/state/doc-reducer.ts`,
-`writeDoc` in `src/server/workspace.ts`, and `src/server/watcher.ts`.
+the PUT route in `src/server/routes/docs.ts` (which announces a save), `writeDoc` in
+`src/server/workspace.ts`, and `src/server/watcher.ts`.
 
 ## Working with agents
 

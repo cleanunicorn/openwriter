@@ -109,7 +109,14 @@ export type DocAction =
   | { type: 'redo' }
   | { type: 'sending'; text: string }
   | { type: 'saved'; text: string; hash: string; baseHash: string | null }
-  | { type: 'external'; text: string; hash: string | null; exists: boolean }
+  | {
+      type: 'external'
+      text: string
+      hash: string | null
+      exists: boolean
+      /** The change was another tab's save (#29), not another program's. */
+      from?: 'tab'
+    }
   | { type: 'resolve'; id: string; keep: ConflictChoice }
   | { type: 'notice'; notice: string | null }
 
@@ -216,6 +223,7 @@ function fusedHolder(doc: Doc, at: number, text: string): Block | undefined {
 
 // What a reload says; e2e specs assert them.
 const RELOADED = 'Reloaded: the file changed on disk.'
+const RELOADED_FROM_TAB = 'Reloaded: another tab saved this file.'
 /** The disk deleted the block being edited, and the editor's text was kept. */
 const BLOCK_KEPT = 'The file changed on disk. The block you are editing was kept.'
 /** Changes of this tab's that were not saved yet survived the reload (#30). */
@@ -451,7 +459,7 @@ function blocksAt(doc: Doc, start: number, end: number): { ids: string[]; afterI
  * kept in a `Conflict`. The editor stays open unless the disk changed what it holds; then it
  * closes, so autosave can never write the writer's copy over the other side's (#29's ping-pong).
  */
-function reloaded(state: DocState, disk: string, hash: string | null): DocState {
+function reloaded(state: DocState, disk: string, hash: string | null, fromTab: boolean): DocState {
   const { mint, next } = minter(state)
   const folded = foldIn(state, mint)
   const mineText = serialise(folded.doc)
@@ -517,7 +525,9 @@ function reloaded(state: DocState, disk: string, hash: string | null): DocState 
               (group) => group.theirsChanged || blocksOf(group).some((index) => index !== ownIndex),
             )
           ? TEXT_KEPT
-          : RELOADED
+          : fromTab
+            ? RELOADED_FROM_TAB
+            : RELOADED
   // The undo step is the document as it was on screen, the editor's text folded in: undoing the
   // reload brings back exactly what the writer saw, not the block as it was before they typed.
   return change({ ...state, doc: folded.doc, status: 'ready', ...editor }, doc, next(), {
@@ -736,7 +746,7 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         }
       }
       if (action.hash === state.baseHash) return state
-      return reloaded(state, action.text, action.hash)
+      return reloaded(state, action.text, action.hash, action.from === 'tab')
     case 'resolve':
       return resolve(state, action.id, action.keep)
     case 'notice':

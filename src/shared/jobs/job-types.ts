@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DocRefSchema } from '../api-types.ts'
+import { DocRefSchema, TabIdSchema } from '../api-types.ts'
 import { BlockIdSchema, BlockKindSchema } from '../blocks/types.ts'
 import { SkillNameSchema } from '../names.ts'
 import { ResultSchema } from './result-schema.ts'
@@ -78,11 +78,7 @@ export const TurnSchema = z.object({
 })
 export type Turn = z.infer<typeof TurnSchema>
 
-/**
- * One browser tab, for as long as it lives — a reload keeps it (client/state/session.ts). Block IDs
- * are that tab's own, so a job can only be applied by the tab that asked for it.
- */
-export const TabIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
+export { TabIdSchema }
 
 /** What the client sends to start a job: the live document's snapshot plus the instruction. */
 export const JobRequestSchema = z.object({
