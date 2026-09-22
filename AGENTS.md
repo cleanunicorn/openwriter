@@ -366,6 +366,10 @@ point into a Hugo site.
   Tests that write use the `app` fixture in `e2e/fixtures.ts`: one server
   process on a free port and one workspace copy per test. Chromium only.
   `npm run test:e2e` builds the client first when it is missing or stale.
+- **Ports:** the `webServer` smoke server takes a free port too, picked once in
+  the runner and handed to the workers through `OPENWRITE_E2E_PORT`, so runs in
+  several checkouts or worktrees on one machine never collide. Set
+  `OPENWRITE_E2E_PORT=<port>` to pin it; an invalid value fails the run at once.
 - **Browser binaries:** `npx playwright install --with-deps chromium`. A
   "browser not found" / "executable doesn't exist" error means this hasn't been
   run.

@@ -27,6 +27,15 @@ directory keeps the name `.zen/`.
 - **`scripts/ensure-build.ts` builds the client only when `dist/client` is missing or older than
   the sources.** It runs before `npm start` (a clean `npm install && npm start` works) and before
   `npm run test:e2e` (the documented gate order runs e2e before `build`).
+- **The Playwright smoke server picks a free port** (`playwright.config.ts`), unless
+  `OPENWRITE_E2E_PORT` names one. The fixed 4399 made a second run on the same machine (another
+  checkout or worktree) fail at start with "port already used". The config is loaded again in every
+  worker, so the port is picked once in the runner, synchronously (a config exports a plain
+  object), and written back to the environment the workers inherit.
+- **`src/client/state/app.test.ts` is type-checked with the client config, not the server one.**
+  Client unit tests are checked with node types and no DOM; this one imports `app.ts`, which uses
+  `window`. It stubs `window` and `fetch` itself and needs nothing from node, so it moves to the
+  DOM program (`files` in `tsconfig.client.json`, `exclude` in `tsconfig.server.json`).
 - **Hono over Fastify.** Smaller, and `app.request()` tests routes in-process.
 - **SSE over WebSocket.** Server→client traffic is one-directional; `EventSource` reconnects by
   itself and the client refetches job state on every reconnect, so no replay log is needed.
