@@ -14,6 +14,8 @@ export default defineConfig({
     host: true,
     port: VITE_PORT,
     strictPort: true,
-    proxy: { '/api': { target: `http://127.0.0.1:${SERVER_PORT}` } },
+    // The trailing slash matters: Vite matches keys by prefix, so '/api' would also proxy the
+    // client's own module /api.ts to the Node server.
+    proxy: { '/api/': { target: `http://127.0.0.1:${SERVER_PORT}` } },
   },
 })
