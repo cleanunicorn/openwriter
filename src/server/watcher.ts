@@ -68,9 +68,30 @@ export class DocWatcher {
   }
 
   /**
-   * Forget everything. Called when the settings change: `contentDir` may point somewhere else
-   * now, so the old directories must stop producing events and documents are re-registered (with
-   * their new paths) the next time they are read.
+   * Follow every tracked document to where it lives now. Called when `contentDir` changes: an
+   * article's slug resolves to another file, so the old directories stop producing events and
+   * each document is watched at its new path. The client reads nothing on `config.changed`, so
+   * without this an open document went unwatched until it happened to be read again. A document
+   * whose file there is not the one the client last got says so at once, as any outside change
+   * would — including a file that is not there, which pauses autosave instead of creating it.
+   */
+  follow(): void {
+    const entries = [...this.tracked.values()]
+    this.reset()
+    for (const { ref, hash } of entries) {
+      try {
+        this.remember(ref, hash)
+      } catch {
+        // A path the guard now refuses is not watched; reading it would be refused the same way.
+      }
+    }
+    for (const dir of new Set([...this.tracked.keys()].map((file) => path.dirname(file))))
+      this.check(dir)
+  }
+
+  /**
+   * Forget everything. Called when the workspace switches: every document belongs to the old
+   * workspace, the client drops them all, and the new one's are registered as they are read.
    */
   reset(): void {
     this.close()

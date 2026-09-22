@@ -743,10 +743,16 @@ codex exec --json --skip-git-repo-check --ephemeral
   that is no longer open. The check and the write run with no await between them, so no switch
   falls in between. A tab drains its config queue before it asks to switch, and reloads the config
   after a refusal. The header is optional, so a request without it still works as before.
-- **A settings save resets the document watcher only when `contentDir` changed.** This keeps the
-  PR from turning every panel toggle into a watcher reset, which would stop external-change
-  detection for the open document until its next save. It does not fix issue #14 §4: a real
-  content-directory change still needs the open documents re-registered.
+- **A settings save touches the document watcher only when `contentDir` changed, and then it
+  follows the documents instead of forgetting them.** Any other save (a panel toggle, a theme)
+  leaves the watcher alone. A real `contentDir` change used to `reset()` it, and nothing
+  re-registered an open document until it was read again — the client reads nothing on
+  `config.changed` — so an outside change went unnoticed, even to `strategy.md`, whose path does
+  not depend on `contentDir` at all. `DocWatcher.follow()` re-registers every tracked document at
+  its new path with the hash the client last got, and checks it at once: an article whose slug
+  now resolves to a different file (or to none) is announced like any outside change, so the
+  editor reloads it, or pauses autosave instead of creating it. A workspace switch still
+  `reset()`s: every document belongs to the old workspace, and the client drops them all.
 - **The tray is promoted in place, not rewritten.** It keeps its "Agent jobs" region and count
   button, so the job specs run unchanged. Turns run oldest first, like a conversation, each with
   its scope and skill. `trayOpen` and "Show agent jobs" are gone; the panel toggle replaces them.
