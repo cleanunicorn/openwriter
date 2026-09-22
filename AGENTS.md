@@ -250,7 +250,8 @@ Beyond the conventional format, keep a commit body short and useful:
 
 ```
 src/shared/           no I/O; imported by client, server, and tests
-  blocks/               types, split, serialise, reconcile, doc-ops, shortcodes, front-matter, index (barrel), test-helpers, corpus/
+  blocks/               types, split, serialise, reconcile, merge (the three-way merge a reload runs), doc-ops, shortcodes,
+                        front-matter, index (barrel), test-helpers, corpus/
   jobs/                 result-schema, validate-ops, apply-ops, scheduler, asset-refs, job-types, scope, herdr-hint,
                         conversation (the agent panel's earlier turns → conversation.md)
   config-schema.ts  api-types.ts  workspaces-schema.ts  events.ts  key-values.ts  names.ts
@@ -276,7 +277,8 @@ src/client/           Vite + React
   api.ts                every request, zod-parsed against src/shared/api-types.ts
   state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions, clear finished), describe-clear,
                         session (pure: what a reload keeps, which jobs a tab may still apply), tab (the tab ID; sessionStorage, pagehide)
-  blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
+  blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset,
+                        ConflictCard (a passage both this tab and the file changed), SourceDiff (the word diff it and ghosts show)
   render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
   shell/                Shell (the two edge panels and their handles), LeftPanel, RightPanel,
                         layout (pure: dock/stack/overlay), keys (pure: global key precedence), state
@@ -399,8 +401,10 @@ persistence, reaching an article from the left panel, the agent panel's
 composer, and a follow-up turn carrying the earlier one (`panels.spec.ts`,
 `agent-panel.spec.ts`), and a reload mid-job keeping block identity, queued
 requests and reviews (`reload.spec.ts`). `two-tabs.spec.ts` pins down what the
-README says about two tabs on one article, known bugs #29 and #30 included; a
-fix for either flips its test on purpose.
+README says about two tabs on one article, known bug #29 included; a fix for it
+flips its test on purpose. A reload's three-way merge and its conflicts
+(Keep mine / Take theirs / Keep both) are covered there and in
+`external-change.spec.ts`.
 
 **Writing tests here:**
 
@@ -477,7 +481,7 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 - `README.md` — setup, workspace layout, job file contract, adding an adapter
   or a skill
 - `DECISIONS.md` — why a non-obvious choice was made, and verified CLI flags
-- `src/shared/blocks/split.ts` — the block splitter; `src/shared/jobs/result-schema.ts`
+- `src/shared/blocks/split.ts` — the block splitter; `merge.ts` — the three-way merge of a reload; `src/shared/jobs/result-schema.ts`
   and `validate-ops.ts` — the `result.json` contract; `scheduler.ts` — the queue rules
 - `src/server/jobs/manager.ts` — the job lifecycle; `src/server/adapters/` — one file per agent
 - `src/server/workspace-list.ts` — the known-workspace list; `src/server/routes/workspaces.ts` —

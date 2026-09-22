@@ -61,48 +61,48 @@ with no auth.
 
 ### Two tabs on the same article
 
-**Unsupported: edit an article in one tab only.** Nothing coordinates two tabs open on the same
-document (article, `strategy.md` or brief), and one tab can overwrite what the other wrote. This
-is what happens today. `e2e/two-tabs.spec.ts` checks each step:
+**Edit an article in one tab at a time.** Nothing a tab writes is thrown away without the writer
+being shown it, but a second tab on the same document (article, `strategy.md` or brief) is not
+kept up to date as you type. This is what happens today; `e2e/two-tabs.spec.ts` checks each step:
 
 1. **A tab never hears of another tab's save.** The server ignores file changes it made itself,
    and every tab's save goes through the same server. So tab B keeps showing the old text, for
-   as long as it stays open, after tab A has saved.
-2. **B finds out only when it saves.** Its save carries the file version it loaded, so the server
-   refuses it (409). B then reloads from disk and shows "Reloaded: the file changed on disk.". As
-   with any outside change, the disk wins everywhere except the block B has open.
-3. **Different blocks merge.** A's text comes in, B's open block keeps B's text, and the next save
-   writes both. A is still not told, and shows B's change only after a reload.
-4. **The same block: the last tab to save wins, and the other is not told.** If B edits the block
-   A changed, B edits its stale copy. The reload keeps it, and B's save replaces A's text in the
-   file. A gets no notice and still shows its own text. When A next saves anything, its screen
-   loses that text too, with only the "Reloaded" notice
+   as long as it stays open, after tab A has saved
    ([#29](https://github.com/cleanunicorn/openwriter/issues/29)).
-5. **A block you have just finished can be dropped.** If you press `Esc` (or click away) and the
-   reload in step 2 comes before the autosave (750 ms), the disk's copy replaces your edit. Only
-   the "Reloaded" notice shows ([#30](https://github.com/cleanunicorn/openwriter/issues/30)).
-   `Ctrl/Cmd+Z` brings the edit back, but it restores the whole document as it was before the
-   reload. That also undoes the other tab's change, and the next autosave writes the result.
-   The same loss can happen in a single tab, when another program edits the file within that
-   750 ms.
+2. **B finds out when it saves.** Its save carries the file version it loaded, so the server
+   refuses it (409). B then reloads from disk, and a reload is a three-way merge: what only B
+   changed since its last save is kept, what only the file changed comes in, and a passage both
+   changed is a conflict (point 4).
+3. **Different blocks merge.** A's text comes in, B's changes stay, and the next save writes
+   both. A is still not told, and shows B's change only after a reload.
+4. **The same block: B gets a conflict, not the file.** If B edits the block A changed, B edits
+   its stale copy. When B's save is refused, B shows the file's version (A's), closes the editor
+   on it, and puts B's version in a card right after it: "Keep mine", "Take theirs" or "Keep
+   both". Until B chooses, nothing of B's is saved over A's text, and closing the tab asks first.
+   A is still not told.
+5. **A block you have just finished is kept.** If you press `Esc` (or click away) and a reload
+   comes before the autosave (750 ms), your edit stays ("Your unsaved text was kept.") and is
+   saved next. The same holds in a single tab when another program edits the file.
 
 What to do instead:
 
 - Keep each document open in one tab. To look at an article somewhere else, close it in the
   first tab, or open a different document there.
-- If you did edit in two tabs, stop typing in one of them and reload it (`F5`) before you edit
-  there again. A reload always shows what is on disk. The other tab's latest save is not
-  affected.
+- If you did edit in two tabs, reload the other tab (`F5`) before you edit there again. A reload
+  always shows what is on disk.
 - Read any "Reloaded: the file changed on disk." notice you did not expect as a sign that a
-  second tab (or another program) is writing the same file. Check the text before you go on.
+  second tab (or another program) is writing the same file.
 - Other programs are different. An editor or `git checkout` that changes the file is reported to
-  the tab at once, and only point 5 applies.
+  the tab at once, and goes through the same merge: your unsaved changes are kept, and a passage
+  you both changed is a conflict. A paragraph the other program changed or deleted while you had
+  it open, with nothing unsaved in it, simply takes the file's version; `Ctrl/Cmd+Z` undoes the
+  whole reload if you want it back.
 
 Switching workspaces is covered for several tabs; see [Managing workspaces](#managing-workspaces).
-The mechanics are in `DECISIONS.md` ("Editor", "Two tabs on one document"), `save()` and
-`onDocChanged()` in `src/client/state/app.ts`, the `external` case in
-`src/client/state/doc-reducer.ts`, `writeDoc` in `src/server/workspace.ts`, and
-`src/server/watcher.ts`.
+The mechanics are in `DECISIONS.md` ("Editor", "Two tabs on one document", "A reload is a
+three-way merge"), `merge3` in `src/shared/blocks/merge.ts`, `save()` and `onDocChanged()` in
+`src/client/state/app.ts`, `reloaded` and `resolve` in `src/client/state/doc-reducer.ts`,
+`writeDoc` in `src/server/workspace.ts`, and `src/server/watcher.ts`.
 
 ## Working with agents
 

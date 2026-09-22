@@ -1,5 +1,6 @@
 export * from './doc-ops.ts'
 export * from './front-matter.ts'
+export * from './merge.ts'
 export * from './reconcile.ts'
 export * from './serialise.ts'
 export * from './shortcodes.ts'

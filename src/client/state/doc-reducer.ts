@@ -6,21 +6,42 @@ import {
   type Doc,
   deleteBlocks,
   insertMarkdown,
+  type MergeGroup,
   type MintId,
+  merge3,
   mergeWithPrevious,
   moveBlock,
   reattach,
   reconcile,
   replaceBlock,
   serialise,
-  type Slice,
-  splitText,
 } from '../../shared/blocks/index.ts'
 
 /** ID of the editor slot for a block that does not exist yet (Enter on an empty last line). */
 export const NEW_BLOCK_ID = 'new'
 
 export type Draft = { id: string; text: string }
+
+/**
+ * A passage this tab and the file both changed, differently, found by a reload (the three-way
+ * merge in `shared/blocks/merge.ts`). The document shows the file's version, so autosave cannot
+ * write over the other side; the writer's version waits here until they choose.
+ */
+export type Conflict = {
+  id: string
+  /** The writer's version, which is in neither the document nor the file. */
+  mine: string
+  /** The file's version, which the document shows. */
+  theirs: string
+  /** Only the blocks the writer wrote there: what "keep both" adds after the file's version. */
+  written: string
+  /** The blocks that held `theirs` when the conflict was found. */
+  blockIds: string[]
+  /** The block before them: where `mine` goes if they are gone by the time the writer chooses. */
+  afterId: string | null
+}
+export type ConflictChoice = 'mine' | 'theirs' | 'both'
+
 export type PendingNew = { afterId: string | null }
 export type FocusCursor = number | 'start' | 'end'
 
@@ -50,6 +71,15 @@ export type DocState = {
   pendingNew: PendingNew | null
   selectedIds: string[]
   notice: string | null
+  /**
+   * The text of the save on its way to disk, if any. When a reload brings exactly that text back,
+   * it is this tab's own and the base of the merge; the text last saved would make every
+   * keystroke typed since into a conflict with itself.
+   */
+  sentText: string | null
+  /** Passages both sides changed; each is settled with a `resolve`. */
+  conflicts: Conflict[]
+  nextConflict: number
 }
 
 export type DocAction =
@@ -59,7 +89,7 @@ export type DocAction =
       hash: string | null
       exists: boolean
       /** The document's identity from before a page reload (state/session.ts), to put back. */
-      restore?: { doc: Doc; nextId: number }
+      restore?: { doc: Doc; nextId: number; conflicts?: Conflict[] }
     }
   | { type: 'failed'; error: string }
   | { type: 'focus'; id: string; cursor: FocusCursor }
@@ -77,8 +107,10 @@ export type DocAction =
   | { type: 'select'; ids: string[] }
   | { type: 'undo' }
   | { type: 'redo' }
+  | { type: 'sending'; text: string }
   | { type: 'saved'; text: string; hash: string; baseHash: string | null }
   | { type: 'external'; text: string; hash: string | null; exists: boolean }
+  | { type: 'resolve'; id: string; keep: ConflictChoice }
   | { type: 'notice'; notice: string | null }
 
 const HISTORY_LIMIT = 200
@@ -101,6 +133,9 @@ export function initialDocState(ref: DocRef): DocState {
     pendingNew: null,
     selectedIds: [],
     notice: null,
+    sentText: null,
+    conflicts: [],
+    nextConflict: 1,
   }
 }
 
@@ -111,8 +146,6 @@ function minter(state: DocState): { mint: MintId; next: () => number } {
 }
 
 const indexOf = (doc: Doc, id: string) => doc.blocks.findIndex((block) => block.id === id)
-/** How many of a document's blocks say exactly this. */
-const copies = (doc: Doc, raw: string) => doc.blocks.filter((block) => block.raw === raw).length
 
 /**
  * Whether `block` is in `next` as itself: under its ID *and* with its text. Only such a block's
@@ -181,8 +214,14 @@ function fusedHolder(doc: Doc, at: number, text: string): Block | undefined {
   return holder?.block ?? doc.blocks[Math.min(at, doc.blocks.length - 1)]
 }
 
-/** Both paths that put a focused block back after a reload say this; an e2e asserts it. */
+// What a reload says; e2e specs assert them.
+const RELOADED = 'Reloaded: the file changed on disk.'
+/** The disk deleted the block being edited, and the editor's text was kept. */
 const BLOCK_KEPT = 'The file changed on disk. The block you are editing was kept.'
+/** Changes of this tab's that were not saved yet survived the reload (#30). */
+const TEXT_KEPT = 'The file changed on disk. Your unsaved text was kept.'
+export const CONFLICT_NOTICE =
+  'The file changed on disk in a passage you had changed too. Choose which version to keep.'
 
 /**
  * The focused block vanished on disk: put its editor text back into `disk` after its nearest
@@ -324,175 +363,6 @@ function withDraft(
   return { doc: replaceBlock(state.doc, index, text, mint), nextId: next() }
 }
 
-/** What a fold produced: the document, the IDs the draft now occupies, and what the editor holds. */
-type Folded = { doc: Doc; nextId: number; ids: string[]; held: Draft }
-
-/**
- * Fold the draft in, its own block rewritten along with the rest. Only for a draft whose text
- * restructures the document — an unclosed fence swallowing what follows it, or an edit that
- * closes one — where the block's old raw is not something `reconcile` could match against the
- * disk anyway, because the writer has already replaced it.
- */
-function foldWhole(state: DocState, draft: Draft): Folded | null {
-  const known = new Set(state.doc.blocks.map((block) => block.id))
-  const { doc, nextId } = withDraft(state, draft.id, draft.text)
-  if (doc === state.doc) return null
-  const own = doc.blocks[indexOf(doc, draft.id)]
-  if (own === undefined) return null
-  const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
-  return { doc, nextId, ids: [draft.id, ...fresh], held: { id: draft.id, text: own.raw } }
-}
-
-/**
- * Fold into the document what the open editor holds but the document does not have yet: the
- * whole text of a new-block slot, or the tail blocks of a draft that spans several. Both are
- * already in the text autosave wrote, so a reload carrying that text would bring them back a
- * second time. Returns the IDs the draft now occupies, the one the editor keeps first.
- *
- * A draft's own block is deliberately left as it is: rewriting its raw would cost it the
- * identity `reconcile` needs to match the disk's older copy of it instead of adding one. That
- * is the one thing this does differently from `withDraft`, which folds the same text in for the
- * live document and *does* rewrite it; the fix is only correct while the two keep that split.
- */
-function foldDraft(state: DocState, draft: Draft): Folded | null {
-  const { slices, gaps } = splitText(draft.text)
-  if (draft.id !== NEW_BLOCK_ID && slices.length < 2) {
-    // One block's worth of text normally leaves the document's shape alone, and then there is
-    // nothing to fold. An unclosed fence is the exception: it swallows the blocks after it, so
-    // what autosave wrote has fewer blocks than the document being edited, and the editor holds
-    // only the fence. Fold it in, and the editor holds what the fence took in with it —
-    // otherwise the reload leaves the two disagreeing and the next save drops the difference.
-    if (draft.text.trim() === '') return null
-    const whole = foldWhole(state, draft)
-    return whole === null || whole.doc.blocks.length === state.doc.blocks.length ? null : whole
-  }
-  const known = new Set(state.doc.blocks.map((block) => block.id))
-  const { mint, next } = minter(state)
-  let doc: Doc
-  let at: number
-  if (draft.id === NEW_BLOCK_ID) {
-    if (draft.text.trim() === '' || state.pendingNew === null) return null
-    at = slotIndex(state.doc, state.pendingNew)
-    doc = insertMarkdown(state.doc, at, draft.text, mint)
-  } else {
-    const index = indexOf(state.doc, draft.id)
-    if (index === -1) return null
-    const tail = serialise({ blocks: slices.slice(1), gaps: ['', ...gaps.slice(2)] })
-    at = index
-    doc = insertMarkdown(state.doc, index + 1, tail, mint)
-  }
-  // `insertMarkdown` returns its input only for markdown that splits into nothing, which the
-  // guards above rule out. Kept so a change to its contract cannot pass silently.
-  if (doc === state.doc) return null
-  const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
-
-  if (draft.id !== NEW_BLOCK_ID) {
-    // The tail fused into the draft's own block instead of becoming blocks of its own. That
-    // block still carries the raw it had, deliberately — so it fused with text the writer has
-    // already replaced, and there is no identity left worth protecting. Fold the lot.
-    if (fresh.length === 0) return foldWhole(state, draft)
-    // Only the tail was folded in, so the editor keeps the draft's own block, and holds the
-    // first block of what the writer typed: that block's raw is the old one, by design.
-    return {
-      doc,
-      nextId: next(),
-      ids: [draft.id, ...fresh],
-      held: { id: draft.id, text: (slices[0] as Slice).raw },
-    }
-  }
-  // The slot became blocks of its own — unless an unclosed fence above it swallowed the text,
-  // and then the block that took it in is the one the editor holds, whole.
-  const heldId = fresh[0] ?? fusedHolder(doc, at, draft.text)?.id
-  if (heldId === undefined) return null
-  const block = doc.blocks[indexOf(doc, heldId)]
-  if (block === undefined) return null
-  return {
-    doc,
-    nextId: next(),
-    ids: fresh.length > 0 ? fresh : [heldId],
-    held: { id: heldId, text: block.raw },
-  }
-}
-
-/**
- * Reconcile a folded document against the disk text, keeping what the fold put in: every folded
- * block the reconcile dropped goes back, and the editor follows whichever block now holds its
- * text. Returns the notice its own outcome earns, or null for the caller's ordinary one.
- */
-function settleFold(
-  folded: Folded,
-  draft: Draft,
-  base: Doc,
-  reconciled: Doc,
-  mint: MintId,
-): { doc: Doc; reopened: Partial<DocState>; notice: string | null } {
-  let doc = reconciled
-  // Which of the two a rescue had to put back, if either. The block the editor is on speaks for
-  // the notice when both did — a writer cares first about the paragraph under their cursor.
-  let rescued: 'held' | 'tail' | null = null
-  // A loop, not a `map`: each pass reads the document the one before it may have just changed,
-  // so the order is part of the meaning.
-  const settled: string[] = []
-  for (const id of folded.ids) {
-    const block = base.blocks[indexOf(base, id)]
-    if (block === undefined) {
-      settled.push(id)
-      continue
-    }
-    // The block the editor keeps is re-applied from its draft, so it only has to exist. The
-    // rest of the fold lives in the document alone, and an ID is not enough to find it:
-    // `reconcile` gives the first slice of a changed run the old ID of that run, so a block
-    // still answering to one of these IDs can be a different one, from disk.
-    //
-    // So look for the text instead — and *count* it. An article may already say the same thing
-    // twice: matching any block with that text would find the one that was always there and
-    // call the writer's copy safe while it was being dropped.
-    const survivor =
-      id === folded.held.id
-        ? doc.blocks[indexOf(doc, id)]?.id
-        : copies(doc, block.raw) >= copies(base, block.raw)
-          ? id
-          : undefined
-    if (survivor !== undefined) {
-      settled.push(survivor)
-      continue
-    }
-    const rescue = keepFocusedBlock(base, doc, { id, text: block.raw }, mint)
-    doc = rescue.doc
-    if (id === folded.held.id) rescued = 'held'
-    else if (rescued === null) rescued = 'tail'
-    settled.push(rescue.id)
-  }
-  // The editor keeps what it held, with the writer's own text: the raw the reconcile produced
-  // would be the disk's copy, one save behind the keyboard. A rescue that fused the text into
-  // another block moves the editor there instead.
-  const moved = settled[folded.ids.indexOf(folded.held.id)] ?? folded.held.id
-  const held =
-    moved === folded.held.id
-      ? folded.held
-      : { id: moved, text: doc.blocks[indexOf(doc, moved)]?.raw ?? folded.held.text }
-  // The caret only moves when the editor does — the slot becoming a real block rebuilds it, and
-  // the end of what was typed is where a writer expects to carry on. An editor that stayed on
-  // its own block keeps the position the writer left it at.
-  const rebuilt = held.id !== draft.id
-  return {
-    doc,
-    reopened: {
-      draft: held,
-      focusedId: held.id,
-      pendingNew: null,
-      ...(rebuilt ? { focusCursor: 'end' as const } : {}),
-    },
-    // Say which text was kept. A rescued tail is not the block the writer is editing.
-    notice:
-      rescued === 'held'
-        ? BLOCK_KEPT
-        : rescued === 'tail'
-          ? 'The file changed on disk. Your unsaved text was kept.'
-          : null,
-  }
-}
-
 /** The document as the writer sees it right now: committed blocks plus the open editor's text. */
 export function liveDoc(state: DocState): Doc {
   // Derived IDs: nothing reserves what this mints, so a stored-looking ID here could be shown
@@ -524,6 +394,193 @@ function commit(state: DocState, id: string, text: string): DocState {
   return change({ ...state, draft: null }, doc, nextId, blurred)
 }
 
+/**
+ * The open editor's text folded into the document under stored IDs, which is what a reload merges
+ * as this tab's side: the same text as `liveText`. `owned` are the blocks that hold the editor's
+ * text afterwards; `held` is the one the editor stays on, and what it holds — the first block of
+ * a draft that spans several (the rest become blocks of their own), the whole fence of one that
+ * swallowed what follows it, or the new block an open slot became. Null when nothing was typed.
+ */
+function foldIn(state: DocState, mint: MintId): { doc: Doc; owned: string[]; held: Draft | null } {
+  const draft = state.draft
+  if (draft === null) return { doc: state.doc, owned: [], held: null }
+  const doc = withDraft(state, draft.id, draft.text, mint).doc
+  if (doc === state.doc) {
+    return draft.id === NEW_BLOCK_ID
+      ? { doc, owned: [], held: null }
+      : { doc, owned: [draft.id], held: draft }
+  }
+  const known = new Set(state.doc.blocks.map((block) => block.id))
+  const fresh = doc.blocks.filter((block) => !known.has(block.id)).map((block) => block.id)
+  const at =
+    draft.id === NEW_BLOCK_ID
+      ? slotIndex(state.doc, state.pendingNew)
+      : indexOf(state.doc, draft.id)
+  const heldId =
+    draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) !== -1
+      ? draft.id
+      : (fresh[0] ?? fusedHolder(doc, at, draft.text)?.id)
+  const holder = heldId === undefined ? undefined : doc.blocks[indexOf(doc, heldId)]
+  if (holder === undefined) return { doc, owned: fresh, held: null }
+  return {
+    doc,
+    owned: [holder.id, ...fresh.filter((id) => id !== holder.id)],
+    held: { id: holder.id, text: holder.raw },
+  }
+}
+
+/** Where a merged stretch's blocks are in `doc` (whose text is the merged text), by offset. */
+function blocksAt(doc: Doc, start: number, end: number): { ids: string[]; afterId: string | null } {
+  const ids: string[] = []
+  let afterId: string | null = null
+  let offset = doc.gaps[0]?.length ?? 0
+  doc.blocks.forEach((block, index) => {
+    const blockEnd = offset + block.raw.length
+    if (offset < end && start < blockEnd) ids.push(block.id)
+    else if (blockEnd <= start) afterId = block.id
+    offset = blockEnd + (doc.gaps[index + 1]?.length ?? 0)
+  })
+  return { ids, afterId }
+}
+
+/**
+ * A reload is a three-way merge (#30): base = the text last loaded or saved (or the save on its
+ * way, when that is what came back), mine = the live document with the editor folded in, theirs
+ * = the disk. What only one side changed is kept — a finished block autosave had not written yet
+ * included — and a passage both changed differently shows the disk's version, with the writer's
+ * kept in a `Conflict`. The editor stays open unless the disk changed what it holds; then it
+ * closes, so autosave can never write the writer's copy over the other side's (#29's ping-pong).
+ */
+function reloaded(state: DocState, disk: string, hash: string | null): DocState {
+  const { mint, next } = minter(state)
+  const folded = foldIn(state, mint)
+  const mineText = serialise(folded.doc)
+  const base = disk === state.sentText ? disk : state.savedText
+  const merge = merge3(base, mineText, disk)
+  const doc = reconcile(folded.doc, merge.text, mint)
+
+  const owned = new Set(folded.owned.map((id) => indexOf(folded.doc, id)))
+  const ownIndex = state.draft === null ? -1 : indexOf(folded.doc, state.draft.id)
+  const blocksOf = ({ mineBlocks }: MergeGroup) =>
+    Array.from({ length: mineBlocks.end - mineBlocks.start }, (_, i) => mineBlocks.start + i)
+  const touches = (group: MergeGroup) => blocksOf(group).some((index) => owned.has(index))
+
+  let editor: Partial<DocState> = {}
+  const held = folded.held
+  if (held !== null && state.draft !== null) {
+    const overwritten = merge.groups.some(
+      (group) => touches(group) && (group.result === 'theirs' || group.result === 'conflict'),
+    )
+    // The editor stays on its block when the merge left that block as the editor had it. A block
+    // that took the editor's text in (an unclosed fence from disk swallowing it) is followed.
+    const own = doc.blocks[indexOf(doc, held.id)]
+    const fused = fusedHolder(doc, indexOf(folded.doc, held.id), held.text)
+    const target =
+      own?.raw === held.text
+        ? own
+        : fused?.raw.includes(held.text.trimEnd()) === true
+          ? fused
+          : undefined
+    if (overwritten || target === undefined) editor = { ...blurred }
+    else {
+      editor = {
+        draft: { id: target.id, text: target.raw },
+        focusedId: target.id,
+        pendingNew: null,
+        // The editor holds its own copy of the text: when that changed, it is built again.
+        ...(target.raw === state.draft.text ? {} : { draftSeed: state.draftSeed + 1 }),
+        // A slot that became a block, or text that fused into another: the caret goes to the end.
+        ...(target.id === state.draft.id ? {} : { focusCursor: 'end' as const }),
+      }
+    }
+  }
+
+  let nextConflict = state.nextConflict
+  const found: Conflict[] = merge.conflicts.map((group) => {
+    const { ids, afterId } = blocksAt(doc, group.at.start, group.at.end)
+    return {
+      id: `c${nextConflict++}`,
+      mine: group.mine,
+      theirs: group.theirs,
+      written: group.written,
+      blockIds: ids,
+      afterId,
+    }
+  })
+  const kept = merge.groups.filter((group) => group.result === 'mine')
+  const notice =
+    found.length > 0
+      ? CONFLICT_NOTICE
+      : kept.some((group) => group.theirsChanged && touches(group))
+        ? BLOCK_KEPT
+        : kept.some(
+              (group) => group.theirsChanged || blocksOf(group).some((index) => index !== ownIndex),
+            )
+          ? TEXT_KEPT
+          : RELOADED
+  // The undo step is the document as it was on screen, the editor's text folded in: undoing the
+  // reload brings back exactly what the writer saw, not the block as it was before they typed.
+  return change({ ...state, doc: folded.doc, status: 'ready', ...editor }, doc, next(), {
+    baseHash: hash,
+    savedText: disk,
+    notice,
+    conflicts: [...state.conflicts, ...found],
+    nextConflict,
+  })
+}
+
+const paragraphBreak = (text: string) => (text.includes('\r\n') ? '\r\n\r\n' : '\n\n')
+
+/**
+ * Settle a conflict. `theirs` keeps the document as it is; `mine` puts the writer's version where
+ * the disk's is; `both` puts what the writer wrote after the disk's version (the blocks of the
+ * passage the writer left alone are in the disk's already). If the disk's blocks are gone
+ * meanwhile, the text goes after the block that was before them. Done on the text and reconciled,
+ * like any other change, so front matter and block kinds stay what the splitter says.
+ */
+function resolve(current: DocState, id: string, keep: ConflictChoice): DocState {
+  const conflict = current.conflicts.find((candidate) => candidate.id === id)
+  if (conflict === undefined) return current
+  // An editor still open on the passage is finished first, so the choice acts on what is there.
+  const state = keep === 'theirs' ? current : docReducer(current, { type: 'blur' })
+  const conflicts = state.conflicts.filter((candidate) => candidate !== conflict)
+  const notice = conflicts.length === 0 && state.notice === CONFLICT_NOTICE ? null : state.notice
+  if (keep === 'theirs') return { ...state, conflicts, notice }
+  const text = serialise(state.doc)
+  const starts: number[] = []
+  let offset = state.doc.gaps[0]?.length ?? 0
+  state.doc.blocks.forEach((block, index) => {
+    starts.push(offset)
+    offset += block.raw.length + (state.doc.gaps[index + 1]?.length ?? 0)
+  })
+  const startOf = (index: number) => starts[index] as number
+  const endOf = (index: number) => startOf(index) + (state.doc.blocks[index]?.raw.length ?? 0)
+  const present = conflict.blockIds
+    .map((blockId) => indexOf(state.doc, blockId))
+    .filter((index) => index !== -1)
+    .sort((a, b) => a - b)
+  const first = present[0]
+  const last = present[present.length - 1]
+  const separator = paragraphBreak(text)
+  const added = keep === 'mine' ? conflict.mine : conflict.written
+  let next: string
+  if (keep === 'mine' && first !== undefined && last !== undefined) {
+    next = text.slice(0, startOf(first)) + conflict.mine + text.slice(endOf(last))
+  } else {
+    const after = last ?? (conflict.afterId === null ? -1 : indexOf(state.doc, conflict.afterId))
+    const anchor =
+      last === undefined && conflict.afterId !== null && after === -1
+        ? state.doc.blocks.length - 1
+        : after
+    if (anchor === -1) {
+      const at = state.doc.gaps[0]?.length ?? 0
+      next = text.slice(0, at) + added + separator + text.slice(at)
+    } else next = text.slice(0, endOf(anchor)) + separator + added + text.slice(endOf(anchor))
+  }
+  const { mint, next: nextId } = minter(state)
+  return change(state, reconcile(state.doc, next, mint), nextId(), { conflicts, notice })
+}
+
 export function docReducer(state: DocState, action: DocAction): DocState {
   switch (action.type) {
     case 'loaded': {
@@ -538,6 +595,8 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         restore === undefined
           ? createDoc(action.text, mint)
           : reattach(restore.doc, action.text, mint)
+      // A conflict the writer had not settled comes back too: its text is nowhere else.
+      const conflicts = restore?.conflicts ?? []
       return {
         ...initialDocState(state.ref),
         status: 'ready',
@@ -545,6 +604,9 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         nextId: next(),
         baseHash: action.hash,
         savedText: action.text,
+        conflicts,
+        nextConflict: Math.max(0, ...conflicts.map((conflict) => Number(conflict.id.slice(1)))) + 1,
+        ...(conflicts.length > 0 ? { notice: CONFLICT_NOTICE } : {}),
       }
     }
     case 'failed':
@@ -658,12 +720,14 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       if (next === undefined) return state
       return { ...state, ...blurred, doc: next, past: [...state.past, state.doc], future: rest }
     }
+    case 'sending':
+      return { ...state, sentText: action.text }
     case 'saved':
       // A save that resolves after a reload moved the document on is one revision behind: its
       // hash would roll `baseHash` back, and the next PUT would be a guaranteed 409.
       if (action.baseHash !== state.baseHash) return state
-      return { ...state, baseHash: action.hash, savedText: action.text }
-    case 'external': {
+      return { ...state, baseHash: action.hash, savedText: action.text, sentText: null }
+    case 'external':
       if (!action.exists) {
         return {
           ...state,
@@ -672,36 +736,9 @@ export function docReducer(state: DocState, action: DocAction): DocState {
         }
       }
       if (action.hash === state.baseHash) return state
-      const draft = state.draft
-      // What the editor holds is already in the file autosave wrote. Reconciling against
-      // `state.doc`, which does not have it yet, would bring it back from disk *and* leave the
-      // editor holding it: the writer's paragraph twice. Fold it in first, so the reconcile
-      // matches the disk's copy with it instead of adding one.
-      const folded = draft === null ? null : foldDraft(state, draft)
-      const base = folded?.doc ?? state.doc
-      const { mint, next } = minter({ ...state, nextId: folded?.nextId ?? state.nextId })
-      let doc = reconcile(base, action.text, mint)
-      let notice: string | null = 'Reloaded: the file changed on disk.'
-      let reopened: Partial<DocState> = {}
-      // Disk wins everywhere except what the writer is editing, which keeps its text.
-      if (folded !== null && draft !== null) {
-        const settled = settleFold(folded, draft, base, doc, mint)
-        doc = settled.doc
-        reopened = settled.reopened
-        notice = settled.notice ?? notice
-      } else if (draft !== null && draft.id !== NEW_BLOCK_ID && indexOf(doc, draft.id) === -1) {
-        const rescue = rescueDraft(state.doc, doc, draft, mint)
-        doc = rescue.doc
-        reopened = rescue.reopened
-        notice = BLOCK_KEPT
-      }
-      if (reopened.draft !== undefined) reopened.draftSeed = state.draftSeed + 1
-      return change({ ...state, status: 'ready', ...reopened }, doc, next(), {
-        baseHash: action.hash,
-        savedText: action.text,
-        notice,
-      })
-    }
+      return reloaded(state, action.text, action.hash)
+    case 'resolve':
+      return resolve(state, action.id, action.keep)
     case 'notice':
       return { ...state, notice: action.notice }
   }

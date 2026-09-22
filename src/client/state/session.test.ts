@@ -102,6 +102,27 @@ describe('a page reload', () => {
     const kept = parseSession(JSON.stringify(sessionOf('/ws', [], jobs)))
     expect(kept).toMatchObject({ root: '/ws', ...jobs })
   })
+
+  it('keeps a conflict the writer has not settled: its text is nowhere else', () => {
+    const conflicted = run(
+      load(TEXT),
+      { type: 'focus', id: 'b2', cursor: 0 },
+      { type: 'commit', id: 'b2', text: 'B mine' },
+      { type: 'external', text: 'A\n\nB disk\n\nC\n', hash: 'h1', exists: true },
+    )
+    expect(conflicted.conflicts).toHaveLength(1)
+    const after = load(serialise(conflicted.doc), reload(conflicted))
+    expect(after.conflicts).toEqual(conflicted.conflicts)
+    expect(after.notice).toContain('Choose which version to keep')
+    // A new conflict after the reload gets an ID of its own.
+    expect(after.nextConflict).toBeGreaterThan(Number(conflicted.conflicts[0]?.id.slice(1)))
+    const resolved = docReducer(after, {
+      type: 'resolve',
+      id: after.conflicts[0]?.id ?? '',
+      keep: 'mine',
+    })
+    expect(serialise(resolved.doc)).toBe('A\n\nB mine\n\nC\n')
+  })
 })
 
 describe('what a reload reads back', () => {
