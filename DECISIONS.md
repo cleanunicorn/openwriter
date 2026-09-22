@@ -62,6 +62,13 @@ directory keeps the name `.zen/`.
   Trusting token maps alone would let that text vanish into a "whitespace" gap.
 - **Front matter is detected before markdown-it, after an optional BOM.** The BOM stays in
   `gaps[0]`. A `---` that is not at the top, or has no closing fence, is ordinary content.
+- **JSON front matter (issue #6) is a `{` that opens the document, closed by its matching `}`.**
+  Hugo's lexer takes any leading `{` and counts braces outside strings, which would swallow a
+  document that opens with a `{{< shortcode >}}`. Stricter here, so ambiguous text stays ordinary
+  markdown: the `{` must be the first character (after an optional BOM, no leading whitespace,
+  like `---`), the matching `}` must end its line, and the slice must `JSON.parse` to an object.
+  Anything else, a shortcode or unclosed or invalid JSON, splits as content and round-trips
+  byte-identically; Hugo would reject most of it anyway.
 - **Lone `\r` counts as a line break** (markdown-it normalises it), so line maps stay aligned
   with offsets in the original text.
 - **Files that are not valid UTF-8 are refused** (fatal decoder) and never written, instead of
@@ -123,7 +130,8 @@ directory keeps the name `.zen/`.
 - **The mermaid source travels as the text of a `<pre>`,** not in a `data-` attribute: DOMPurify
   drops attribute values that contain `-->`.
 - **Front matter summary and skill headers share one dependency-free key/value reader.** Display
-  only; on anything unexpected the line just says "front matter".
+  only; on anything unexpected the line just says "front matter". JSON front matter is read with
+  `JSON.parse` instead, and only string title, date and tags are shown.
 - **Always-visible controls in the editor itself: none.** The notice line appears only when there
   is something to say. The exceptions in the app are the two panel handles and the job count
   (under "Shell and panels" below).
