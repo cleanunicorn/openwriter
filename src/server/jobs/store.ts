@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 import { AdapterConfigSchema } from '../../shared/config-schema.ts'
@@ -40,7 +40,7 @@ export function readJobFile(jobDir: string): JobFile | undefined {
  * the tray (nothing is lost); it is never resumed or re-applied by matching positions.
  */
 export function recoverJobs(jobsDir: string): JobFile[] {
-  if (!existsSync(jobsDir)) return []
+  if (!existsSync(jobsDir) || !statSync(jobsDir).isDirectory()) return []
   const recovered: JobFile[] = []
   for (const entry of readdirSync(jobsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue

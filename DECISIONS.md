@@ -525,6 +525,28 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **The mutating workspace routes are serialised through one promise chain.** They all read the
   list, change the world and write it back; two interleaving across the `await` in `quiesce`
   would lose a write, or retarget while another request was halfway through an erase.
+- **Live agent handles are tracked apart from the job list (#15, R6).** `rebind()` clears
+  `entries`, and `cancelAll()` used to walk `entries`, so an agent that outlived the switch —
+  one created while `quiesce` waited, or one whose cancel was slow — was unreachable from
+  `shutdown()` and kept running and spending. Now every started handle sits in a `live` set until
+  its own `done` settles; `cancelAll()` walks that set, and `rebind()` force-cancels whatever is
+  still in it, since everything there belongs to the workspace being left. The epoch still fences
+  the writes; this closes the process.
+- **The list is written before the switch retargets anything (#15, R8).** `touch()` is the one
+  fallible step of a switch. Written last, a failure 500'd a server that had already moved, with
+  no `workspace.changed` for any client. Written first, it runs even before `quiesce`, so a
+  failure stops no job either; the worst it leaves is an entry for a workspace that was not
+  opened, which the palette can still open or forget.
+- **The server keeps the realpath of the workspace it started on (#15, R9).** `validRoot` already
+  gave every switch a realpath and the list stored realpaths, but `createApp` kept the lexical
+  `--workspace`; through a symlink `active.root` matched no entry, and the client offered to
+  erase the open workspace. One form everywhere is cheaper than teaching each comparison.
+- **An entry's `path` must be absolute, in the schema and again in erase (#15, R7).** The shared
+  schema tests the shape by regex (POSIX `/`, `C:\`, `\\server`) because it is imported by the
+  client and cannot use `node:path`. A relative entry fails the file's schema, so, like any other
+  hand-broken entry, the list reads as empty rather than guessing. Erase checks
+  `path.isAbsolute` and refuses the filesystem root itself (`assertErasablePath`), because it is
+  the one route that deletes and should not rely on a parse it does not see.
 
 ## Shell and panels (ui-rethink)
 

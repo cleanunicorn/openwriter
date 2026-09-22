@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,6 +16,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createTestApp, json, type TestApp } from '../test-helpers.ts'
 import { WorkspaceList } from '../workspace-list.ts'
+import { assertErasablePath } from './workspaces.ts'
 
 const SAMPLE = path.resolve(import.meta.dirname, '..', '..', '..', 'sample-workspace')
 /** An absolute path a create request names; the server must never make it. */
@@ -61,6 +63,31 @@ describe('the known-workspace list over HTTP', () => {
     expect(listed.active.root).toBe(t.workspace)
     expect(listed.entries).toHaveLength(1)
     expect(listed.entries[0].path).toBe(t.workspace)
+  })
+
+  // R9: the list stored the realpath and `active.root` kept the lexical one, so the client
+  // classified the open workspace as another one and offered to erase it.
+  it('recognises a workspace opened through a symlink as the active one', async () => {
+    const real = path.join(base, 'real')
+    cpSync(SAMPLE, real, { recursive: true })
+    const link = path.join(base, 'link')
+    symlinkSync(real, link)
+    const linked = createTestApp({ workspace: link })
+    try {
+      const listed = await json(linked.get('/api/workspaces'))
+      expect(listed.active.root).toBe(realpathSync(real))
+      expect(listed.entries.map((entry: { path: string }) => entry.path)).toEqual([
+        listed.active.root,
+      ])
+      const [entry] = listed.entries
+      const res = await linked.send('POST', `/api/workspaces/${entry.id}/erase`, {
+        confirm: entry.label,
+      })
+      expect(res.status).toBe(409)
+      expect(existsSync(path.join(real, 'strategy.md'))).toBe(true)
+    } finally {
+      linked.cleanup()
+    }
   })
 
   it('renames an entry and deletes nothing', async () => {
@@ -177,6 +204,76 @@ describe('opening another workspace', () => {
     expect((await json(t.get('/api/workspaces'))).entries).toHaveLength(1)
   })
 
+  // The `serialised()` chain: switches never overlap, run in the order they arrived, and one
+  // that fails does not stop the ones queued behind it.
+  it('runs concurrent switches one at a time, in order, past a failure', async () => {
+    const second = another('second')
+    let inside = 0
+    let most = 0
+    const quiesce = t.jobs.quiesce.bind(t.jobs)
+    t.jobs.quiesce = async (reason, budget) => {
+      inside++
+      most = Math.max(most, inside)
+      // Long enough that a second switch would reach its own quiesce if nothing held it back.
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      await quiesce(reason, budget)
+      inside--
+    }
+    const changed: string[] = []
+    const unsubscribe = t.context.events.subscribe((event) => {
+      if (event.type === 'workspace.changed') changed.push(event.root)
+    })
+    try {
+      const [first, failed, last] = await Promise.all([
+        open(second),
+        t.send('POST', '/api/workspaces/open', { name: 'nope' }),
+        create({ name: 'third' }),
+      ])
+      expect([first.status, failed.status, last.status]).toEqual([200, 400, 201])
+      expect(most).toBe(1)
+      const third = path.join(t.workspacesDir, 'third')
+      expect(changed).toEqual([second, third])
+      const listed = await json(t.get('/api/workspaces'))
+      expect(listed.active.root).toBe(third)
+      expect(listed.entries).toHaveLength(3)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  // The R11 shape (#15) at the worst place for it: `rebind()` recovers jobs after the retarget,
+  // so a throw there would have left a half-switched server.
+  it('opens a workspace whose .zen/jobs is a file, with no jobs', async () => {
+    const second = another('second', (root) => {
+      rmSync(path.join(root, '.zen', 'jobs'), { recursive: true, force: true })
+      writeFileSync(path.join(root, '.zen', 'jobs'), 'not a folder')
+    })
+    expect((await open(second)).status).toBe(200)
+    expect(t.context.workspace.root).toBe(second)
+    expect(await json(t.get('/api/jobs'))).toEqual({ jobs: [] })
+  })
+
+  // R8: the list was written after the retarget, so a failed write 500'd a server that had
+  // already moved, with no event to tell any client.
+  it('stays where it is when the list cannot be written', async () => {
+    const second = another('second')
+    // A directory where the list file goes: reading it fails (an empty list) and so does the
+    // rename that saves it — deterministically, even for a user whom file modes do not stop.
+    rmSync(t.workspacesFile)
+    mkdirSync(t.workspacesFile)
+    const seen: string[] = []
+    const unsubscribe = t.context.events.subscribe((event) => seen.push(event.type))
+    try {
+      const res = await open(second)
+      expect(res.status).toBe(500)
+      expect(t.context.workspace.root).toBe(t.workspace)
+      expect((await json(t.get('/api/articles'))).articles[0].slug).toBe('hello-openwrite')
+      expect(seen).not.toContain('workspace.changed')
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('refuses a link in the workspaces folder that points outside it', async () => {
     const outside = path.join(base, 'outside')
     cpSync(SAMPLE, outside, { recursive: true })
@@ -248,6 +345,18 @@ describe('creating a workspace', () => {
     expect(existsSync(ANYWHERE)).toBe(false)
     expect(existsSync(path.join(path.dirname(t.workspacesDir), 'escape'))).toBe(false)
     expect(existsSync(path.join(t.workspacesDir, 'fresh'))).toBe(false)
+    expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
+  })
+
+  // R11: `readdirSync` on a file threw ENOTDIR, which the app answered as a 500 "internal error".
+  it('refuses a name a file already has, with a 400, and leaves the file alone', async () => {
+    mkdirSync(t.workspacesDir, { recursive: true })
+    const file = path.join(t.workspacesDir, 'a-file')
+    writeFileSync(file, 'not a workspace')
+    const res = await create({ name: 'a-file' })
+    expect(res.status).toBe(400)
+    expect((await json(res)).error).toContain('is a file')
+    expect(readFileSync(file, 'utf8')).toBe('not a workspace')
     expect((await json(t.get('/api/workspaces'))).active.root).toBe(t.workspace)
   })
 
@@ -397,6 +506,37 @@ describe('deleting a workspace from disk', () => {
     expect(existsSync(path.join(SAMPLE, 'content', 'posts', 'hello-openwrite', 'index.md'))).toBe(
       true,
     )
+  })
+
+  // R7: the schema said "absolute" in a comment and enforced only "non-empty". A relative entry
+  // resolved against the server's cwd on both sides of the symlink guard, so the guard passed.
+  it('never reads a hand-edited relative entry, so it cannot delete under the server’s cwd', async () => {
+    const relative = `openwrite-relative-${process.pid}`
+    const underCwd = path.resolve(relative)
+    mkdirSync(underCwd)
+    try {
+      writeFileSync(path.join(underCwd, 'keep.md'), 'mine')
+      writeFileSync(
+        t.workspacesFile,
+        JSON.stringify({
+          version: 1,
+          entries: [{ id: 'aaaaaaaaaaaa', path: relative, label: 'x' }],
+        }),
+      )
+      expect((await json(t.get('/api/workspaces'))).entries).toEqual([])
+      expect((await erase('aaaaaaaaaaaa', 'x')).status).toBe(404)
+      expect(readFileSync(path.join(underCwd, 'keep.md'), 'utf8')).toBe('mine')
+    } finally {
+      rmSync(underCwd, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['a relative path', 'foo'],
+    ['a dotted relative path', './foo'],
+    ['the filesystem root', '/'],
+  ])('refuses to erase %s whatever the list says', (_name, root) => {
+    expect(() => assertErasablePath(root)).toThrow(/not a workspace folder that can be deleted/)
   })
 
   it('drops the entry when its directory is already gone', async () => {

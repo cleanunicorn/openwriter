@@ -85,9 +85,28 @@ function homeChild(home: string, name: string): string {
   return root
 }
 
+/**
+ * The erase route's first guard, on the recorded path alone. The list's schema already refuses a
+ * relative path; the one route that deletes checks again rather than trust a parse it cannot see.
+ * A relative root would resolve against the server's working directory — the openwrite checkout —
+ * and the filesystem root is nobody's workspace.
+ */
+export function assertErasablePath(root: string): void {
+  if (!path.isAbsolute(root) || path.dirname(root) === root) {
+    throw new HttpError(400, `${root} is not a workspace folder that can be deleted`)
+  }
+}
+
 function scaffold(root: string): void {
-  if (existsSync(root) && readdirSync(root).length > 0) {
-    throw new HttpError(400, `${root} already has something in it; pick another name`)
+  if (existsSync(root)) {
+    // `homeChild` refused a link, so this is the thing itself: a file here must be a clean 400,
+    // not the ENOTDIR `readdirSync` would throw, which the app answers as a 500.
+    if (!statSync(root).isDirectory()) {
+      throw new HttpError(400, `${root} is a file, not a folder; pick another name`)
+    }
+    if (readdirSync(root).length > 0) {
+      throw new HttpError(400, `${root} already has something in it; pick another name`)
+    }
   }
   mkdirSync(root, { recursive: true })
   // A link swapped in between the check and the mkdir would be followed by the writes below.
@@ -132,11 +151,14 @@ export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: Jo
       if (label !== undefined) workspaces.touch(next, label)
       return
     }
+    // The list is written first: it is the one fallible step, and if it throws the server has not
+    // moved — no job was stopped, no root changed — so every client is still right about where it
+    // is. The worst a failed switch leaves behind is an entry for a workspace that was not opened.
+    const entry = workspaces.touch(next, label)
     await jobs.quiesce(SWITCH_REASON)
     workspace.retarget(next)
     watcher.reset()
     jobs.rebind()
-    const entry = workspaces.touch(next, label)
     events.emit({ type: 'workspace.changed', root: next, label: entry.label })
   }
 
@@ -214,6 +236,7 @@ export function mountWorkspaceRoutes(app: Hono, context: ServerContext, jobs: Jo
           )
         }
         const root = entry.path
+        assertErasablePath(root)
         if (realpathOrSelf(root) === realpathOrSelf(workspace.root)) {
           throw new HttpError(409, 'that workspace is open; switch to another one first')
         }

@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
 import type { ServerEvent } from '../../shared/events.ts'
 import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
+import { createFakeAdapter, FakeGate } from '../adapters/fake.ts'
 import { createProcessAdapter } from '../adapters/process-adapter.ts'
 import { AdapterRegistry } from '../adapters/registry.ts'
 import { alive } from '../adapters/test-helpers.ts'
@@ -804,6 +805,79 @@ describe('a workspace switch under the job manager', () => {
     expect(recovered.map((entry) => entry.id)).toEqual([job.id])
     expect(recovered[0]?.state).toBe('stale')
     expect(recovered[0]?.rawOutput).toContain('WHY BLOCKS')
+  })
+
+  /**
+   * The fake adapter, behind a cancel that can be told to do nothing — an agent whose stop is
+   * slower than the switch's budget. Every call is counted either way.
+   */
+  const stubbornFake = (gate: FakeGate) => {
+    const fake = createFakeAdapter(gate)
+    const state = { stubborn: true, cancels: 0 }
+    const adapter: AgentAdapter = {
+      name: 'fake',
+      start: (dir, options) => {
+        const handle = fake.start(dir, options)
+        return {
+          ...handle,
+          cancel: async (how) => {
+            state.cancels++
+            if (!state.stubborn) await handle.cancel(how)
+          },
+        }
+      },
+    }
+    return { adapter, state }
+  }
+
+  it('stops a job started while the switch waited, which nothing else would reach', async () => {
+    const gate = new FakeGate(true)
+    const manager = new JobManager({
+      workspace: t.context.workspace,
+      events: t.context.events,
+      registry: new AdapterRegistry().register(createFakeAdapter(gate)),
+    })
+    const early = manager.create(request('fake:upper', byText('## Why blocks')))
+    await expect.poll(() => gate.waitingIds(), { timeout: 5000 }).toContain(early.id)
+
+    const quiescing = manager.quiesce(SWITCHED, 100)
+    const late = manager.create(request('fake:upper', byText('## A table')))
+    await expect.poll(() => gate.waitingIds(), { timeout: 5000 }).toContain(late.id)
+    await quiescing
+    // The quiesce cancelled what it could see when it began: the late job was not there yet.
+    expect(gate.waitingIds()).toEqual([late.id])
+
+    t.context.workspace.retarget(next)
+    manager.rebind()
+
+    await expect.poll(() => gate.waitingIds(), { timeout: 5000 }).toEqual([])
+    expect(manager.list()).toEqual([])
+  })
+
+  it('keeps an agent that outlived the switch cancellable by shutdown', async () => {
+    const gate = new FakeGate(true)
+    const { adapter, state } = stubbornFake(gate)
+    const manager = new JobManager({
+      workspace: t.context.workspace,
+      events: t.context.events,
+      registry: new AdapterRegistry().register(adapter),
+    })
+    const job = manager.create(request('fake:upper', byText('## Why blocks')))
+    await expect.poll(() => gate.waitingIds(), { timeout: 5000 }).toContain(job.id)
+
+    await manager.quiesce(SWITCHED, 100)
+    t.context.workspace.retarget(next)
+    manager.rebind()
+    // Every cancel so far was ignored: the agent is still running, and its entry is gone.
+    expect(state.cancels).toBeGreaterThan(0)
+    expect(gate.waitingIds()).toEqual([job.id])
+    expect(manager.list()).toEqual([])
+
+    state.stubborn = false
+    const before = state.cancels
+    await manager.shutdown()
+    expect(state.cancels).toBe(before + 1)
+    expect(gate.waitingIds()).toEqual([])
   })
 
   it('never writes a job of the old workspace into the new one, however late it finishes', async () => {

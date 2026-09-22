@@ -79,4 +79,11 @@ describe('a workspace can be pointed at another root', () => {
     workspace.retarget(second)
     expect(workspace.listArticles()).toEqual([])
   })
+
+  // The R11 shape (#15): `readdirSync` on a file throws ENOTDIR, which the app answers as a 500.
+  it('lists nothing, rather than throwing, when content/posts is a file', () => {
+    rmSync(path.join(second, 'content', 'posts'), { recursive: true, force: true })
+    writeFileSync(path.join(second, 'content', 'posts'), 'not a folder')
+    expect(new Workspace(second).listArticles()).toEqual([])
+  })
 })
