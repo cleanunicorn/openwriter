@@ -391,7 +391,9 @@ document, and the full select → prompt → review → accept flow with the fak
 adapter, including two overlapping jobs, plus the shell: panel toggle and
 persistence, reaching an article from the left panel, the agent panel's
 composer, and a follow-up turn carrying the earlier one (`panels.spec.ts`,
-`agent-panel.spec.ts`).
+`agent-panel.spec.ts`). `two-tabs.spec.ts` pins down what the README says
+about two tabs on one article, known bugs #29 and #30 included; a fix for
+either flips its test on purpose.
 
 **Writing tests here:**
 
