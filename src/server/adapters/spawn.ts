@@ -16,7 +16,7 @@ export type SpawnOptions = {
   onLine: (line: string) => void
 }
 
-export type SpawnOutcome = {
+type SpawnOutcome = {
   /** `missing` when the executable does not exist (ENOENT). */
   status: 'exited' | 'missing' | 'cancelled'
   code: number | null

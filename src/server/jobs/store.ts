@@ -6,7 +6,7 @@ import { isUnsettled, type Job, JobSchema } from '../../shared/jobs/job-types.ts
 import { readJobText, readJobTextOrNull, writeJobText } from './job-io.ts'
 
 /** `job.json`: server-owned lifecycle metadata next to the contract files. */
-export const JobFileSchema = z.object({
+const JobFileSchema = z.object({
   version: z.literal(1),
   job: JobSchema,
   /** The adapter settings this job was launched with; later settings changes do not affect it. */

@@ -450,6 +450,7 @@ npm run dev          # Node server (watch) + Vite on every interface, http://127
 npm run format       # biome format --write
 npm run lint
 npm run typecheck
+npm run knip         # unused exports, files and dependencies (entry points: knip.jsonc)
 npm test             # Vitest; one file: npm test -- src/server/paths.test.ts
 npm run test:e2e     # Playwright; first run: npx playwright install --with-deps chromium
                      # the smoke server takes a free port; OPENWRITE_E2E_PORT=<port> pins one

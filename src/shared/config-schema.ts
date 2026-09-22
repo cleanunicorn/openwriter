@@ -16,7 +16,7 @@ export type AdapterConfig = z.infer<typeof AdapterConfigSchema>
  * Which edge panels are open. A toggle, not a setting: the Settings form does not show it.
  * `prefault` (not `default`): in zod 4 `.default({})` would skip the inner defaults.
  */
-export const UiStateSchema = z
+const UiStateSchema = z
   .object({
     leftPanel: z.boolean().default(false),
     rightPanel: z.boolean().default(false),

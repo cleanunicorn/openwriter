@@ -83,7 +83,7 @@ function overlaps(start: number, end: number, hunk: Hunk): boolean {
   return hunk.bs < end && start < hunk.be
 }
 
-export type MergeOutcome = 'same' | 'mine' | 'theirs' | 'conflict'
+type MergeOutcome = 'same' | 'mine' | 'theirs' | 'conflict'
 
 /** One stretch that at least one side changed, and how the merge settled it. */
 export type MergeGroup = {

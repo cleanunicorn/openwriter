@@ -48,6 +48,8 @@ npm scripts are the single source of the dev flow (`package.json`).
 - **Lint:** `npm run lint` — Biome, warnings fail
 - **Format:** `npm run format` writes; `npm run format:check` verifies (CI)
 - **Type-check:** `npm run typecheck`
+- **Unused code:** `npm run knip` — unused exports, files and dependencies; the
+  entry points and every ignore are listed, with reasons, in `knip.jsonc`
 - **Test (unit, all):** `npm test`
 - **Test (single file):** `npm test -- <path>`
 - **Test (end-to-end):** `npm run test:e2e` — see
@@ -212,6 +214,7 @@ when it is missing or stale):
 npm run format        # CI: npm run format:check
 npm run lint
 npm run typecheck
+npm run knip
 npm test
 npm run test:e2e
 npm run build
@@ -293,7 +296,7 @@ skills/               prompt templates: diagram, terminal-recording, image, vide
                       (a workspace adds its own in <workspace>/.zen/skills/; a shipped name wins)
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
 scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
-.github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)
+.github/workflows/    ci.yml: format:check, lint, typecheck, knip, test, build, test:e2e (fake adapter only)
 e2e/                  Playwright specs, fixtures.ts (one server per test), helpers.ts,
                       start-server.ts (spawns scripts/e2e-server.ts; also used by scripts/screenshots.ts)
 docs/                 herdr-evaluation.md, ui-inventory.md (every option's home), screenshots/

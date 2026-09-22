@@ -40,6 +40,14 @@ directory keeps the name `.zen/`.
 - **SSE over WebSocket.** Server→client traffic is one-directional; `EventSource` reconnects by
   itself and the client refetches job state on every reconnect, so no replay log is needed.
 - **`concurrently` (dev only)** runs the server and Vite for `npm run dev`.
+- **`knip` (dev only) finds unused exports, files and dependencies** (issue #10); an automated
+  pass instead of a manual sweep, run in CI as `npm run knip`. Policy: `knip.jsonc` lists every
+  entry point by hand (the vite, vitest and playwright plugins are off, so their configs are
+  explicit entries; `src/server/main.ts` comes from the package.json scripts), every ignore
+  carries a comment, and config hints are errors, so a stale entry or ignore fails the run. An
+  export used only inside its own file is un-exported, not ignored; nothing is exported for tests
+  alone. The first run found 28 unused exports, 5 unused exported types and one unused dev
+  dependency (`@types/markdown-it`: markdown-it 15 ships its own types); all were removed.
 
 ## Local-only hardening
 

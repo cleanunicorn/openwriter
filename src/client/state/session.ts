@@ -15,7 +15,7 @@ import { type Conflict, type DocState, docReducer } from './doc-reducer.ts'
 export const TAB_KEY = 'openwrite.tab'
 export const SESSION_KEY = 'openwrite.session'
 
-export const HeldRequestSchema = z.object({
+const HeldRequestSchema = z.object({
   id: z.string(),
   request: JobRequestSchema.omit({ snapshot: true }),
   blockedBy: z.array(z.string()),
@@ -62,7 +62,7 @@ export type RestoredDoc = {
   sent?: string
 }
 
-export const SessionSchema = z.object({
+const SessionSchema = z.object({
   version: z.literal(1),
   /** The workspace the tab showed; a session for another one is thrown away. */
   root: z.string(),

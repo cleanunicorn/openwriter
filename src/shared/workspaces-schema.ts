@@ -14,7 +14,7 @@ const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 const isAbsolutePath = (value: string): boolean => ABSOLUTE_PATH.test(value)
 
 /** One remembered workspace. `id` is the handle every mutating route takes; `path` is absolute. */
-export const WorkspaceEntrySchema = z.object({
+const WorkspaceEntrySchema = z.object({
   id: z.string().regex(/^[0-9a-f]{12}$/),
   path: z.string().refine(isAbsolutePath, 'a workspace path must be absolute'),
   label: LabelSchema,
@@ -30,7 +30,7 @@ export const WorkspacesFileSchema = z.object({
   entries: z.array(WorkspaceEntrySchema).default([]),
 })
 
-export const ActiveWorkspaceSchema = z.object({ root: z.string(), label: z.string() })
+const ActiveWorkspaceSchema = z.object({ root: z.string(), label: z.string() })
 
 export const WorkspacesResponseSchema = z.object({
   active: ActiveWorkspaceSchema,

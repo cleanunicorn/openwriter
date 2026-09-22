@@ -115,7 +115,7 @@ export function readClaudeLine(line: string): LineRead {
   return {}
 }
 
-export const claudeSpec: CliSpec = {
+const claudeSpec: CliSpec = {
   name: 'claude',
   command: 'claude',
   buildArgs: buildClaudeArgs,

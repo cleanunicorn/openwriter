@@ -6,7 +6,7 @@
 export const GROUP_ORDER = ['documents', 'agent', 'export', 'workspace', 'app'] as const
 export type CommandGroup = (typeof GROUP_ORDER)[number]
 
-export const GROUP_LABELS: Record<CommandGroup, string> = {
+const GROUP_LABELS: Record<CommandGroup, string> = {
   documents: 'Documents',
   agent: 'Agent',
   export: 'Export',

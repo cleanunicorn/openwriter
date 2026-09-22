@@ -23,6 +23,8 @@ jobs:
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
+      # Unused exports, files and dependencies (knip.jsonc lists the entry points).
+      - run: npm run knip
       # Unit and Playwright suites use the fake adapter only; CI never calls a real agent.
       - run: npm test
       - run: npm run build
