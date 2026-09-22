@@ -107,20 +107,47 @@ const indexOf = (doc: Doc, id: string) => doc.blocks.findIndex((block) => block.
 const copies = (doc: Doc, raw: string) => doc.blocks.filter((block) => block.raw === raw).length
 
 /**
- * The anchor of an open new-block slot, carried over to `next`: the anchor itself when it
- * survives, otherwise its nearest surviving predecessor (null = top of the document). Without
- * this, a slot whose anchor was deleted or reloaded away would land at index 0 and autosave
- * would write the paragraph the writer typed at the end of the article to the top of the file.
+ * Whether `block` is in `next` as itself: under its ID *and* with its text. Only such a block's
+ * position can be trusted. `reconcile` hands the first slice of a changed run the old ID of that
+ * run, and an op's replacement keeps the replaced block's ID, so an ID alone can answer for a
+ * different paragraph — one another program inserted, say, in front of the one that was edited.
+ */
+function unchanged(next: Doc, block: Block | undefined): block is Block {
+  return block !== undefined && next.blocks[indexOf(next, block.id)]?.raw === block.raw
+}
+
+/**
+ * Where a position of `previous` — just after `previous.blocks[left]`, just before
+ * `previous.blocks[right]` — is in `next`, as the index a block inserted there would get. The
+ * neighbours decide it when one of them is still there unchanged, the left one first. When both
+ * changed, the region around the position was rewritten and nothing says where in it the
+ * position went; the nearest block still answering to its ID is the best guess, and it is kept.
+ */
+function carriedIndex(previous: Doc, next: Doc, left: number, right: number): number {
+  const before = previous.blocks[left]
+  if (unchanged(next, before)) return indexOf(next, before.id) + 1
+  const after = previous.blocks[right]
+  if (unchanged(next, after)) return indexOf(next, after.id)
+  const survivor = previous.blocks
+    .slice(0, Math.max(left + 1, 0))
+    .reverse()
+    .find((block: Block) => indexOf(next, block.id) !== -1)
+  return survivor === undefined ? 0 : indexOf(next, survivor.id) + 1
+}
+
+/**
+ * The anchor of an open new-block slot, carried over to `next`: the slot keeps its place between
+ * the anchor and the block after it (null = top of the document). Without this, a slot whose
+ * anchor was deleted or reloaded away would land at index 0 and autosave would write the
+ * paragraph the writer typed at the end of the article to the top of the file.
  */
 function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): PendingNew | null {
   if (pending === null || pending.afterId === null) return pending
-  if (indexOf(next, pending.afterId) !== -1) return pending
   const oldIndex = indexOf(previous, pending.afterId)
-  const survivor = previous.blocks
-    .slice(0, Math.max(oldIndex, 0))
-    .reverse()
-    .find((block) => indexOf(next, block.id) !== -1)
-  return { afterId: survivor?.id ?? null }
+  if (oldIndex === -1) return indexOf(next, pending.afterId) === -1 ? { afterId: null } : pending
+  if (unchanged(next, previous.blocks[oldIndex])) return pending
+  const at = carriedIndex(previous, next, oldIndex, oldIndex + 1)
+  return { afterId: next.blocks[at - 1]?.id ?? null }
 }
 
 /** Both paths that put a focused block back after a reload say this; an e2e asserts it. */
@@ -141,11 +168,7 @@ function keepFocusedBlock(
 ): { doc: Doc; id: string } {
   // `previous` always has the block: `change()` never lets an open draft lose its block.
   const oldIndex = indexOf(previous, draft.id)
-  const survivor = previous.blocks
-    .slice(0, oldIndex)
-    .reverse()
-    .find((block: Block) => indexOf(disk, block.id) !== -1)
-  const at = survivor === undefined ? 0 : indexOf(disk, survivor.id) + 1
+  const at = carriedIndex(previous, disk, oldIndex - 1, oldIndex + 1)
   const known = new Set(disk.blocks.map((block) => block.id))
   const text = draft.text.trim() === '' ? '…' : draft.text
   const inserted = insertMarkdown(disk, at, text, mint)

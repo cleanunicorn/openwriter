@@ -201,6 +201,51 @@ describe('an open new-block slot whose anchor disappears', () => {
     expect(liveText(broken)).toBe('One\n\nTwo\n\nmy new paragraph\n')
   })
 
+  it('keeps its place after an edited anchor when a block inherits the anchor’s ID', () => {
+    // `reconcile` hands the first slice of a changed run the old ID of that run. Another program
+    // edited the anchor and put a paragraph in front of it, so the ID now answers for *that*
+    // paragraph, and trusting it put the slot between the two instead of after the anchor.
+    const open = run(
+      loaded('One\n\nTwo\n\nThree\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'new-block', currentId: 'b2', currentText: 'Two' },
+    )
+    const state = run(
+      open,
+      {
+        type: 'external',
+        text: 'One\n\nInserted elsewhere\n\nTwo, edited\n\nThree\n',
+        hash: 'h1',
+        exists: true,
+      },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'my new paragraph' },
+    )
+    // The ID really was inherited: this is the case the rule has to see through.
+    expect(state.doc.blocks.find((block) => block.id === 'b2')?.raw).toBe('Inserted elsewhere')
+    expect(liveText(state)).toBe(
+      'One\n\nInserted elsewhere\n\nTwo, edited\n\nmy new paragraph\n\nThree\n',
+    )
+  })
+
+  it('stays after the whole of an accepted replacement of its anchor', () => {
+    // An accepted op replaced the anchor with two paragraphs. The first keeps the anchor's ID,
+    // but the slot sat right before "Three", and that is where it still belongs.
+    const open = slotAfter(loaded('One\n\nTwo\n\nThree\n'), 'b2', 'Two')
+    const replaced = run(loaded('One\n\nTwo, rewritten\n\nand continued\n\nThree\n')).doc
+    const doc = {
+      ...replaced,
+      blocks: replaced.blocks.map((block, index) => ({
+        ...block,
+        id: ['b1', 'b2', 'b9', 'b3'][index] as string,
+      })),
+    }
+    const state = run(open, { type: 'replace-doc', doc, nextId: 10 })
+    expect(state.focusedId).toBe(NEW_BLOCK_ID)
+    expect(liveText(state)).toBe(
+      'One\n\nTwo, rewritten\n\nand continued\n\nmy new paragraph\n\nThree\n',
+    )
+  })
+
   it('commits where it was shown', () => {
     // `blur` commits whatever the editor holds, wherever the reload left it — addressing the
     // slot by name would now be a no-op, and a test that asserts nothing is worse than none.
@@ -704,6 +749,33 @@ describe('an open editor never loses its block', () => {
     expect(liveText(state)).toContain('typed with trailing spaces')
     expect(state.draft?.text).toContain('typed with trailing spaces')
     expect(state.focusedId).not.toBe('b1')
+    expect(dangling(state)).toBe(false)
+  })
+
+  it('puts a vanished block back next to its unchanged neighbour, not after an inherited ID', () => {
+    // Another program deleted the block being edited, edited the one before it and put a
+    // paragraph in front of that. `reconcile` gives the inserted paragraph the edited block's
+    // old ID, so a rescue that trusts IDs put the writer's text above "Two, edited" — away from
+    // "Four", the neighbour that is still exactly where it was.
+    const state = run(
+      loaded('One\n\nTwo\n\nThree\n\nFour\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'Three, typed by the writer' },
+      {
+        type: 'external',
+        text: 'One\n\nInserted elsewhere\n\nTwo, edited\n\nFour\n',
+        hash: 'h1',
+        exists: true,
+      },
+    )
+    expect(state.doc.blocks.map((block) => block.raw)).toEqual([
+      'One',
+      'Inserted elsewhere',
+      'Two, edited',
+      'Three, typed by the writer',
+      'Four',
+    ])
+    expect(state.focusedId).toBe('b3')
     expect(dangling(state)).toBe(false)
   })
 

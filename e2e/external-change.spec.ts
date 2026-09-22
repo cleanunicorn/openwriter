@@ -250,3 +250,63 @@ test('a save that loses the race with an outside change gets a 409 and keeps bot
     expect(file).toContain('reject the rest. MINE')
   }).toPass({ timeout: 8000 })
 })
+
+// `reconcile` gives the first block of a changed run the old ID of that run. In both tests below
+// another program edits a block *and* puts a paragraph in front of it, so the edited block's old
+// ID ends up on the inserted paragraph — and whatever trusts that ID lands on the wrong side.
+
+test('a block deleted from outside comes back under its heading, not above it', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Every paragraph, list').click()
+  await page.keyboard.press(blockEnd)
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type(' MINE')
+  await saved
+
+  // The paragraph being edited goes; the heading above it is reworded and gets a paragraph in
+  // front of it, which inherits the heading's ID.
+  writeFileSync(
+    app.articlePath(),
+    app
+      .readArticle()
+      .replace(/^Every paragraph, list.*\n\n/m, '')
+      .replace('## Why blocks\n', 'Inserted from outside.\n\n## Why blocks, reworded\n'),
+  )
+  await expect(notice(page)).toContainText('was kept')
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain(
+      '## Why blocks, reworded\n\nEvery paragraph, list, and code fence is a block.',
+    )
+    expect(file).toContain('stays plain markdown. MINE\n\n- Blocks are slices')
+  })
+})
+
+test('an open new-block slot stays under the block it was opened after', async ({ page, app }) => {
+  await openArticle(page)
+  await page.getByText('Every paragraph, list').click()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Enter')
+  await expect(editor(page)).toHaveText('')
+
+  // The block the slot was opened after is edited, and a paragraph put in front of it inherits
+  // its ID.
+  writeFileSync(
+    app.articlePath(),
+    app
+      .readArticle()
+      .replace('Every paragraph, list', 'Inserted from outside.\n\nEvery paragraph, list')
+      .replace('stays plain markdown.', 'stays plain markdown!'),
+  )
+  await expect(page.getByText('Inserted from outside.')).toBeVisible()
+  await page.keyboard.type('Typed into the slot.')
+  await page.keyboard.press('Escape')
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('stays plain markdown!\n\nTyped into the slot.\n\n- Blocks are slices')
+  })
+})
