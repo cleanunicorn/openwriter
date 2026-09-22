@@ -127,7 +127,8 @@ directory keeps the name `.zen/`.
   hash. A stale base is a 409 and triggers the same reconcile as a watcher event. Disk wins except
   in the focused block. A file deleted from outside pauses autosave and is never recreated.
 - **`fs.watch` on the document's directory** (sees save-by-rename), debounced, compared by
-  content hash; hashes the server itself wrote are ignored. No `chokidar` needed so far.
+  content hash; hashes the server itself wrote are ignored, which is also why another tab's save
+  is never reported (see "Two tabs on one document"). No `chokidar` needed so far.
 - **Mermaid labels are SVG text (`htmlLabels: false`).** HTML labels live in `foreignObject`,
   which sanitising removes; SVG text also survives the standalone HTML export.
 - **The mermaid source travels as the text of a `<pre>`,** not in a `data-` attribute: DOMPurify
@@ -138,6 +139,25 @@ directory keeps the name `.zen/`.
 - **Always-visible controls in the editor itself: none.** The notice line appears only when there
   is something to say. The exceptions in the app are the two panel handles and the job count
   (under "Shell and panels" below).
+
+## Two tabs on one document (issue #5)
+
+- **Documented as unsupported rather than fixed, because the fix that looks obvious makes it
+  worse.** The watcher ignores the hash of every server write, so another tab's save never
+  reaches a tab as `doc.changed`, and the stale tab only learns of it from its own 409 (#29).
+  Emitting `doc.changed` from the PUT route fixes the staleness, but it starts a save ping-pong.
+  When both tabs have an editor open on the same block, each reload keeps the local draft, and
+  the `lastSeen` key (base hash plus text) re-arms the autosave. So each tab saves its own copy
+  and reloads the other, for as long as both editors stay open. A real fix needs a tie-break
+  (an origin id on the event, and a "changed elsewhere" notice), so it is left to #29.
+- **What the README says happens is tested, bugs included** (`e2e/two-tabs.spec.ts`). Different
+  blocks merge on the stale tab's refused save. For the same block, the stale copy wins and the
+  other tab is not told (#29). A block finished with `Esc` before its autosave is lost on the
+  reload, because the `external` reconcile protects only the open draft (#30, which also happens
+  in one tab with an outside editor). The two bug tests assert today's behaviour, so a fix has
+  to change them on purpose rather than pass by accident.
+- **Undo is not offered as the recovery for #30.** It restores the whole pre-reload snapshot,
+  which reverts the other side's change as well, and the next autosave writes that result.
 
 ## Jobs
 
