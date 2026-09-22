@@ -38,6 +38,11 @@ export const ConfigSchema = z.object({
   theme: z.enum(['system', 'light', 'dark']).default('system'),
   concurrency: z.number().int().min(1).max(16).default(3),
   jobTimeoutSec: z.number().int().min(1).max(7200).default(600),
+  /**
+   * Finished jobs (done, failed, cancelled, or dismissed) not updated for this many days are
+   * deleted when the workspace opens. 0 keeps them until cleared by hand. See DECISIONS.md.
+   */
+  jobRetentionDays: z.number().int().min(0).max(3650).default(30),
   adapters: z.record(z.string(), AdapterConfigSchema).default({}),
   ui: UiStateSchema,
 })

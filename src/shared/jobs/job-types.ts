@@ -143,3 +143,20 @@ const ACTIVE_STATES: readonly JobState[] = ['queued', 'running', 'validating', '
 export const isActive = (state: JobState): boolean => ACTIVE_STATES.includes(state)
 /** A job holds its block locks until it is settled or can no longer produce a review. */
 export const isUnsettled = (state: JobState): boolean => isActive(state) || state === 'ready'
+
+/**
+ * Nothing will run for it and nothing waits for the writer's decision, so its directory may be
+ * cleared. `ready` is never finished: a proposal awaiting review is kept until it is decided.
+ */
+const FINISHED_STATES: readonly JobState[] = ['settled', 'failed', 'cancelled', 'stale']
+export const isFinished = (state: JobState): boolean => FINISHED_STATES.includes(state)
+
+/** `POST /api/jobs/clear-finished`: what was deleted, what was kept, and what was refused. */
+export const ClearJobsResponseSchema = z.object({
+  removed: z.array(z.string()),
+  /** Job directories left alone because their job is queued, running, or awaiting review. */
+  kept: z.number().int().min(0),
+  /** Directories that looked eligible but were not deleted, with why (a symlink, an error). */
+  skipped: z.array(z.object({ id: z.string(), reason: z.string() })),
+})
+export type ClearJobsResponse = z.infer<typeof ClearJobsResponseSchema>

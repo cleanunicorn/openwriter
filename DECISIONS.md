@@ -389,6 +389,41 @@ codex exec --json --skip-git-repo-check --ephemeral
 - **`job.json` lives in that directory too,** so it is re-validated with zod on every read and
   never trusted for anything the in-memory job does not already know.
 
+## Job retention (issue #4)
+
+- **Finished means `settled`, `failed`, `cancelled` or `stale`** (`isFinished`, shared). `ready`
+  is never finished, dismissed or not: a proposal awaiting a decision is kept until it is decided.
+  Nothing queued or running is ever touched, and neither is a finished job whose agent handle is
+  still live (a cancel the agent ignored): its process could still be writing into the directory.
+- **Two ways out, both server-side.** An explicit *Clear finished jobs* removes every finished job
+  of the open workspace; automatic pruning when a workspace opens (server start and every switch,
+  before restart recovery) removes done, failed, cancelled and dismissed finished jobs whose
+  `updatedAt` is older than `jobRetentionDays` (default 30, `0` = off). Why age and not a count: a
+  burst of jobs would push out yesterday's failure before the writer saw it; age is predictable.
+- **Pruning spares a stale job that was not dismissed.** It is in the agent panel with its output
+  "so nothing is lost" (the stale rule); only the writer's own clear or dismiss lets it go. Done,
+  failed and cancelled jobs of an earlier session are not shown at all after a restart, so a
+  month-old one has no reader left.
+- **The clear scans the disk, not just memory.** Restart recovery loads only stale jobs, so the
+  finished jobs of earlier sessions exist only as directories; the in-memory state wins where
+  there is one. A `job.json` whose id does not name its directory, or that does not parse, is
+  left alone and reported: the agent can write that file, so it is never a reason to delete.
+- **Deletion is its own no-follow walk** (`removeJobDir` in `job-io.ts`), not `rm -r`: the id must
+  match the job id pattern (one segment, directly under `.zen/jobs`), `.zen/jobs` and the job
+  directory must `lstat` as real directories, and inside it every non-directory — symlink, hard
+  link, FIFO — is `unlink`ed, which removes the name and never what it points at.
+- **A cleared job writes nothing more.** `update` and `progress` check that the entry is still the
+  one in the map (as well as the epoch), so a run that settles after the clear cannot recreate the
+  directory through `saveJobFile`'s `mkdir`.
+- **The request names its workspace** (`x-openwrite-workspace`, as settings writes do) and the
+  route has no `await` before the sweep, so a click from a tab still showing the previous
+  workspace is refused with 409 instead of clearing the one that is open now. A `job.removed`
+  event tells every tab to drop the cleared jobs.
+- **Palette only, no confirmation.** It is rare housekeeping, so it gets no always-visible control
+  and stays off the transcript. It is not behind a typed confirmation like erasing a workspace:
+  it removes only finished work, never anything that could still enter the article, and the
+  notice says how many jobs it cleared and kept.
+
 ## Decisions made while fixing the review findings
 
 - **Only a `blocks` job goes stale when a target disappears.** A whole-article job lists every

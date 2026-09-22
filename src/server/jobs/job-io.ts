@@ -3,9 +3,12 @@ import {
   closeSync,
   constants,
   fstatSync,
+  lstatSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
+  rmdirSync,
   unlinkSync,
   writeSync,
 } from 'node:fs'
@@ -147,4 +150,42 @@ export function readJobAsset(jobDir: string, file: string): Buffer | null {
   } finally {
     closeSync(fd)
   }
+}
+
+/** The shape `newJobId` mints: `YYYYMMDD-HHMMSS-xxxx`. Nothing else under `.zen/jobs` is a job. */
+const JOB_ID = /^[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$/
+export const isJobId = (name: string): boolean => JOB_ID.test(name)
+
+/**
+ * Delete one job directory, `<jobsDir>/<id>`, and nothing outside it. The id must be a job id
+ * (so it is a single path segment), `jobsDir` and the job directory must be real directories
+ * (lstat: a symlink is refused, never followed), and the walk below lstats every entry: a
+ * directory is descended into, anything else — a regular file, a FIFO, a symlink, a hard link —
+ * is unlinked, which removes the name and never touches what it points at. Call it only for a
+ * job whose agent has exited; nothing may be writing into the directory while it goes.
+ */
+export function removeJobDir(jobsDir: string, id: string): void {
+  if (!isJobId(id)) throw new PathEscapeError(`not a job id: ${JSON.stringify(id)}`)
+  const parent = lstatSync(jobsDir)
+  if (!parent.isDirectory()) {
+    throw new UnsafeJobFileError(
+      '.zen/jobs',
+      parent.isSymbolicLink() ? 'it is a symlink' : 'not a directory',
+    )
+  }
+  const dir = path.join(jobsDir, id)
+  const stats = lstatSync(dir)
+  if (!stats.isDirectory()) {
+    throw new UnsafeJobFileError(id, stats.isSymbolicLink() ? 'it is a symlink' : 'not a directory')
+  }
+  removeTree(dir)
+}
+
+function removeTree(dir: string): void {
+  for (const name of readdirSync(dir)) {
+    const child = path.join(dir, name)
+    if (lstatSync(child).isDirectory()) removeTree(child)
+    else unlinkSync(child)
+  }
+  rmdirSync(dir)
 }

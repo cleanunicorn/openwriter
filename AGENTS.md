@@ -265,14 +265,15 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
   test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
   routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control),
                         workspaces (the known list, switch, create, erase), export
-  jobs/                 manager (lifecycle, repair, decisions), job-files (the contract), store (job.json, restart recovery),
-                        job-io (the only way to touch an agent-writable job directory: no-follow, regular files only)
+  jobs/                 manager (lifecycle, repair, decisions, clear finished), job-files (the contract), store (job.json, restart recovery),
+                        job-io (the only way to touch an agent-writable job directory: no-follow, regular files only, removeJobDir),
+                        retention (which finished jobs are pruned when a workspace opens)
   adapters/             types, registry, channel, spawn, process-adapter, claude, codex, herdr, fake, fixtures/echo-agent,
                         test-helpers (the AdapterOptions fixture and the pid probe the adapter and job tests share)
 src/client/           Vite + React
   index.html main.tsx App.tsx   entry points and the shell (global keys, notices, overlays)
   api.ts                every request, zod-parsed against src/shared/api-types.ts
-  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions)
+  state/                store, doc-reducer (pure, history), app (load/save/events), jobs (held requests, decisions, clear finished), describe-clear
   blocks/               BlockList, Block, BlockEditor (CodeMirror 6), RenderedBlock, FrontMatterLine, click-to-offset
   render/               markdown (markdown-it → DOMPurify, highlight.js, mermaid), export-html
   shell/                Shell (the two edge panels and their handles), LeftPanel, RightPanel,

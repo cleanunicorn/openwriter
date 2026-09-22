@@ -13,7 +13,9 @@ import type { Op } from '../../shared/jobs/result-schema.ts'
 import { blockersOf, type Claim, lostItsTargets, startable } from '../../shared/jobs/scheduler.ts'
 import { effectiveTargets } from '../../shared/jobs/validate-ops.ts'
 import { api } from '../api.ts'
+import { describeClear } from './describe-clear.ts'
 import {
+  dispatch,
   dispatchDoc,
   docStateOf,
   flush,
@@ -199,15 +201,36 @@ export async function dismissJob(id: string): Promise<void> {
     notifyFailure('Could not dismiss the job', error, job?.doc)
     return
   }
-  jobsStore.set((state) => {
-    const { [id]: _gone, ...jobs } = state.jobs
-    return {
-      ...state,
-      jobs,
-      order: state.order.filter((other) => other !== id),
-      researchJobId: state.researchJobId === id ? null : state.researchJobId,
-    }
-  })
+  forgetJobs([id])
+}
+
+/** Drop jobs from the transcript: dismissed here, or cleared from disk (by any tab). */
+function forgetJobs(ids: string[]): void {
+  const gone = new Set(ids)
+  jobsStore.set((state) => ({
+    ...state,
+    jobs: Object.fromEntries(Object.entries(state.jobs).filter(([id]) => !gone.has(id))),
+    order: state.order.filter((id) => !gone.has(id)),
+    inserted: Object.fromEntries(Object.entries(state.inserted).filter(([id]) => !gone.has(id))),
+    researchJobId:
+      state.researchJobId !== null && gone.has(state.researchJobId) ? null : state.researchJobId,
+  }))
+}
+
+/**
+ * Delete every finished job's directory in this workspace (the server decides which; nothing
+ * queued, running or awaiting review goes). The request names the workspace this tab shows, so
+ * one made just before a switch is refused rather than applied to the other workspace.
+ */
+export async function clearFinishedJobs(): Promise<void> {
+  try {
+    const root = store.get().workspaces?.active.root ?? (await api.workspaces()).active.root
+    const outcome = await api.clearFinishedJobs(root)
+    forgetJobs(outcome.removed)
+    dispatch({ type: 'notice', notice: describeClear(outcome) })
+  } catch (error) {
+    notifyFailure('Could not clear the finished jobs', error)
+  }
 }
 
 export const undecided = (job: Job): number[] =>
@@ -466,6 +489,8 @@ export function startJobs(): void {
       if (event.type === 'job.state') {
         upsert(event.job)
         pump()
+      } else if (event.type === 'job.removed') {
+        forgetJobs(event.ids)
       } else if (event.type === 'job.progress') {
         jobsStore.set((state) => {
           const job = state.jobs[event.id]

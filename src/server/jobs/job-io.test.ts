@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import {
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +19,7 @@ import {
   readJobAsset,
   readJobText,
   readJobTextOrNull,
+  removeJobDir,
   UnsafeJobFileError,
   writeJobText,
 } from './job-io.ts'
@@ -117,4 +119,65 @@ describe('job assets', () => {
     linkSync(secret(), path.join(jobDir, 'assets', 'hard.txt'))
     expect(readJobAsset(jobDir, 'assets/hard.txt')).toBeNull()
   })
+})
+
+describe('removing a job directory', () => {
+  const ID = '20260922-101500-ab12'
+  let jobsDir: string
+  let victim: string
+  beforeEach(() => {
+    jobsDir = path.join(base, 'ws', '.zen', 'jobs')
+    victim = path.join(jobsDir, ID)
+    mkdirSync(path.join(victim, 'assets', 'deep'), { recursive: true })
+    writeFileSync(path.join(victim, 'job.json'), '{}')
+    writeFileSync(path.join(victim, 'assets', 'deep', 'a.png'), 'png')
+  })
+
+  it('removes the whole tree and nothing beside it', () => {
+    removeJobDir(jobsDir, ID)
+    expect(existsSync(victim)).toBe(false)
+    // The job directory the other tests use sits beside it and is untouched.
+    expect(existsSync(jobDir)).toBe(true)
+  })
+
+  it('unlinks every agent-planted link without touching what it points at', () => {
+    symlinkSync(secret(), path.join(victim, 'result.json'))
+    symlinkSync(outside, path.join(victim, 'assets', 'escape'))
+    linkSync(secret(), path.join(victim, 'assets', 'hard.txt'))
+    execFileSync('mkfifo', [path.join(victim, 'progress.log')])
+    removeJobDir(jobsDir, ID)
+    expect(existsSync(victim)).toBe(false)
+    expect(readFileSync(secret(), 'utf8')).toBe('TOP SECRET\n')
+    expect(readdirSync(outside)).toEqual(['secret.txt'])
+  })
+
+  it('refuses a job directory that is a symlink, and leaves its target alone', () => {
+    rmSync(victim, { recursive: true })
+    symlinkSync(outside, victim)
+    expect(() => removeJobDir(jobsDir, ID)).toThrow(UnsafeJobFileError)
+    expect(readFileSync(secret(), 'utf8')).toBe('TOP SECRET\n')
+  })
+
+  it('refuses a file where a job directory should be', () => {
+    rmSync(victim, { recursive: true })
+    writeFileSync(victim, 'not a dir')
+    expect(() => removeJobDir(jobsDir, ID)).toThrow(UnsafeJobFileError)
+    expect(existsSync(victim)).toBe(true)
+  })
+
+  it('refuses a jobs directory that is a symlink', () => {
+    const linked = path.join(base, 'linked-jobs')
+    symlinkSync(jobsDir, linked)
+    expect(() => removeJobDir(linked, ID)).toThrow(UnsafeJobFileError)
+    expect(existsSync(victim)).toBe(true)
+  })
+
+  it.each(['..', '.', '', 'j1', `../${ID}`, `${ID}/assets`, '20260922-101500-AB12'])(
+    'removes only names that are job ids: refuses %j',
+    (name) => {
+      expect(() => removeJobDir(jobsDir, name)).toThrow(PathEscapeError)
+      expect(existsSync(victim)).toBe(true)
+      expect(existsSync(jobDir)).toBe(true)
+    },
+  )
 })
