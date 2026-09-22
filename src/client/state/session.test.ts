@@ -6,9 +6,11 @@ import {
   type DocState,
   docReducer,
   initialDocState,
+  isDirty,
   liveText,
 } from './doc-reducer.ts'
 import {
+  BASE_BUDGET,
   parseSession,
   type Session,
   sessionFor,
@@ -122,6 +124,128 @@ describe('a page reload', () => {
       keep: 'mine',
     })
     expect(serialise(resolved.doc)).toBe('A\n\nB mine\n\nC\n')
+  })
+})
+
+describe('a page reload with changes autosave had not written (#38)', () => {
+  // The writer finished B (Esc) inside the autosave debounce; the file still says what it said.
+  const finished = () =>
+    run(
+      load(TEXT),
+      { type: 'focus', id: 'b2', cursor: 0 },
+      { type: 'commit', id: 'b2', text: 'B mine' },
+    )
+
+  it('keeps the finished block, under its ID, and it is still to be saved', () => {
+    const before = finished()
+    const after = load(TEXT, reload(before))
+    expect(serialise(after.doc)).toBe('A\n\nB mine\n\nC\n')
+    expect(ids(after)).toEqual(['b1', 'b2', 'b3'])
+    expect(isDirty(after)).toBe(true)
+    expect(after.savedText).toBe(TEXT)
+    // Nothing on disk changed: nothing to tell the writer, and no undo step into the page before.
+    expect(after.notice).toBeNull()
+    expect(after.past).toEqual([])
+  })
+
+  it('keeps the text of an editor still open as the page went', () => {
+    const before = run(
+      load(TEXT),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'C typed' },
+    )
+    const after = load(TEXT, reload(before))
+    expect(serialise(after.doc)).toBe('A\n\nB\n\nC typed\n')
+    expect(after.focusedId).toBeNull()
+    expect(isDirty(after)).toBe(true)
+  })
+
+  it('takes a change the disk made elsewhere, keeps the writer’s, and says so', () => {
+    const after = load('A disk\n\nB\n\nC\n', reload(finished()))
+    expect(serialise(after.doc)).toBe('A disk\n\nB mine\n\nC\n')
+    expect(after.conflicts).toEqual([])
+    expect(after.notice).toContain('Your unsaved text was kept')
+    // Only unchanged text keeps its ID: the block the disk rewrote gets a fresh one.
+    expect(ids(after)).toEqual(['b4', 'b2', 'b3'])
+  })
+
+  it('makes a conflict of a block the disk changed too: the disk’s in the document, the writer’s aside', () => {
+    const after = load('A\n\nB disk\n\nC\n', reload(finished()))
+    expect(serialise(after.doc)).toBe('A\n\nB disk\n\nC\n')
+    expect(after.conflicts).toHaveLength(1)
+    expect(after.conflicts[0]).toMatchObject({ mine: 'B mine', theirs: 'B disk' })
+    expect(after.notice).toContain('Choose which version to keep')
+    expect(isDirty(after)).toBe(false)
+    const resolved = docReducer(after, {
+      type: 'resolve',
+      id: after.conflicts[0]?.id ?? '',
+      keep: 'mine',
+    })
+    expect(serialise(resolved.doc)).toBe('A\n\nB mine\n\nC\n')
+  })
+
+  it('counts the save on its way as the base when that is what landed', () => {
+    // A save of "B mine" was sent; the writer went on typing; the page went; the save landed.
+    const sending = run(finished(), { type: 'sending', text: 'A\n\nB mine\n\nC\n' })
+    const before = run(
+      sending,
+      { type: 'focus', id: 'b2', cursor: 0 },
+      { type: 'commit', id: 'b2', text: 'B mine, more' },
+    )
+    const kept = reload(before)
+    expect(kept).toMatchObject({ base: TEXT, sent: 'A\n\nB mine\n\nC\n' })
+    const after = load('A\n\nB mine\n\nC\n', kept)
+    expect(after.conflicts).toEqual([])
+    expect(serialise(after.doc)).toBe('A\n\nB mine, more\n\nC\n')
+    expect(after.sentText).toBeNull()
+    // Had it not landed, the disk is still the base: the same text, no conflict either.
+    expect(serialise(load(TEXT, kept).doc)).toBe('A\n\nB mine, more\n\nC\n')
+  })
+
+  it('agrees without a word when the last save landed after all', () => {
+    const after = load('A\n\nB mine\n\nC\n', reload(finished()))
+    expect(serialise(after.doc)).toBe('A\n\nB mine\n\nC\n')
+    expect(isDirty(after)).toBe(false)
+    expect(after.notice).toBeNull()
+  })
+
+  it('keeps a base only for a document ahead of the disk', () => {
+    expect(reload(load(TEXT))).not.toHaveProperty('base')
+    expect(reload(finished())).toMatchObject({ base: TEXT })
+    expect(reload(finished())).not.toHaveProperty('sent')
+  })
+
+  it('keeps bases within a budget; past it, the disk wins as before', () => {
+    const big = `${'x'.repeat(BASE_BUDGET - 10)}\n\nB\n`
+    const edited = (ref: DocState['ref'], text: string) =>
+      run(
+        docReducer(initialDocState(ref), { type: 'loaded', text, hash: 'h', exists: true }),
+        { type: 'focus', id: 'b2', cursor: 0 },
+        { type: 'commit', id: 'b2', text: 'B mine' },
+      )
+    const first = edited(REF, big)
+    const second = edited({ kind: 'brief', slug: 'post' }, TEXT)
+    const kept = parseSession(JSON.stringify(sessionOf('/ws', [first, second], NO_JOBS)))
+    expect(kept?.docs[0]?.base).toBe(big)
+    expect(kept?.docs[1]).not.toHaveProperty('base')
+    // Without a base the kept text is the base, so the disk's text is taken: the edit goes.
+    const after = docReducer(initialDocState(second.ref), {
+      type: 'loaded',
+      text: TEXT,
+      hash: 'h',
+      exists: true,
+      ...(kept?.docs[1] === undefined ? {} : { restore: kept.docs[1] }),
+    })
+    expect(serialise(after.doc)).toBe(TEXT)
+  })
+
+  it('refuses a session whose base is larger than any session writes', () => {
+    const [doc] = sessionOf('/ws', [finished()], NO_JOBS).docs
+    if (doc === undefined) throw new Error('no doc')
+    const session = sessionOf('/ws', [], NO_JOBS)
+    const huge = { ...doc, base: 'x'.repeat(BASE_BUDGET + 1) }
+    expect(parseSession(JSON.stringify({ ...session, docs: [huge] }))).toBeNull()
+    expect(parseSession(JSON.stringify({ ...session, docs: [{ ...doc, base: 7 }] }))).toBeNull()
   })
 })
 

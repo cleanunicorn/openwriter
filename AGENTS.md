@@ -400,7 +400,8 @@ adapter, including two overlapping jobs, plus the shell: panel toggle and
 persistence, reaching an article from the left panel, the agent panel's
 composer, and a follow-up turn carrying the earlier one (`panels.spec.ts`,
 `agent-panel.spec.ts`), and a reload mid-job keeping block identity, queued
-requests and reviews (`reload.spec.ts`). `two-tabs.spec.ts` pins down what the
+requests and reviews, and a reload before autosave keeping the unsaved edit
+or making it a conflict (`reload.spec.ts`). `two-tabs.spec.ts` pins down what the
 README says about two tabs on one article: a save reaching the other tab, and a
 conflict without a save ping-pong. A reload's three-way merge and its conflicts
 (Keep mine / Take theirs / Keep both) are covered there and in

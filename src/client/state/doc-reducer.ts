@@ -88,8 +88,8 @@ export type DocAction =
       text: string
       hash: string | null
       exists: boolean
-      /** The document's identity from before a page reload (state/session.ts), to put back. */
-      restore?: { doc: Doc; nextId: number; conflicts?: Conflict[] }
+      /** The document from before a page reload (state/session.ts), to merge and put back. */
+      restore?: Restore
     }
   | { type: 'failed'; error: string }
   | { type: 'focus'; id: string; cursor: FocusCursor }
@@ -451,6 +451,10 @@ function blocksAt(doc: Doc, start: number, end: number): { ids: string[]; afterI
   return { ids, afterId }
 }
 
+/** The base of a reload's merge: the save on its way when that is what the disk holds (#30). */
+const mergeBase = (state: DocState, disk: string): string =>
+  disk === state.sentText ? disk : state.savedText
+
 /**
  * A reload is a three-way merge (#30): base = the text last loaded or saved (or the save on its
  * way, when that is what came back), mine = the live document with the editor folded in, theirs
@@ -458,14 +462,22 @@ function blocksAt(doc: Doc, start: number, end: number): { ids: string[]; afterI
  * included — and a passage both changed differently shows the disk's version, with the writer's
  * kept in a `Conflict`. The editor stays open unless the disk changed what it holds; then it
  * closes, so autosave can never write the writer's copy over the other side's (#29's ping-pong).
+ * `keepIds` puts the IDs on the merged text: `reconcile` for a reload the writer is watching,
+ * `reattach` (unchanged text only) for the first load after a page reload.
  */
-function reloaded(state: DocState, disk: string, hash: string | null, fromTab: boolean): DocState {
+function reloaded(
+  state: DocState,
+  disk: string,
+  hash: string | null,
+  fromTab: boolean,
+  keepIds: typeof reconcile = reconcile,
+): DocState {
   const { mint, next } = minter(state)
   const folded = foldIn(state, mint)
   const mineText = serialise(folded.doc)
-  const base = disk === state.sentText ? disk : state.savedText
+  const base = mergeBase(state, disk)
   const merge = merge3(base, mineText, disk)
-  const doc = reconcile(folded.doc, merge.text, mint)
+  const doc = keepIds(folded.doc, merge.text, mint)
 
   const owned = new Set(folded.owned.map((id) => indexOf(folded.doc, id)))
   const ownIndex = state.draft === null ? -1 : indexOf(folded.doc, state.draft.id)
@@ -539,6 +551,52 @@ function reloaded(state: DocState, disk: string, hash: string | null, fromTab: b
   })
 }
 
+/** What a page reload kept of a document (state/session.ts), to put back on the first load. */
+export type Restore = {
+  doc: Doc
+  nextId: number
+  conflicts?: Conflict[]
+  /** The text last loaded or saved; absent, the kept text is the base and the disk wins. */
+  base?: string
+  /** The save that was on its way as the page went. */
+  sent?: string
+}
+
+/**
+ * The first load after a page reload (#38) runs the merge a reload runs (`reloaded`): mine = the
+ * kept document (its editor committed as the page went), theirs = the disk, base = the kept base.
+ * So a block finished but not yet saved survives and is then autosaved, a change only the disk
+ * made is taken, and a passage both changed is a conflict. The IDs go back only on unchanged text
+ * (`reattach`): after an absence of unknown length a changed block can be unrelated text, and a
+ * job aimed at it must lose its target and go stale. A conflict the writer had not settled comes
+ * back too: its text is nowhere else. There is no undo step: the page before is gone.
+ */
+function restored(ref: DocRef, restore: Restore, disk: string, hash: string | null): DocState {
+  const conflicts = restore.conflicts ?? []
+  const text = serialise(restore.doc)
+  const kept: DocState = {
+    ...initialDocState(ref),
+    status: 'ready',
+    doc: restore.doc,
+    nextId: restore.nextId,
+    savedText: restore.base ?? text,
+    sentText: restore.sent ?? null,
+    conflicts,
+    nextConflict: Math.max(0, ...conflicts.map((conflict) => Number(conflict.id.slice(1)))) + 1,
+  }
+  const base = mergeBase(kept, disk)
+  const merged = reloaded(kept, disk, hash, false, reattach)
+  // A reload's notice is about a change the writer watched arrive; here only what needs them is
+  // said: a conflict, or unsaved text kept against a disk that changed too.
+  const notice =
+    merged.conflicts.length > 0
+      ? CONFLICT_NOTICE
+      : text !== base && disk !== base && disk !== text
+        ? TEXT_KEPT
+        : null
+  return { ...merged, past: [], future: [], sentText: null, notice }
+}
+
 const paragraphBreak = (text: string) => (text.includes('\r\n') ? '\r\n\r\n' : '\n\n')
 
 /**
@@ -597,26 +655,16 @@ export function docReducer(state: DocState, action: DocAction): DocState {
       // A brief or strategy that was never written is an empty document, created on first save.
       if (!action.exists && state.ref.kind === 'article')
         return { ...state, status: 'missing', error: null }
-      // After a reload the blocks get back the IDs they had, but only where their text is exactly
-      // what it was: a job aimed at a block that changed meanwhile loses its target and goes stale.
-      const { restore } = action
-      const { mint, next } = minter({ ...state, nextId: restore?.nextId ?? 1 })
-      const doc =
-        restore === undefined
-          ? createDoc(action.text, mint)
-          : reattach(restore.doc, action.text, mint)
-      // A conflict the writer had not settled comes back too: its text is nowhere else.
-      const conflicts = restore?.conflicts ?? []
+      if (action.restore !== undefined)
+        return restored(state.ref, action.restore, action.text, action.hash)
+      const { mint, next } = minter({ ...state, nextId: 1 })
       return {
         ...initialDocState(state.ref),
         status: 'ready',
-        doc,
+        doc: createDoc(action.text, mint),
         nextId: next(),
         baseHash: action.hash,
         savedText: action.text,
-        conflicts,
-        nextConflict: Math.max(0, ...conflicts.map((conflict) => Number(conflict.id.slice(1)))) + 1,
-        ...(conflicts.length > 0 ? { notice: CONFLICT_NOTICE } : {}),
       }
     }
     case 'failed':

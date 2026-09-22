@@ -1,14 +1,19 @@
-import { writeFileSync } from 'node:fs'
-import { expect, test } from './fixtures.ts'
+import { accessSync, chmodSync, constants, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import type { Page } from '@playwright/test'
+import { type App, expect, test } from './fixtures.ts'
 import {
   acceptButton,
   articleHeading,
   ask,
+  blockEnd,
   blockWith,
+  editor,
   expectFile,
   expectOneWaiting,
   ghosts,
   jobState,
+  notice,
   openArticle,
   release,
   selectWord,
@@ -170,4 +175,105 @@ test('another open tab shows the job but leaves it to the tab that asked', async
   await page.reload()
   await acceptButton(ghosts(page)).click()
   await expectFile(app.articlePath(), (file) => expect(file).toContain('## WHY BLOCKS\n'))
+})
+
+// A block finished with Esc but not saved yet (#38): the reload merges three ways, as a live
+// reload does (#30), instead of taking the disk's text.
+
+const SECOND = 'stays plain markdown.'
+
+// A test that fails before the next page reads the document leaves the directory read-only;
+// the workspace copy could not be removed then.
+test.afterEach(({ app }) => chmodSync(path.dirname(app.articlePath()), 0o755))
+
+/**
+ * Type ` BBB` at the end of the second paragraph, and press Esc when `finish` says so, while no
+ * save of this page can reach the disk: the article's directory is read-only (a save writes a
+ * temp file and renames it) until the next page reads the document. That is a reload inside the
+ * 750 ms autosave debounce whose last save — the one `visibilitychange` sends as the page goes —
+ * never landed, without depending on timing. Holding or aborting the request with `route` does
+ * not stop that last save: a request the page sends while it goes can escape the interception,
+ * and landed in about half the runs tried.
+ */
+async function editWithoutSaving(page: Page, app: App, finish: boolean): Promise<void> {
+  const directory = path.dirname(app.articlePath())
+  chmodSync(directory, 0o555)
+  // As root the mode would not stop the save, and the test would time out saying nothing useful.
+  expect(() => accessSync(directory, constants.W_OK), 'the directory is read-only').toThrow()
+  // Set up after this page read the document, so the next read of it is the next page's.
+  await page.route('**/api/docs/**', async (route) => {
+    const request = route.request()
+    if (request.method() === 'GET' && request.url().endsWith('/hello-openwrite'))
+      chmodSync(directory, 0o755)
+    await route.continue()
+  })
+  await page.getByText('Every paragraph, list').click()
+  await expect(editor(page)).toBeVisible()
+  await page.keyboard.press(blockEnd)
+  await page.keyboard.type(' BBB')
+  if (finish) {
+    await page.keyboard.press('Escape')
+    await expect(editor(page)).toHaveCount(0)
+  }
+  await expect(blockWith(page, `${SECOND} BBB`)).toHaveCount(1)
+  // The unload guard asks before leaving a tab with unsaved text; the writer leaves.
+  page.on('dialog', (dialog) => void dialog.accept())
+}
+
+const savedOnce = (page: Page) =>
+  page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+
+for (const [how, finish] of [
+  ['finished with Esc', true],
+  ['still open in its editor', false],
+] as const) {
+  test(`a block ${how} but not saved before a reload is still there after it, and is saved (#38)`, async ({
+    page,
+    app,
+  }) => {
+    await openArticle(page)
+    await editWithoutSaving(page, app, finish)
+    expect(app.readArticle()).not.toContain('BBB')
+
+    const saved = savedOnce(page)
+    await page.reload()
+    await expect(articleHeading(page)).toBeVisible()
+    await expect(blockWith(page, `${SECOND} BBB`)).toHaveCount(1)
+    await saved
+    await expectFile(app.articlePath(), (file) => expect(file).toContain(`${SECOND} BBB`))
+    // Nothing on disk changed meanwhile, so there is nothing to tell the writer.
+    await expect(notice(page)).toHaveCount(0)
+  })
+}
+
+test('a finished unsaved block the disk also changed while the page was away is a conflict (#38)', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await editWithoutSaving(page, app, true)
+
+  // Away from the app (the tab keeps its session storage), someone edits the same paragraph.
+  await page.goto('about:blank')
+  writeFileSync(app.articlePath(), app.readArticle().replace(SECOND, `${SECOND} DISK`))
+  await page.goto('/')
+  await expect(articleHeading(page)).toBeVisible()
+
+  // The disk's version is in the document; the writer's is kept aside until they choose.
+  const conflict = page.getByRole('group', { name: 'Conflict' })
+  await expect(conflict).toContainText('BBB')
+  await expect(blockWith(page, `${SECOND} DISK`)).toHaveCount(1)
+  await expect(blockWith(page, 'BBB')).toHaveCount(0)
+  await expect(notice(page)).toContainText('Choose which version to keep.')
+  expect(app.readArticle()).not.toContain('BBB')
+
+  const saved = savedOnce(page)
+  await conflict.getByRole('button', { name: 'Keep mine' }).click()
+  await saved
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain(`${SECOND} BBB`)
+    expect(file).not.toContain('DISK')
+  })
 })

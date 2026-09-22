@@ -224,6 +224,28 @@ directory keeps the name `.zen/`.
 - **An unsettled conflict counts as unsaved:** the unload guard warns, a workspace switch waits,
   and a page reload keeps it in `sessionStorage` with the rest of the document's identity
   (`state/session.ts`). Its text is in neither the document nor the file.
+- **A page reload is the same merge (#38).** The first load after a reload used to put the kept
+  IDs on the disk's text (`reattach`), so a block finished with `Esc` inside the autosave
+  debounce was replaced by the disk's older copy — only the unload guard's prompt stood in the
+  way. Now the session keeps each document's base as well (`base`: the text last loaded or
+  saved; `sent`: the save on its way), and `restored` in `doc-reducer.ts` runs `reloaded` with
+  mine = the kept document (editor committed at `pagehide`), theirs = the disk, base = the kept
+  base — `reattach` instead of `reconcile` for the IDs, so the strict identity rule stands. A
+  base is kept only for a document ahead of the disk (the kept text is the base otherwise, which
+  gives the disk's text wherever it differs, as before), within `BASE_BUDGET` (1,000,000 UTF-16
+  units over all documents, first come first kept): a full `sessionStorage` would lose the
+  whole session, IDs and held requests included. zod refuses a longer one. The notice is quieter
+  than a live reload's: a conflict, or "your unsaved text was kept" when the disk changed too;
+  nothing when the reload only brings back what the writer had. No undo step: the page it would
+  undo to is gone.
+- **`pagehide` already has the latest text.** The editor dispatches every keystroke as a
+  `draft`, and `sessionOf` commits the draft, so a reload inside the 750 ms window keeps what
+  was typed a moment before (`reload.spec.ts` covers an editor still open as well as one closed
+  with `Esc`). The last-chance save `visibilitychange` sends as the page goes usually lands too;
+  when it does not (a slow or refused write), the merge is what keeps the text. The e2e tests make
+  the write fail by making the article's directory read-only until the next page reads it: a
+  `page.route` hold or abort does not stop that last save, which escaped the interception and
+  landed in about half the runs tried.
 
 ## Jobs
 
@@ -490,8 +512,9 @@ codex exec --json --skip-git-repo-check --ephemeral
   The page removes the keys as it starts and writes them again as it goes, so a tab *duplicated*
   while this one is open copies nothing and gets IDs and jobs of its own. A crash that skips
   `pagehide` loses the session: the jobs go stale with their output kept, as before. What is kept:
-  the tab ID; each ready document's blocks with the open editor committed (the text autosave
-  wrote) and its counter; held requests, the `inserted` map (order of a partly accepted result),
+  the tab ID; each ready document's blocks with the open editor committed (the text the writer
+  sees) and its counter, plus its merge base when it is ahead of the disk (#38, "A page reload is
+  the same merge"); held requests, the `inserted` map (order of a partly accepted result),
   conversation starts and composer drafts. zod-validated on read; a document whose gaps do not fit
   its blocks, repeats an ID or holds a `live<n>` is dropped, and a counter behind its IDs is moved
   past them.
