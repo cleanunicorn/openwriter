@@ -166,9 +166,11 @@ describe('skills in jobs', () => {
       'name',
       'requires',
       'scope',
+      'source',
       'stub',
       'task',
     ])
+    expect(recording.source).toBe('shipped')
   })
 
   it('puts the skill body into instruction.md: any adapter can run it', async () => {

@@ -2,7 +2,7 @@ import type { DocRef } from '../../shared/api-types.ts'
 import type { Scope } from '../../shared/jobs/job-types.ts'
 import { registerCommands } from '../palette/commands.ts'
 import { inGroup } from '../palette/group.ts'
-import { currentDoc, setPalette } from '../state/app.ts'
+import { currentDoc, describeSkillError, dispatch, setPalette } from '../state/app.ts'
 import { requestJob } from '../state/jobs.ts'
 
 /** Ask for an instruction in the palette, then start an ordinary job with it. */
@@ -75,7 +75,11 @@ registerCommands((state) => {
       .map((skill) => ({
         id: `skill:${skill.name}`,
         title: `Run skill: ${skill.name}`,
-        hint: skill.stub ? `${skill.description} — stub` : skill.description,
+        hint: [
+          skill.description,
+          ...(skill.stub ? ['stub'] : []),
+          ...(skill.source === 'workspace' ? ['workspace skill'] : []),
+        ].join(' — '),
         run: () =>
           askInPalette({
             label: `Instruction for the ${skill.name} skill`,
@@ -86,5 +90,12 @@ registerCommands((state) => {
             targets: targetsFor(skill.scope, doc.selectedIds, content),
           }),
       })),
+    // A workspace skill file that did not load is findable where the skills are, with the reason.
+    ...state.skillErrors.map((problem) => ({
+      id: `skill-error:${problem.file}`,
+      title: `Skill not loaded: ${problem.file}`,
+      hint: problem.error,
+      run: () => dispatch({ type: 'notice', notice: describeSkillError(problem) }),
+    })),
   ])
 })

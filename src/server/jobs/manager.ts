@@ -174,7 +174,9 @@ export class JobManager {
       throw new HttpError(400, 'snapshot gaps do not match its blocks')
     }
     const skill =
-      request.skill === undefined ? undefined : findSkill(request.skill, this.options.skillsDir)
+      request.skill === undefined
+        ? undefined
+        : findSkill(request.skill, workspace.root, this.options.skillsDir)
     if (request.skill !== undefined && skill === undefined)
       throw new HttpError(400, `unknown skill ${request.skill}`)
 

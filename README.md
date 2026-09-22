@@ -97,6 +97,7 @@ with no auth.
     config.json               settings (validated; every key has a default)
     articles/<slug>/brief.md  per-article outline, angle, target reader
     jobs/<job-id>/            one directory per agent job
+    skills/<name>.md          optional: this workspace's own skills (see "Adding a skill")
 ```
 
 `contentDir` in `.zen/config.json` is relative to the workspace by default. It may be an absolute
@@ -229,8 +230,8 @@ An adapter only launches a process and relays progress; the file contract does t
 ## Skills and media
 
 Media types are agent skills, not editor features: the editor only knows that a job can return
-assets plus blocks that reference them. A skill is a prompt template in `skills/` that any
-adapter can run. Run one from the palette (`Run skill: <name>`), from its `/name` chip in the agent panel, or
+assets plus blocks that reference them. A skill is a prompt template in `skills/` (or in a
+workspace's own `.zen/skills/`, see [Workspace skills](#workspace-skills)) that any adapter can run. Run one from the palette (`Run skill: <name>`), from its `/name` chip in the agent panel, or
 start an instruction with `/name`.
 
 | Skill | What it does |
@@ -264,6 +265,31 @@ The prompt: what to produce, as ops on the target blocks, and which files to put
 The body is inserted into the job's `instruction.md` under "Skill: <name>", between the writer's
 instruction and the contract rules, so it should describe the *what* and leave the `result.json`
 format to the contract.
+
+### Workspace skills
+
+A skill that belongs to one blog rather than to openwrite goes in that workspace:
+`<workspace>/.zen/skills/<name>.md`, same header, same body. It is listed after the shipped ones
+(its palette hint says "workspace skill"), runs through `/name`, the `/name` chips and
+`Run skill: <name>` like any other, and its `requires:` goes through the same `PATH` preflight.
+The list follows the open workspace: switching workspaces shows the other one's skills, and
+saving, breaking or deleting a file updates the palette while the editor is open.
+
+The rules, all enforced by the server (`src/server/skills.ts`):
+
+- **A shipped name wins.** A workspace file called `diagram.md` is not loaded; the shipped
+  `diagram` still runs, and the file is reported. Rename it to use it (`my-diagram.md`).
+- **It cannot widen the agent.** `allow:` and `network: true` are honoured only in the shipped
+  `skills/` folder, which is reviewed like code; a workspace skill that sets them is reported
+  instead of loaded.
+- **It stays in the workspace.** A link whose target is outside the workspace, a hard link, a
+  folder, a FIFO or anything that is not a regular file, a file over 64 KiB, a file that is not
+  UTF-8, and a file name that is not kebab case are refused. At most 100 files are read.
+- **`name:` must match the file name**, as in `skills/`.
+
+A file that is refused does not stop the others. The editor says why, once, as a notice, and
+keeps the reason in the agent panel ("Skills not loaded", under the `/name` chips) and in the
+palette (`Skill not loaded: .zen/skills/<file>`) until the file is fixed.
 
 ## Export
 

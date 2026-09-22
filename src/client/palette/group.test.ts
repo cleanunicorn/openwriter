@@ -42,6 +42,8 @@ function sampleState(): SampleState {
   const skills = readdirSync(path.join(root, 'skills'))
     .filter((file) => file.endsWith('.md'))
     .map((file) => skillInfo(readFileSync(path.join(root, 'skills', file), 'utf8')))
+  // What e2e/skills.spec.ts puts into the workspace's .zen/skills/: one good file, one broken.
+  const haiku = skillInfo('---\nname: haiku\ndescription: Rewrite as a haiku\n---\n', 'workspace')
   const entry = (id: string, label: string) => ({ id, label, path: `/tmp/${id}` })
   return {
     boot: 'ready',
@@ -56,7 +58,8 @@ function sampleState(): SampleState {
       adapters: ['fake'],
       adapterOverride: null,
     },
-    skills,
+    skills: [...skills, haiku],
+    skillErrors: [{ file: '.zen/skills/broken.md', error: 'description: Required' }],
     workspaces: {
       active: { root: '/tmp/active', label: 'sample' },
       home: '/tmp/workspaces',
@@ -75,7 +78,7 @@ function sampleState(): SampleState {
 const root = path.resolve(import.meta.dirname, '..', '..', '..')
 
 /** A skill file's header as /api/skills lists it (the defaults are the server's). */
-function skillInfo(text: string): SkillInfo {
+function skillInfo(text: string, source: SkillInfo['source'] = 'shipped'): SkillInfo {
   const { header } = splitHeader(text)
   const list = (value: string | string[] | undefined) =>
     value === undefined ? [] : Array.isArray(value) ? value : [value]
@@ -86,6 +89,7 @@ function skillInfo(text: string): SkillInfo {
     stub: header.stub === 'true',
     requires: list(header.requires),
     document: header.document ?? 'current',
+    source,
   })
 }
 const REGISTRY = allCommands(sampleState())
@@ -146,6 +150,8 @@ describe('the first match of every palette query the e2e suite runs', () => {
     ['open hello', 'open:hello-openwrite'],
     ['remove workspace from the list: The first one', 'workspace-forget:cccccccccccc'],
     ['run skill diagram', 'skill:diagram'],
+    ['run skill haiku', 'skill:haiku'],
+    ['skill not loaded broken', 'skill-error:.zen/skills/broken.md'],
     ['settings', 'settings'],
     ['switch to workspace', 'workspace-open:aaaaaaaaaaaa'],
   ]

@@ -56,7 +56,8 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | id | title | home | reason |
 |---|---|---|---|
 | `open:<slug>` | Open article: … | L·D article list | the persistent file browser the app lacked |
-| `skill:<name>` | Run skill: … | R `/name` chips | skills are agent requests; `/name` also works in the pill and the composer |
+| `skill:<name>` | Run skill: … | R `/name` chips | skills are agent requests; `/name` also works in the pill and the composer; a workspace skill's hint says "workspace skill" |
+| `skill-error:<file>` | Skill not loaded: … | R "Skills not loaded" list | a `.zen/skills/` file that did not load is found where the skills are; running it repeats the reason as a notice |
 | `workspace-open:<id>` | Switch to workspace: … | L·W "Switch workspace" | navigation |
 | `workspace-rename:<id>` | Rename workspace: … | P | rare; the palette's text prompt does it well |
 | `workspace-forget:<id>` | Remove workspace from the list: … | P | rare |
@@ -72,6 +73,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | Document, scope and skill chips on each turn (the document only when it is not the one on screen) | R | what each turn was about, at a glance; the transcript holds every document's turns |
 | Research notes: Insert as block, Close, Discard these notes | R, above the transcript | a research answer is part of the conversation |
 | Composer: "Message to the agent", "Ask about", Send, `/skill` chips, starters | R | whole-article requests and research questions get a home outside the palette |
+| "Skills not loaded" list under the `/skill` chips (only while a `.zen/skills/` file is broken) | R | the reason a workspace skill is missing stays in sight until the file is fixed; a notice also says it once |
 | "Carries the last N turns …" and New conversation | R, under the composer | shows what the next message sends the agent, and lets the writer start clean |
 | Prompt pill ("Ask the agent"): "Instruction for the agent", scope, `/skill`, `Ctrl/Cmd+I`, type-to-pill, Escape | C at the selection | anchored to what is selected; it never takes focus by appearing |
 | Ghost diff: Accept, Reject, Accept all, Reject all; keys `Enter`/`a`, `Backspace`/`Delete`/`r`, with `Ctrl/Cmd` for the whole job | C on the text | a decision sits on the text it changes |

@@ -319,6 +319,28 @@ codex exec --json --skip-git-repo-check --ephemeral
   registry. The spec allows the main agent to spawn another agent CLI as a subprocess; routing
   the job instead keeps one confined process per job and needs no nested permissions.
 - **`video` is a stub:** listed, marked `stub: true`, and refused with a pointer to the README.
+- **Workspace skills live in `<workspace>/.zen/skills/*.md` (issue #3).** Same header parser and
+  zod schema as `skills/`, read through `resolveWithin` and opened `O_NOFOLLOW | O_NONBLOCK`;
+  regular, singly linked, ≤ 64 KiB, UTF-8 files only, at most 100. A bad file becomes an entry in
+  `GET /api/skills`'s `errors` (shown as a notice once, in the agent panel and in the palette)
+  and never hides the valid ones: a typo in one prompt must not take away the rest.
+- **A shipped skill's name cannot be taken by a workspace skill; the file is refused, not
+  namespaced and not an override.** `/diagram` then means the same reviewed prompt in every
+  workspace, a workspace copied from someone else cannot silently swap one out, and the `/name`
+  parser needs no namespace syntax. Customising one is a copy under a new name. Considered and
+  rejected: workspace-overrides-shipped (a workspace could replace a skill whose allowances were
+  reviewed), and `ws:` prefixes (new syntax in the pill for a rare case).
+- **A workspace skill may not declare `allow:` or `network: true`.** Its prompt is the writer's
+  own file and is in trust like any instruction, but those two keys change the agent's command
+  line, and the confinement is sentinel-checked only for reviewed repository files
+  (`skills.test.ts` pins every shipped `allow` list). Refused with a reason, not silently dropped,
+  so the writer is never surprised by a skill that runs with less than it asked for. `requires:`
+  is allowed: it only adds a `PATH` preflight that fails early.
+- **The skills list refreshes by event, and a switch needs no special code.** `GET /api/skills`
+  reads `workspace.root` at request time, so the client's own reload after a switch lists the new
+  workspace's skills. For edits made while the editor is open, `SkillsWatcher` watches
+  `.zen/skills/` (or `.zen/` until it exists), re-reads after a 100 ms debounce, and emits
+  `skills.changed` only when what the palette lists changed; it re-arms on `workspace.changed`.
 - **Export: the client renders, the server zips.** DOMPurify needs a DOM, and mermaid renders in
   the browser anyway, so the HTML body is rendered by the editor's own pipeline (export mode) and
   posted; the server wraps it in a template with one `style.css`, adds the bundle's files, and

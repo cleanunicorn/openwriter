@@ -1,3 +1,4 @@
+import type { SkillsWatcher } from './skills-watcher.ts'
 import type { EventHub } from './sse.ts'
 import type { DocWatcher } from './watcher.ts'
 import type { WorkspaceList } from './workspace-list.ts'
@@ -27,7 +28,7 @@ export type AppOptions = {
   allowedHosts: () => string[]
   /** PATH lookup for skill prerequisites; injected in tests. */
   toolLookup?: (tool: string) => boolean
-  /** Where skill templates live; defaults to the repository's `skills/`. */
+  /** Where the shipped skill templates live; defaults to the repository's `skills/`. */
   skillsDir?: string
 }
 
@@ -38,5 +39,7 @@ export type ServerContext = {
   workspaces: WorkspaceList
   events: EventHub
   watcher: DocWatcher
+  /** Emits `skills.changed` when `<workspace>/.zen/skills/` changes what the palette lists. */
+  skills: SkillsWatcher
   adapterNames: () => string[]
 }

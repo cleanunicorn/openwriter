@@ -259,7 +259,8 @@ src/server/           Hono on Node (TypeScript run natively, no build step)
   app.ts                createApp(options): wires workspace, watcher, jobs, adapters, routes
   paths.ts security.ts  the path guard; Host/Origin/content-type hardening
   context.ts            AppOptions and the ServerContext every route module receives
-  workspace.ts workspace-list.ts config.ts watcher.ts sse.ts assets.ts export.ts skills.ts http.ts
+  workspace.ts workspace-list.ts config.ts watcher.ts sse.ts assets.ts export.ts http.ts
+  skills.ts skills-watcher.ts  shipped skills/ plus <workspace>/.zen/skills/ (guarded, errors kept); skills.changed
   test-helpers.ts       createTestApp(): a temp copy of the sample workspace plus an in-process app
   routes/               events (SSE), docs (documents, articles, assets), config, jobs (+ fake control),
                         workspaces (the known list, switch, create, erase), export
@@ -281,6 +282,7 @@ src/client/           Vite + React
   settings/             Settings, commands
   export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
+                      (a workspace adds its own in <workspace>/.zen/skills/; a shipped name wins)
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
 scripts/              ensure-build, e2e-server, screenshots, verify-adapter (manual, real agents)
 .github/workflows/    ci.yml: format:check, lint, typecheck, test, build, test:e2e (fake adapter only)

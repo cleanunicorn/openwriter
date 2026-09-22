@@ -11,7 +11,7 @@ import type { ServerContext } from '../context.ts'
 import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
 import { readJobAsset } from '../jobs/job-io.ts'
 import type { JobManager } from '../jobs/manager.ts'
-import { listSkills } from '../skills.ts'
+import { loadSkills } from '../skills.ts'
 import type { EventHub } from '../sse.ts'
 
 export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManager): void {
@@ -53,11 +53,13 @@ export function mountJobRoutes(app: Hono, context: ServerContext, jobs: JobManag
   })
 
   // Only what the palette needs: the prompt body and the permission headers stay on the server.
-  app.get('/api/skills', (c) =>
-    c.json({
-      skills: listSkills(context.options.skillsDir).map((skill) => SkillInfoSchema.parse(skill)),
-    }),
-  )
+  // The shipped skills, then the open workspace's `.zen/skills/`, read now: after a switch the
+  // next request lists the new workspace's. Files that did not load come back as `errors`.
+  app.get('/api/skills', (c) => {
+    context.skills.follow()
+    const { skills, errors } = loadSkills(context.workspace.root, context.options.skillsDir)
+    return c.json({ skills: skills.map((skill) => SkillInfoSchema.parse(skill)), errors })
+  })
 }
 
 /** Test-only: mounted only with `--fake-control`. Lets e2e tests decide when a fake job finishes. */
