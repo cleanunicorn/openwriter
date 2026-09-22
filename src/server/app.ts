@@ -93,7 +93,7 @@ export function createApp(options: AppOptions): CreatedApp {
   // with, and it would keep naming the old workspace after a switch.
   app.get('/api/health', (c) => c.json({ ok: true, workspace: path.basename(workspace.root) }))
 
-  mountEventRoutes(app, events)
+  mountEventRoutes(app, events, () => workspace.root)
   mountDocRoutes(app, context)
   mountConfigRoutes(app, context)
   mountJobRoutes(app, context, jobs)

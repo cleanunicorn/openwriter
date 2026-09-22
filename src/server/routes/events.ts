@@ -1,9 +1,14 @@
 import type { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import type { HelloEvent } from '../../shared/events.ts'
 import { TabIdSchema } from '../../shared/jobs/job-types.ts'
 import type { EventHub } from '../sse.ts'
 
-export function mountEventRoutes(app: Hono, events: EventHub): void {
+/**
+ * `root` is read when a stream opens: its `hello` names the workspace every event after it is
+ * about, until a `workspace.changed` names the next one (see `connectEvents` in the client).
+ */
+export function mountEventRoutes(app: Hono, events: EventHub, root: () => string): void {
   app.get('/api/events', (c) =>
     streamSSE(c, async (stream) => {
       // Which tab this is, so a tab that loads later knows whose jobs still have a tab to apply
@@ -28,7 +33,10 @@ export function mountEventRoutes(app: Hono, events: EventHub): void {
         untrack()
       }
       stream.onAbort(stop)
-      await stream.writeSSE({ event: 'hello', data: '{}' })
+      // Synchronously after `subscribe`: no event can come between the two, so the root named
+      // here is the one the first event on this stream is about.
+      const hello: HelloEvent = { root: root() }
+      await stream.writeSSE({ event: 'hello', data: JSON.stringify(hello) })
       // Keep the connection open; a comment line every 25 s defeats idle timeouts.
       while (!stream.aborted && !dropped) {
         await stream.sleep(25_000)

@@ -9,5 +9,5 @@
   },
   "include": ["src/shared", "src/client"],
   "exclude": ["src/**/*.test.ts"],
-  "files": ["src/client/state/app.test.ts"]
+  "files": ["src/client/state/app.test.ts", "src/client/state/workspace-fence.test.ts"]
 }
