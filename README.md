@@ -314,7 +314,7 @@ the server creates `<workspace>/.zen/jobs/<id>/`:
 | File | Written by | Content |
 | --- | --- | --- |
 | `instruction.md` | server | the writer's prompt, the scope and its rules, the skill body if any, the output schema |
-| `article.md` | server | a snapshot of the document, each block wrapped in `<!-- zen:block id=bN -->` … `<!-- /zen:block -->`; targets carry `target`. Markers exist only here, never in the article. An empty document has the virtual block `b0`. |
+| `article.md` | server | a snapshot of the document, each block wrapped in `<!-- zen:block id=bN -->` … `<!-- /zen:block -->`; targets carry `target`. An ID is `bN`, or `liveN` for text the writer had not committed yet (an op on one comes back stale). Markers exist only here, never in the article. An empty document has the virtual block `b0`. |
 | `targets.json` | server | `{ "scope", "blockIds", "selection" }` — `selection` has the selected text and, for a selection made in edit mode, `from`/`to` offsets into the block |
 | `strategy.md`, `brief.md` | server | copies of the workspace strategy and the article's brief |
 | `conversation.md` | server | only on a follow-up turn: the earlier turns about the same document, oldest first, with what came of each. At most 6 turns: 600, 300 and 1500 characters for instruction, summary and research notes, 8000 for the file. Named in `instruction.md`'s Context list; absent on a first turn. |

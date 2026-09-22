@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { GOLDEN_CASES } from './instruction-golden-cases.ts'
 import { renderInstruction } from './job-files.ts'
 
-// Rendered once by the renderer as it was before conversations existed (main at 4798921).
+// Rendered once by the renderer as it was before conversations existed (main at 4798921), then
+// amended by hand for one sentence: the derived `liveN` block IDs (#14).
 const golden = JSON.parse(
   readFileSync(path.join(import.meta.dirname, 'fixtures', 'instruction-first-turn.json'), 'utf8'),
 ) as Record<string, string>

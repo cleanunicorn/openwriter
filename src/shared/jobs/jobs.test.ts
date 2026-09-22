@@ -43,6 +43,16 @@ describe('result.json schema', () => {
     expect(parsed.success).toBe(true)
   })
 
+  it('accepts both ID namespaces a snapshot can carry: stored and derived', () => {
+    // `liveDoc` names a block that exists only in the open editor `live<n>`, an ID the store
+    // never mints. An agent that addresses it must not have its whole result rejected; applying
+    // the op finds no such block and the op is withdrawn, like any op on a vanished block.
+    for (const id of ['b1', 'b12', 'live1', 'live42'])
+      expect(
+        ResultSchema.safeParse({ summary: 's', ops: [{ op: 'delete', block_id: id }] }).success,
+      ).toBe(true)
+  })
+
   it.each([
     ['an unknown op', { summary: 's', ops: [{ op: 'move', block_id: 'b1' }] }],
     [
@@ -57,6 +67,14 @@ describe('result.json schema', () => {
   ])('rejects %s', (_name, value) => {
     expect(ResultSchema.safeParse(value).success).toBe(false)
   })
+
+  it.each(['live', 'b', 'd1', 'live1x', 'b1 ', 'Live1', 'liveb1', 'b-1', 'live01\n'])(
+    'rejects the block id %j: only b<n> and live<n> exist',
+    (id) => {
+      const value = { summary: 's', ops: [{ op: 'delete', block_id: id }] }
+      expect(ResultSchema.safeParse(value).success).toBe(false)
+    },
+  )
 
   it('defaults ops, assets and notes so a research answer can be short', () => {
     expect(ResultSchema.parse({ summary: 's' })).toEqual({

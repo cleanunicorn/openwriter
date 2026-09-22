@@ -20,11 +20,25 @@ export type SplitResult = { slices: Slice[]; gaps: string[] }
 
 export type MintId = () => string
 
-/** The shape of a block ID wherever one crosses a boundary (a job request, a `result.json`). */
-export const BlockIdSchema = z.string().regex(/^b\d+$/)
+/**
+ * The shape of a block ID wherever one crosses a boundary (a job request, a `result.json`): a
+ * stored ID `b<n>`, or a derived one `live<n>` (below). Nothing else — agent output is untrusted.
+ */
+export const BlockIdSchema = z.string().regex(/^(?:b|live)\d+$/)
 
 /** IDs are `b<n>` from a per-document counter. `b0` is reserved for the virtual start anchor. */
 export function createIdMinter(start = 1): MintId {
   let next = start
   return () => `b${next++}`
+}
+
+/**
+ * IDs for blocks that exist only in a derived document — the open editor's text folded in for a
+ * save, a job snapshot or an export. The store never mints these, so an op that comes back aimed
+ * at one finds no block and is withdrawn, instead of landing on whatever block the store later
+ * gave a `b<n>` it had shown the agent.
+ */
+export function createDerivedMinter(): MintId {
+  let next = 1
+  return () => `live${next++}`
 }

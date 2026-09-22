@@ -537,6 +537,52 @@ describe('outside changes', () => {
     expect(isDirty(state)).toBe(false)
   })
 
+  it('never shows a job snapshot an ID the store will give to another block', () => {
+    // A job snapshot is `liveDoc`: the committed blocks plus whatever the editor holds. The
+    // open slot is not a block, so the ID it appears under must be one the store cannot mint —
+    // otherwise an accepted op aimed at it lands on whatever block that ID goes to next.
+    const open = run(
+      loaded('One\n\nTwo\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'new-block', currentId: 'b2', currentText: 'Two' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'Three' },
+    )
+    const snapshot = liveDoc(open)
+    expect(snapshot.blocks.map((block) => block.raw)).toEqual(['One', 'Two', 'Three'])
+    const slotId = snapshot.blocks[2]?.id as string
+
+    // The writer backspaces out of the slot, and an ordinary insert happens instead.
+    const later = run(
+      open,
+      { type: 'merge-previous', id: NEW_BLOCK_ID, text: '' },
+      { type: 'insert', index: 1, markdown: 'A completely other paragraph' },
+    )
+    expect(later.doc.blocks.map((block) => block.id)).not.toContain(slotId)
+  })
+
+  it('never shows a job snapshot the tail of a splitting draft under a storable ID', () => {
+    // The same hazard for a draft that spans several blocks: its tail exists only in the editor.
+    // The writer keeps typing and commits, and the store mints the next IDs for *other* text.
+    const splitting = run(
+      loaded('One\n\nTwo\n'),
+      { type: 'focus', id: 'b2', cursor: 'end' },
+      { type: 'draft', id: 'b2', text: 'Two\n\n## Heading' },
+    )
+    const snapshot = liveDoc(splitting)
+    expect(snapshot.blocks.map((block) => block.raw)).toEqual(['One', 'Two', '## Heading'])
+    // The draft's own block keeps its stored ID: an op on it is aimed at the right block.
+    expect(snapshot.blocks[1]?.id).toBe('b2')
+    const tailId = snapshot.blocks[2]?.id as string
+
+    const later = run(splitting, {
+      type: 'commit',
+      id: 'b2',
+      text: 'Two\n\nA paragraph typed in between\n\n## Heading',
+    })
+    const holder = later.doc.blocks.find((block) => block.id === tailId)
+    expect(holder).toBeUndefined()
+  })
+
   it('gives a job snapshot only block IDs the job contract accepts', () => {
     // `liveDoc` is what `postNow` sends as a job's snapshot, and `SnapshotSchema` binds every
     // block ID to `BlockIdSchema`. An ID shape the schema rejects makes the request a 400, so

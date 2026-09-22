@@ -15,7 +15,7 @@ type ArticleBlock = { id: string; raw: string }
 function readBlocks(jobDir: string): ArticleBlock[] {
   const article = readFileSync(path.join(jobDir, 'article.md'), 'utf8')
   const blocks: ArticleBlock[] = []
-  const pattern = /<!-- zen:block id=(b\d+)[^>]*-->\n([\s\S]*?)\n<!-- \/zen:block -->/g
+  const pattern = /<!-- zen:block id=((?:b|live)\d+)[^>]*-->\n([\s\S]*?)\n<!-- \/zen:block -->/g
   for (const match of article.matchAll(pattern))
     blocks.push({ id: match[1] ?? '', raw: match[2] ?? '' })
   return blocks

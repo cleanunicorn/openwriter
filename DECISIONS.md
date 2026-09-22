@@ -100,16 +100,19 @@ directory keeps the name `.zen/`.
   already written to the file is matched instead of added a second time — which is how a new
   block came back doubled. `foldDraft` in `doc-reducer.ts` holds the two rules that make it
   work, and says why each is load-bearing.
-- **A job snapshot carries only store block IDs.** `liveDoc` folds the editor in with the
-  document's own counter and nothing reserves the ID, so a snapshot can show the agent a block
-  under an ID the store later gives to different content, and an accepted op then lands on the
-  wrong block. Giving derived blocks their own ID namespace was tried and reverted: `liveDoc` is
-  the job snapshot (`jobs.ts:113`) and `SnapshotSchema` binds every ID to `BlockIdSchema`
-  (`/^b\d+$/`), so the request became a 400 and a job started while the editor was open never
-  ran. The real fix belongs with the contract — the ID shapes, the README's job-file section,
-  `job-files.ts`'s instruction text and `fake.ts`'s block regex move together — and has its own
-  follow-up. A test pins the snapshot against `SnapshotSchema` so the boundary cannot drift
-  again.
+- **Blocks that exist only in a derived document get IDs the store cannot mint** (`live1`, not
+  `b3`). `liveDoc` is the job snapshot and folds the open editor in, but nothing reserves the IDs
+  it would mint from the document's counter, so a snapshot could show the agent the slot's text as
+  `b3` and the store later give `b3` to different text — an accepted op then lands on the wrong
+  block. A derived ID is never in the store, so such an op is *missing* and withdrawn by the path
+  every vanished block already takes. The price: an agent's edit of a paragraph the writer was
+  still typing comes back stale rather than applied, which is the honest answer, since the writer
+  kept typing. The contract moves as one: `BlockIdSchema` accepts `b<n>` and `live<n>` and nothing
+  else (a test lists near-misses it rejects), and the README's job-file section, `job-files.ts`'s
+  instruction text (its golden fixture regenerated for that one sentence) and `fake.ts`'s marker
+  regex name both. The first attempt changed only `liveDoc` and was reverted (`cde17b2`), because
+  the schema turned every job started with the editor open into a 400; a test still parses what
+  `liveDoc` produces with `SnapshotSchema`.
 - **A save that resolves after a reload is dropped,** since its hash would roll `baseHash` back
   to a revision the disk has moved past. The check is in the reducer rather than in `save()`:
   that is where document state transitions are owned, and the only client state the unit suite

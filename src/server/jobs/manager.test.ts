@@ -70,6 +70,29 @@ const runToReady = async (id: string): Promise<Job> => {
 }
 
 describe('the job file contract', () => {
+  it('runs a job whose snapshot holds a block that exists only in the open editor', async () => {
+    // The client names such a block `live<n>` (doc-reducer `liveDoc`): the store never mints
+    // that, so an op aimed at it cannot land on another block. The contract must carry it end to
+    // end — snapshot, targets, article.md markers, the agent's result.
+    const base = request('Make it louder', byText('## Why blocks'))
+    const live = { id: 'live1', raw: 'Typed but not committed yet', kind: 'content' as const }
+    const job = await start({
+      ...base,
+      targets: ['live1'],
+      snapshot: {
+        blocks: [...base.snapshot.blocks, live],
+        gaps: [...base.snapshot.gaps.slice(0, -1), '\n\n', '\n'],
+      },
+    })
+    expect(readFileSync(path.join(jobDir(job.id), 'article.md'), 'utf8')).toContain(
+      '<!-- zen:block id=live1 target -->\nTyped but not committed yet\n<!-- /zen:block -->',
+    )
+    const ready = await runToReady(job.id)
+    expect(ready.result?.ops).toEqual([
+      { op: 'replace', block_id: 'live1', markdown: 'TYPED BUT NOT COMMITTED YET' },
+    ])
+  })
+
   it('writes the contract files and leaves the article untouched', async () => {
     const before = readFileSync(articlePath())
     const job = await start(request('Make it louder', byText('## Why blocks')))
