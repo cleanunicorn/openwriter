@@ -76,6 +76,8 @@ const emptyJobs = (): JobsState => ({
 const jobsStore = createStore<JobsState>(emptyJobs())
 export const useJobs = <T>(selector: (state: JobsState) => T): T =>
   useStoreSlice(jobsStore, selector)
+/** The jobs state outside React: what the tray would show now. */
+export const jobsState = (): JobsState => jobsStore.get()
 
 /**
  * A job this tab asked for — before a reload too, since the tab ID survives it. Block IDs are the
@@ -90,6 +92,13 @@ const inFlight = new Map<string, Set<number>>()
 const posting = new Map<string, Claim>()
 let heldCounter = 0
 let firstSync = true
+/**
+ * Bumped by `resetJobs`. A response to a request made before a workspace switch describes the
+ * workspace that was left; each one checks that the generation it started in is still current
+ * before it touches the jobs, the same fence `resetDocSession` puts around the documents.
+ */
+let generation = 0
+const stillCurrent = (since: number) => since === generation
 /** A held request is waiting for its document to load (after a reload) before it can start. */
 let waitingForDoc = false
 
@@ -153,6 +162,7 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
   // Picked now, not when the request was made: a held request then carries what became of the
   // job it waited for. A conversation's first turn sends no field at all.
   const conversation = threadOf(jobsStore.get(), request.doc)
+  const since = generation
   try {
     const job = await api.createJob({
       ...request,
@@ -161,8 +171,9 @@ async function postNow(request: Omit<JobRequest, 'snapshot'>): Promise<void> {
       owner: tabId,
       ...(conversation.length > 0 ? { conversation } : {}),
     })
-    upsert(job)
+    if (stillCurrent(since)) upsert(job)
   } catch (error) {
+    if (!stillCurrent(since)) return
     dispatchDoc(request.doc, {
       type: 'notice',
       notice: `Could not start the job: ${(error as Error).message}`,
@@ -225,9 +236,12 @@ export const dropHeld = (id: string) =>
   jobsStore.set((state) => ({ ...state, held: state.held.filter((held) => held.id !== id) }))
 
 export async function cancelJob(id: string): Promise<void> {
+  const since = generation
   try {
-    upsert(await api.cancelJob(id))
+    const job = await api.cancelJob(id)
+    if (stillCurrent(since)) upsert(job)
   } catch (error) {
+    if (!stillCurrent(since)) return
     notifyFailure('Could not cancel the job', error, jobsStore.get().jobs[id]?.doc)
   }
   pump()
@@ -306,19 +320,26 @@ export async function decide(
   if (accepted.length + rejected.length === 0 && job.result.ops.length > 0) return
   for (const index of [...accepted, ...rejected]) pending.add(index)
   deciding++
+  const since = generation
   try {
-    await applyDecision(job, accepted, rejected)
+    await applyDecision(job, accepted, rejected, since)
   } catch (error) {
     // The ghost stays on screen: nothing was applied, and the writer can decide again.
-    notifyFailure('Could not record the decision', error, job.doc)
+    if (stillCurrent(since)) notifyFailure('Could not record the decision', error, job.doc)
   } finally {
     for (const index of [...accepted, ...rejected]) pending.delete(index)
-    deciding--
+    // `resetJobs` already set the count back to zero for the workspace it opened.
+    if (stillCurrent(since)) deciding--
     pump()
   }
 }
 
-async function applyDecision(job: Job, accepted: number[], rejected: number[]): Promise<void> {
+async function applyDecision(
+  job: Job,
+  accepted: number[],
+  rejected: number[],
+  since: number,
+): Promise<void> {
   const id = job.id
   if (job.result === null) return
   // An accepted replace or delete of the block that is being edited must win over the open
@@ -338,6 +359,9 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
   if (touchesFocused) dispatchDoc(job.doc, { type: 'blur' })
 
   const decided = await api.decide(id, accepted, rejected)
+  // Decided in the workspace that was left: its ops name that workspace's blocks, and a document
+  // of the same name open here now is another file whose block IDs may well coincide.
+  if (!stillCurrent(since)) return
   let updated = decided.job
   const docState = docStateOf(job.doc)
   if (docState !== undefined && accepted.length > 0) {
@@ -374,6 +398,7 @@ async function applyDecision(job: Job, accepted: number[], rejected: number[]): 
       reportedStale.delete(id)
     }
   }
+  if (!stillCurrent(since)) return
   upsert(updated)
   checkTargets()
 }
@@ -460,10 +485,14 @@ function checkTargets(): void {
     // While a target is being edited its text may be empty for a moment; only a committed delete counts.
     if (!lostItsTargets(job.scope, job.targets, ids)) continue
     reportedStale.add(id)
+    const since = generation
     void api
       .staleJob(id, 'A target block was deleted before the result was reviewed.')
-      .then(upsert)
-      .then(pump)
+      .then((stale) => {
+        if (!stillCurrent(since)) return
+        upsert(stale)
+        pump()
+      })
       // Not recorded as reported: the next document change tries again.
       .catch(() => reportedStale.delete(id))
   }
@@ -505,15 +534,21 @@ function restoreJobsState(): void {
 }
 
 async function sync(): Promise<void> {
+  const since = generation
   if (firstSync) {
     // Whether the kept block IDs are for the open workspace is known once `start` has asked.
     await restoreSettled
+    if (!stillCurrent(since)) return
     restoreJobsState()
   }
   const { jobs, tabs } = await api.jobs()
+  // A sync the switch overtook (a reconnect's, say) read the workspace that was left.
+  if (!stillCurrent(since)) return
   for (const job of jobs) {
     if (firstSync && isUnsettled(job.state) && !stillApplicable(job, tabId, wasRestored, tabs)) {
-      upsert(await api.staleJob(job.id, LOST_IDS))
+      const stale = await api.staleJob(job.id, LOST_IDS)
+      if (!stillCurrent(since)) return
+      upsert(stale)
     } else {
       upsert(job)
     }
@@ -537,6 +572,7 @@ export async function resetJobs(): Promise<void> {
   reportedStale.clear()
   deciding = 0
   firstSync = true
+  generation++
   await sync()
 }
 

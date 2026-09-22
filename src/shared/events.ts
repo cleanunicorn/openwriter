@@ -26,3 +26,12 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('job.removed'), ids: z.array(z.string()) }),
 ])
 export type ServerEvent = z.infer<typeof ServerEventSchema>
+
+/**
+ * The first message on every event stream (SSE event name `hello`): the workspace the server is
+ * on as the stream opens. Every event after it is about that workspace until a
+ * `workspace.changed` names another — the one ordering the client can rely on, because an HTTP
+ * response and an event travel on different connections and may arrive in either order.
+ */
+export const HelloEventSchema = z.object({ root: z.string() })
+export type HelloEvent = z.infer<typeof HelloEventSchema>

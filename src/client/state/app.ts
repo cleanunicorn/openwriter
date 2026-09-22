@@ -9,7 +9,7 @@ import {
 } from '../../shared/api-types.ts'
 import type { Config } from '../../shared/config-schema.ts'
 import type { WorkspacesResponse } from '../../shared/workspaces-schema.ts'
-import { type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
+import { HelloEventSchema, type ServerEvent, ServerEventSchema } from '../../shared/events.ts'
 import { isSlug } from '../../shared/names.ts'
 import { ApiError, api, nameWorkspaceWith, workspaceMoved } from '../api.ts'
 import {
@@ -327,13 +327,20 @@ function preload(ref: DocRef): void {
   void load(ref)
 }
 
+// The four reads below answer for the workspace that was open when they were asked; one that
+// arrives after a switch (a reconnect's, say) is dropped, like a document read (`docSession`).
+
 export async function refreshArticles(): Promise<void> {
+  const session = docSession
   const { articles } = await api.articles()
+  if (session !== docSession) return
   store.set((state) => ({ ...state, articles }))
 }
 
 export async function refreshWorkspaces(): Promise<void> {
+  const session = docSession
   const workspaces = await api.workspaces()
+  if (session !== docSession) return
   store.set((state) => ({ ...state, workspaces }))
 }
 
@@ -435,7 +442,9 @@ export function saveSettings(draft: Config): Promise<void> {
 }
 
 export async function refreshConfig(): Promise<void> {
+  const session = docSession
   const config = await api.config()
+  if (session !== docSession) return
   store.set((state) => {
     const local = state.config?.config
     // While a toggle is still on its way to disk, the server's copy is older than the screen.
@@ -449,7 +458,9 @@ export async function refreshConfig(): Promise<void> {
 }
 
 async function refreshSkills(): Promise<void> {
+  const session = docSession
   const { skills, errors } = await api.skills()
+  if (session !== docSession) return
   store.set((state) => ({ ...state, skills, skillErrors: errors }))
   announceSkillErrors()
 }
@@ -574,11 +585,28 @@ export async function resync(): Promise<void> {
   ])
 }
 
+/**
+ * Is an event about `root` one for the workspace this tab shows? Before either is known there is
+ * nothing to compare, and the event goes through as it always did.
+ */
+function aboutShown(root: string | null): boolean {
+  const shown = store.get().workspaces?.active.root
+  if (store.get().moved !== null) return false
+  return root === null || shown === undefined || root === shown
+}
+
 export function connectEvents(): () => void {
   // The stream says which tab it is: the server lists the tabs that are open, and another tab
   // leaves this one's jobs alone while it is (state/jobs.ts, `sync`).
   const source = new EventSource(`/api/events?tab=${encodeURIComponent(tabId)}`)
-  source.addEventListener('hello', () => {
+  // The workspace the events on this stream are about: the `hello` names it, and every
+  // `workspace.changed` after it moves it on. Only the stream's own order says which workspace
+  // an event is about — the answer to this tab's own switch travels on another connection and
+  // can arrive before the old workspace's last events, so the tab may already show the new one.
+  let streamRoot: string | null = null
+  source.addEventListener('hello', (message) => {
+    const hello = HelloEventSchema.safeParse(JSON.parse((message as MessageEvent).data as string))
+    streamRoot = hello.success ? hello.data.root : null
     void resync().catch((error: unknown) =>
       notifyFailure('Could not check for outside changes', error),
     )
@@ -588,12 +616,15 @@ export function connectEvents(): () => void {
     if (!parsed.success) return
     const event = parsed.data
     if (event.type === 'workspace.changed') {
+      streamRoot = event.root
       handlers.onWorkspaceChanged?.(event.root, event.label)
       return
     }
-    // Every other event is about the workspace the server is on; while this tab still shows the
-    // one it left (`moved`), those would land on the wrong documents, settings and jobs.
-    if (store.get().moved !== null) return
+    // Every other event is about `streamRoot`. One about a workspace this tab does not show would
+    // land on the wrong documents, settings and jobs: the old workspace's last events after this
+    // tab adopted the new one, or the new one's while it still shows the one it left (`moved`).
+    // What it drops, the tab reads again when it adopts a workspace (`start`, `resetJobs`).
+    if (!aboutShown(streamRoot)) return
     if (event.type === 'doc.changed') {
       // This tab's own save: it already has the text, and the answer to its PUT brings the hash.
       if (event.origin === tabId) return

@@ -832,6 +832,19 @@ codex exec --json --skip-git-repo-check --ephemeral
   the open workspace first and, when it is not the tab's, hands it to the same handler as the
   live event; only then does it sync jobs and compare documents. Without it, a switch made while
   the stream was down made B's article of the same slug arrive as an outside change to A's.
+- **An event is about the workspace its own stream last named** (`streamRoot` in
+  `connectEvents`). The `hello` now carries the root the server was on when the stream opened,
+  and each `workspace.changed` moves it on; an event about a workspace the tab does not show is
+  dropped. The answer to a tab's own switch travels on another connection than the event
+  stream, so it can arrive before the old workspace's last events — the job the switch just
+  marked stale reappeared in the new workspace's tray in 7 of 40 runs of
+  `workspace-jobs.spec.ts`. Stamping each job event with its root was the alternative; the
+  stream's order already says it, for every event type, with one field on one message.
+- **A response to a request made before a switch is dropped when it arrives after** — the jobs
+  by a generation `resetJobs` bumps (the sync, a cancel, a decision, a stale report, a job
+  creation), the article list, settings, skills and workspace list by `docSession`, as the
+  document reads already were. The header refusal cannot catch these: they were admitted under
+  the old workspace, before the switch.
 - **A failure with no document open gets a notice of its own** (`AppState.notice`). It used to
   go to `console.error`, and the workspace commands — erase among them — are reachable from an
   empty workspace.

@@ -47,6 +47,21 @@ describe('the tabs with an open event stream', () => {
   })
 })
 
+describe('the hello', () => {
+  it('names the workspace the events after it are about', async () => {
+    const response = await t.get('/api/events')
+    const reader = response.body?.getReader()
+    if (reader === undefined) throw new Error('no stream')
+    const first = new TextDecoder().decode((await reader.read()).value)
+    const data = first.split('\n').find((line) => line.startsWith('data: '))
+    expect(JSON.parse(data?.slice('data: '.length) ?? 'null')).toEqual({
+      root: t.context.workspace.root,
+    })
+    t.context.events.dropStreams()
+    await reader.cancel()
+  })
+})
+
 describe('EventHub.connectedTabs', () => {
   it('forgets a tab when its last stream is untracked', () => {
     const hub = new EventHub()
