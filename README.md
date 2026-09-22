@@ -98,7 +98,7 @@ with no auth.
   .zen/
     config.json               settings (validated; every key has a default)
     articles/<slug>/brief.md  per-article outline, angle, target reader
-    jobs/<job-id>/            one directory per agent job
+    jobs/<job-id>/            one directory per agent job (see "Job retention")
     skills/<name>.md          optional: this workspace's own skills (see "Adding a skill")
 ```
 
@@ -181,6 +181,7 @@ Settings are reachable from the palette (`Settings…`) and stored in `<workspac
 | `theme` | `system`, `light`, `dark` |
 | `concurrency` | how many agent processes run at once (jobs waiting for review do not count) |
 | `jobTimeoutSec` | a job that produces no result in this time is stopped |
+| `jobRetentionDays` | `30` by default: when the workspace opens, done, failed and cancelled jobs (and dismissed ones) not updated for this many days are deleted from `.zen/jobs/`. `0` keeps them until cleared. See "Job retention" below |
 | `adapters.<name>` | `command`, `model`, `extraArgs`, and `baseArgs` (replaces the verified default command line; `{jobDir}`, `{jobRel}`, `{workspace}` are substituted) |
 | `ui.leftPanel`, `ui.rightPanel` | whether the two edge panels are open; `false` by default. Set by the edge handles and `Ctrl/Cmd+B` / `Ctrl/Cmd+Alt+B`, not by the Settings form. Kept per workspace; in a narrow window a remembered left panel stays closed after a reload until opened by hand |
 
@@ -355,6 +356,25 @@ repair attempt; after that the job fails and the raw output is shown in the agen
 Job states: `queued → running → validating → (repairing →) ready → settled`, or `failed`
 (`missing-cli`, `missing-tool`, `auth`, `timeout`, `invalid-result`, `exit`), `cancelled`,
 `stale`. A stale job (deleted target, app restart, page reload) keeps its output visible.
+
+### Job retention
+
+A job directory stays on disk after the job ends, so nothing an agent produced is lost by
+accident. Two things remove it, and both only ever touch *finished* jobs — `settled`, `failed`,
+`cancelled`, `stale` — never one that is queued, running, or `ready` (awaiting review):
+
+- **Clear finished jobs** (palette, `POST /api/jobs/clear-finished`) deletes every finished job
+  of the open workspace, listed or dismissed, from this session or an earlier one, and says how
+  many it cleared and kept. A finished job whose agent process has not exited yet is kept until
+  it has. The request names the workspace the tab shows; after a switch it is refused (409).
+- **Pruning when a workspace opens** (server start and every switch) deletes done, failed and
+  cancelled jobs, and dismissed finished ones, not updated for `jobRetentionDays` days (30 by
+  default; `0` turns it off). A stale job that was not dismissed is on screen with its output,
+  so only the writer clears it.
+
+Deletion considers only names that are job ids directly under `.zen/jobs/`, refuses a symlink
+there, and walks each directory with `lstat`: the agent's links are unlinked, never followed.
+A directory whose `job.json` is missing or invalid is left alone and reported.
 
 ## Development
 

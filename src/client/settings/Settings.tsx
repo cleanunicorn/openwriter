@@ -194,6 +194,16 @@ export function Settings() {
             onChange={(event) => set({ jobTimeoutSec: Number(event.target.value) })}
           />
         </label>
+        <label>
+          Keep finished jobs (days, 0 = until cleared)
+          <input
+            type="number"
+            min={0}
+            max={3650}
+            value={draft.jobRetentionDays}
+            onChange={(event) => set({ jobRetentionDays: Number(event.target.value) })}
+          />
+        </label>
 
         {adapterNames
           .filter((name) => name !== 'fake')

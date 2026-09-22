@@ -12,5 +12,7 @@ export const ServerEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('workspace.changed'), root: z.string(), label: z.string() }),
   z.object({ type: z.literal('job.state'), job: JobSchema }),
   z.object({ type: z.literal('job.progress'), id: z.string(), text: z.string() }),
+  /** These jobs' directories were cleared; every tab forgets them. */
+  z.object({ type: z.literal('job.removed'), ids: z.array(z.string()) }),
 ])
 export type ServerEvent = z.infer<typeof ServerEventSchema>

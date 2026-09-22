@@ -3,7 +3,7 @@ import type { Scope } from '../../shared/jobs/job-types.ts'
 import { registerCommands } from '../palette/commands.ts'
 import { inGroup } from '../palette/group.ts'
 import { currentDoc, describeSkillError, dispatch, setPalette } from '../state/app.ts'
-import { requestJob } from '../state/jobs.ts'
+import { clearFinishedJobs, requestJob } from '../state/jobs.ts'
 
 /** Ask for an instruction in the palette, then start an ordinary job with it. */
 function askInPalette(options: {
@@ -99,3 +99,15 @@ registerCommands((state) => {
     })),
   ])
 })
+
+// Housekeeping, so palette only: the transcript stays a conversation, not a file manager.
+registerCommands(() =>
+  inGroup('agent', [
+    {
+      id: 'clear-finished-jobs',
+      title: 'Clear finished jobs',
+      hint: 'deletes done, failed, cancelled and stale jobs from .zen/jobs; keeps running work and anything awaiting review',
+      run: () => void clearFinishedJobs(),
+    },
+  ]),
+)

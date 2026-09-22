@@ -40,6 +40,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 | `draft-article` | Draft article from brief | R starter (a row on an empty transcript, a chip under the composer after) | an agent job, reviewed like any other |
 | `ask-article` | Instruct the agent: whole article… | R composer ("Ask about: whole article") | an agent request; the palette's own prompt stays too |
 | `ask-research` | Research question… | R composer ("Ask about: research") | an agent request; the palette's own prompt stays too |
+| `clear-finished-jobs` | Clear finished jobs | P | housekeeping, rare: it deletes finished jobs' directories, so it stays off the transcript, which is a conversation (DECISIONS.md, "Job retention") |
 | `export-markdown` | Export: markdown + assets (zip) | L·A | the clearest action on the article |
 | `export-html` | Export: standalone HTML + assets (zip) | L·A | the same |
 | `workspace-open-name` | Open workspace… | L·W | workspace navigation |
@@ -109,6 +110,7 @@ The palette groups them as Documents, Agent, Export, Workspace, App (`src/client
 - Theme (the exact choice)
 - Jobs running at once
 - Job timeout
+- Keep finished jobs (days, 0 = until cleared)
 - Per adapter: command, model, extra arguments
 - The invalid-config and `--adapter` notices
 - Save, Close, and the saved/error status ("Settings status")

@@ -16,6 +16,7 @@ import {
 import type { Config } from '../shared/config-schema.ts'
 import { WorkspacesResponseSchema } from '../shared/workspaces-schema.ts'
 import {
+  ClearJobsResponseSchema,
   DecisionsResponseSchema,
   type JobRequest,
   JobSchema,
@@ -88,6 +89,12 @@ export const api = {
     request(JobSchema, `/api/jobs/${id}/stale`, { method: 'POST', body: { reason } }),
   dismissJob: (id: string) =>
     request(OkResponseSchema, `/api/jobs/${id}/dismiss`, { method: 'POST' }),
+  /** `root`: the workspace whose jobs the writer saw; the server refuses if another is open now. */
+  clearFinishedJobs: (root: string) =>
+    request(ClearJobsResponseSchema, '/api/jobs/clear-finished', {
+      method: 'POST',
+      headers: { [WORKSPACE_HEADER]: encodeWorkspaceHeader(root) },
+    }),
   skills: () => request(SkillsResponseSchema, '/api/skills'),
   /** `root`: the workspace this was written for; the server refuses it if another is open now. */
   saveConfig: (config: Config, root?: string) =>

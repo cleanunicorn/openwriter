@@ -2,8 +2,10 @@ import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { referencedAssets } from '../../shared/jobs/asset-refs.ts'
 import {
+  type ClearJobsResponse,
   type FailureReason,
   isActive,
+  isFinished,
   isUnsettled,
   PROGRESS_TAIL,
   type Job,
@@ -28,13 +30,16 @@ import type { Workspace } from '../workspace.ts'
 import { renderRepair, writeJobFiles } from './job-files.ts'
 import {
   appendJobText,
+  isJobId,
+  removeJobDir,
   readJobAsset,
   readJobText,
   readJobTextOrNull,
   UnsafeJobFileError,
   writeJobText,
 } from './job-io.ts'
-import { type JobFile, recoverJobs, saveJobFile } from './store.ts'
+import { isPlainDirectory, jobIdsIn, pruneExpiredJobs } from './retention.ts'
+import { type JobFile, readJobFile, recoverJobs, saveJobFile } from './store.ts'
 
 const PROGRESS_LOG_LIMIT = 512 * 1024
 /** How long a workspace switch waits for the runs it cancelled; the epoch fences the rest. */
@@ -99,9 +104,24 @@ export class JobManager {
     this.recover()
   }
 
-  /** Adopt whatever job directories the current workspace already has. */
+  /**
+   * Adopt whatever job directories the current workspace already has, after pruning the finished
+   * ones older than `jobRetentionDays` (retention.ts). It runs on server start and after every
+   * workspace switch, both moments when no agent of this workspace is running.
+   */
   private recover(): void {
-    for (const file of recoverJobs(this.options.workspace.jobsDir())) {
+    const jobsDir = this.options.workspace.jobsDir()
+    try {
+      const pruned = pruneExpiredJobs(
+        jobsDir,
+        this.options.workspace.config().config.jobRetentionDays,
+      )
+      if (pruned.length > 0) console.log(`pruned ${pruned.length} finished job(s) past retention`)
+    } catch (error) {
+      // Housekeeping must never keep the workspace from opening.
+      console.error('could not prune finished jobs', error)
+    }
+    for (const file of recoverJobs(jobsDir)) {
       this.entries.set(file.job.id, { file, logBytes: 0, epoch: this.epoch })
     }
   }
@@ -117,7 +137,7 @@ export class JobManager {
   }
 
   jobDir(id: string): string {
-    if (!/^[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$/.test(id)) throw new HttpError(400, 'invalid job id')
+    if (!isJobId(id)) throw new HttpError(400, 'invalid job id')
     return resolveWithin(this.options.workspace.jobsDir(), id)
   }
 
@@ -127,10 +147,18 @@ export class JobManager {
     return entry
   }
 
+  /**
+   * Whether this entry may still write: it belongs to the open workspace, and it was not cleared.
+   * A job of a workspace that is no longer open writes nothing and says nothing — its directory is
+   * in the other root, and `jobDir()` would now resolve into this one — and a cleared job must not
+   * recreate the directory `clearFinished` just removed.
+   */
+  private current(entry: Entry): boolean {
+    return entry.epoch === this.epoch && this.entries.get(entry.file.job.id) === entry
+  }
+
   private update(entry: Entry, patch: Partial<Job>): void {
-    // A job of a workspace that is no longer open writes nothing and says nothing: its directory
-    // is in the other root, and `jobDir()` would now resolve into this one.
-    if (entry.epoch !== this.epoch) return
+    if (!this.current(entry)) return
     entry.file.job = {
       ...entry.file.job,
       ...patch,
@@ -156,7 +184,7 @@ export class JobManager {
   }
 
   private progress(entry: Entry, text: string): void {
-    if (entry.epoch !== this.epoch) return
+    if (!this.current(entry)) return
     const job = entry.file.job
     job.progress = [...job.progress, text].slice(-PROGRESS_TAIL)
     if (entry.logBytes < PROGRESS_LOG_LIMIT) {
@@ -496,6 +524,61 @@ export class JobManager {
     const entry = this.entry(id)
     entry.file.dismissed = true
     saveJobFile(this.jobDir(id), entry.file)
+  }
+
+  /**
+   * Delete the directory of every finished job of the open workspace — settled, failed, cancelled
+   * or stale, listed or dismissed, from this session or an earlier one — and keep everything
+   * else: nothing queued, running or awaiting review goes, nor a finished job whose agent process
+   * has not exited yet. Only job-id names directly under `.zen/jobs` are considered, a symlink is
+   * reported and left alone, and each deletion goes through `removeJobDir` (lstat, no-follow).
+   * Synchronous, so a workspace switch cannot interleave: it acts on one workspace's jobs.
+   */
+  clearFinished(): ClearJobsResponse {
+    const jobsDir = this.options.workspace.jobsDir()
+    const removed: string[] = []
+    const skipped: ClearJobsResponse['skipped'] = []
+    let kept = 0
+    for (const id of jobIdsIn(jobsDir)) {
+      if (!isPlainDirectory(jobsDir, id)) {
+        skipped.push({ id, reason: 'not a plain directory' })
+        continue
+      }
+      const entry = this.entries.get(id)
+      const state = entry?.file.job.state ?? this.stateOnDisk(jobsDir, id)
+      if (state === undefined) {
+        skipped.push({ id, reason: 'job.json is missing or invalid' })
+        continue
+      }
+      if (!isFinished(state) || (entry !== undefined && this.agentAlive(entry))) {
+        kept++
+        continue
+      }
+      try {
+        removeJobDir(jobsDir, id)
+      } catch (error) {
+        // A filesystem error's message carries an absolute path; the code says enough.
+        const code = (error as NodeJS.ErrnoException).code ?? 'error'
+        console.error(`could not clear job ${id}`, error)
+        skipped.push({ id, reason: `could not be fully deleted (${code})` })
+        continue
+      }
+      this.entries.delete(id)
+      removed.push(id)
+    }
+    if (removed.length > 0) this.options.events.emit({ type: 'job.removed', ids: removed })
+    return { removed, kept, skipped }
+  }
+
+  /** The state recorded in a job directory this session never loaded; its id must match. */
+  private stateOnDisk(jobsDir: string, id: string): JobState | undefined {
+    const file = readJobFile(path.join(jobsDir, id))
+    return file?.job.id === id ? file.job.state : undefined
+  }
+
+  /** A cancelled or stale job's agent can outlive its state change until its `done` settles. */
+  private agentAlive(entry: Entry): boolean {
+    return entry.handle !== undefined && this.live.has(entry.handle)
   }
 
   /**
