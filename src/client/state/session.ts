@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { type DocRef, DocRefSchema } from '../../shared/api-types.ts'
+import { serialise } from '../../shared/blocks/serialise.ts'
 import { BlockIdSchema, type Doc } from '../../shared/blocks/types.ts'
 import { type Job, JobRequestSchema, SnapshotSchema } from '../../shared/jobs/job-types.ts'
 import { type Conflict, type DocState, docReducer } from './doc-reducer.ts'
@@ -30,13 +31,36 @@ const ConflictSchema = z.object({
   afterId: BlockIdSchema.nullable(),
 })
 
+/**
+ * How much merge-base text a session keeps, over all its documents together (UTF-16 code units,
+ * which is what `sessionStorage` counts). A base is kept only for a document that is ahead of
+ * the disk; a blog post is tens of kilobytes, and the budget keeps a large one from filling the
+ * storage and losing the whole session (`persistOnHide` then writes nothing).
+ */
+export const BASE_BUDGET = 1_000_000
+
 const RestoredDocSchema = z.object({
   ref: DocRefSchema,
   doc: SnapshotSchema,
   nextId: z.number().int().min(1),
   conflicts: z.array(ConflictSchema).default([]),
+  /**
+   * The text last loaded or saved, when the document was ahead of it: the base of the three-way
+   * merge the next page runs against the disk (#38). Absent, the kept text itself is the base,
+   * so the disk's text is taken wherever it differs.
+   */
+  base: z.string().max(BASE_BUDGET).optional(),
+  /** The text of a save that was on its way; if the disk holds exactly it, it is the base. */
+  sent: z.string().max(BASE_BUDGET).optional(),
 })
-export type RestoredDoc = { ref: DocRef; doc: Doc; nextId: number; conflicts: Conflict[] }
+export type RestoredDoc = {
+  ref: DocRef
+  doc: Doc
+  nextId: number
+  conflicts: Conflict[]
+  base?: string
+  sent?: string
+}
 
 export const SessionSchema = z.object({
   version: z.literal(1),
@@ -69,6 +93,8 @@ function usableDoc(entry: z.infer<typeof RestoredDocSchema>): RestoredDoc | null
     doc: { blocks, gaps },
     nextId: Math.max(entry.nextId, highest + 1),
     conflicts: entry.conflicts,
+    ...(entry.base === undefined ? {} : { base: entry.base }),
+    ...(entry.sent === undefined ? {} : { sent: entry.sent }),
   }
 }
 
@@ -99,9 +125,13 @@ export type JobsPart = Pick<Session, 'held' | 'inserted' | 'threadStarts' | 'dra
 
 /**
  * The session to keep for `root`: each ready document as it would be with its open editor
- * committed — which is the text autosave writes, so the next load finds it — and the jobs part.
+ * committed — the text the writer sees, which is what autosave writes — and the jobs part. A
+ * document ahead of the disk also keeps its merge base (and the save on its way), so the next
+ * page can tell the writer's unsaved changes from the disk's and keep both (#38); within
+ * `BASE_BUDGET`, first documents first. One past the budget keeps none, and the disk wins there.
  */
 export function sessionOf(root: string, docs: DocState[], jobs: JobsPart): Session {
+  let budget = BASE_BUDGET
   return {
     version: 1,
     root,
@@ -109,12 +139,21 @@ export function sessionOf(root: string, docs: DocState[], jobs: JobsPart): Sessi
       .filter((state) => state.status === 'ready')
       .map((state) => {
         const committed = docReducer(state, { type: 'blur' })
-        return {
+        const kept = {
           ref: state.ref,
           doc: committed.doc,
           nextId: committed.nextId,
           conflicts: state.conflicts,
         }
+        const text = serialise(committed.doc)
+        // A save of exactly this text is no base of its own: whether it landed or not, the
+        // disk then either matches the kept text or is still the base.
+        const sent = state.sentText !== null && state.sentText !== text ? state.sentText : null
+        if (text === state.savedText && sent === null) return kept
+        const cost = state.savedText.length + (sent?.length ?? 0)
+        if (cost > budget) return kept
+        budget -= cost
+        return { ...kept, base: state.savedText, ...(sent === null ? {} : { sent }) }
       }),
     ...jobs,
   }

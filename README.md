@@ -85,6 +85,9 @@ Good to know:
 
 - A tab that was offline (a dropped connection, a laptop asleep) re-checks every open document
   when it reconnects, through the same merge.
+- Reloading the page runs the same merge. A block you finished (or were still typing in) whose
+  autosave had not reached the file comes back and is saved; what the file changed meanwhile
+  comes in; a passage both changed is a conflict card.
 - A paragraph another tab or program changed or deleted while you had it open, with nothing
   unsaved in it, simply takes the file's version; `Ctrl/Cmd+Z` undoes the whole reload if you
   want it back.
