@@ -41,6 +41,12 @@ directory keeps the name `.zen/`.
   job to the loopback API and start an agent with file access.
 - **The Vite origin is allowed only with `--dev`.** The dev proxy forwards the browser's Host and
   Origin (`127.0.0.1:5173`); production rejects them.
+- **`npm run dev` listens on every interface (2026-09-22, at the writer's request)** so the editor
+  can be opened from another device. Only Vite (`host: true`) is exposed; the Node API stays on
+  `127.0.0.1` and is reached through Vite's proxy. In dev the Host allow-list adds this machine's
+  own IP addresses at the Vite port, read per request; hostnames other than `localhost` are still
+  rejected, so the DNS-rebinding check holds. There is still no auth: anyone on the network can
+  edit files and start agents while dev runs. `npm start` and the e2e server stay loopback-only.
 - **One path guard, `resolveWithin(root, …)`**, checks NUL, absolute segments, `..` (raw and
   percent-decoded), sibling-prefix, and symlinks via `realpath` of the nearest existing ancestor,
   so it also covers files that are about to be created.

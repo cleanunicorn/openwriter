@@ -1,3 +1,4 @@
+import os from 'node:os'
 import type { MiddlewareHandler } from 'hono'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -36,9 +37,29 @@ export function localOnly(allowedHosts: () => string[]): MiddlewareHandler {
   }
 }
 
-/** Hosts the API answers to. The Vite origin is accepted only in the dev flow. */
-export function hostsFor(port: number, devVitePort?: number): string[] {
+/**
+ * Hosts the API answers to. The Vite origin is accepted only in the dev flow, where Vite listens
+ * on every interface: then each LAN address at the Vite port is ours too. Hostnames other than
+ * `localhost` stay rejected, which keeps the DNS-rebinding check.
+ */
+export function hostsFor(port: number, devVitePort?: number, lan: string[] = []): string[] {
   const hosts = [`127.0.0.1:${port}`, `localhost:${port}`]
-  if (devVitePort !== undefined) hosts.push(`127.0.0.1:${devVitePort}`, `localhost:${devVitePort}`)
+  if (devVitePort === undefined) return hosts
+  hosts.push(`127.0.0.1:${devVitePort}`, `localhost:${devVitePort}`)
+  for (const address of lan) {
+    hosts.push(address.includes(':') ? `[${address}]:${devVitePort}` : `${address}:${devVitePort}`)
+  }
   return hosts
+}
+
+/** This machine's non-loopback addresses, read per call so a DHCP change needs no restart. */
+export function lanAddresses(): string[] {
+  return (
+    Object.values(os.networkInterfaces())
+      .flat()
+      .filter((info): info is os.NetworkInterfaceInfo => info !== undefined && !info.internal)
+      // A zoned IPv6 link-local address cannot appear in a browser's Host header.
+      .filter((info) => info.family === 'IPv4' || info.scopeid === 0)
+      .map((info) => info.address)
+  )
 }

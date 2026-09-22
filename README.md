@@ -24,7 +24,9 @@ that copy. To open your own workspace:
 npm start -- --workspace /path/to/workspace     # or OPENWRITE_WORKSPACE=/path/to/workspace
 ```
 
-The server binds `127.0.0.1` only.
+The server binds `127.0.0.1` only. `npm run dev` is the exception: Vite listens on every
+interface, so the editor is reachable from your network at `http://<this machine's IP>:5173`,
+with no auth.
 
 ## Using the editor
 
@@ -321,7 +323,7 @@ Job states: `queued → running → validating → (repairing →) ready → set
 ## Development
 
 ```bash
-npm run dev          # Node server (watch) + Vite, http://127.0.0.1:5173
+npm run dev          # Node server (watch) + Vite on every interface, http://127.0.0.1:5173
 npm run format       # biome format --write
 npm run lint
 npm run typecheck

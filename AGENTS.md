@@ -42,7 +42,7 @@ npm scripts are the single source of the dev flow (`package.json`).
 
 - **Install / bootstrap:** `npm install`
 - **Run locally (dev):** `npm run dev` — Node server with `--watch` on
-  `127.0.0.1:4317` plus Vite on `127.0.0.1:5173`
+  `127.0.0.1:4317` plus Vite on every interface at port `5173`
 - **Run locally (production):** `npm start` — builds the client when it is
   missing or stale (`scripts/ensure-build.ts`), then opens the editor on a
   gitignored copy of the sample workspace (`.openwrite/sample-workspace/`);
@@ -87,7 +87,9 @@ rerun without asking. The exceptions are in
    anything that does not conform is rejected.
 8. **Never block the writer.** Agent work is asynchronous. No job, queue, or
    review state may freeze editing elsewhere in the document.
-9. **Local and contained.** The server binds to `127.0.0.1` only. Every file
+9. **Local and contained.** The server binds to `127.0.0.1` only. The one
+   exception is `npm run dev`, where Vite listens on every interface and proxies
+   to the loopback server (`DECISIONS.md`, "Local-only hardening"). Every file
    path is guarded against traversal outside the workspace.
 10. **No blanket permission bypass for agents.** Never default to flags such as
     `--dangerously-skip-permissions`. Use the narrowest settings that let the
@@ -448,7 +450,9 @@ A flaky e2e test is a real finding, not noise — fix it or report it. Never
 
 - Never commit secrets, API keys, credentials, or sensitive data.
 - The server listens on `127.0.0.1` only and has no auth model: local access is
-  the boundary, so it must never bind wider.
+  the boundary, so it must never bind wider. In dev, only Vite is exposed, and
+  the Host check accepts this machine's own IPs at the Vite port — never an
+  arbitrary hostname.
 - Resolve every path from the client or from a `result.json` against the
   workspace root and reject anything that escapes it — asset paths included.
 - Agent output is untrusted input: validate `result.json` with zod, and treat
