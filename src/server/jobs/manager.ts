@@ -14,7 +14,12 @@ import { type Result, ResultSchema } from '../../shared/jobs/result-schema.ts'
 import { START_ANCHOR, validateOps } from '../../shared/jobs/validate-ops.ts'
 import type { AdapterRegistry } from '../adapters/registry.ts'
 import type { AdapterHandle, Completion } from '../adapters/types.ts'
-import { sanitiseFileName, storeWithoutOverwrite } from '../assets.ts'
+import {
+  safeAssetBytes,
+  sanitiseFileName,
+  storeWithoutOverwrite,
+  UnsafeSvgError,
+} from '../assets.ts'
 import { HttpError } from '../http.ts'
 import { resolveWithin } from '../paths.ts'
 import { findSkill, missingTools, type Skill, type ToolLookup } from '../skills.ts'
@@ -405,10 +410,19 @@ export class JobManager {
     })
     for (const asset of parsed.data.assets) {
       try {
-        if (readJobAsset(jobDir, asset.file) === null) {
+        const data = readJobAsset(jobDir, asset.file)
+        if (data === null) {
           errors.push(`asset "${asset.file}" does not exist in the job directory as a plain file`)
+        } else {
+          // An SVG that cannot be sanitised would be refused on acceptance; say so while the
+          // agent can still repair it.
+          safeAssetBytes(asset.file, data)
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof UnsafeSvgError) {
+          errors.push(`asset "${asset.file}" is not a safe SVG: ${error.reason}`)
+          continue
+        }
         errors.push(`asset "${asset.file}" is not inside assets/`)
       }
     }
@@ -563,7 +577,16 @@ export class JobManager {
         // An escaping path throws (PathEscapeError → 400); anything else that is not a plain file is a 409.
         const data = readJobAsset(this.jobDir(id), file)
         if (data === null) throw new HttpError(409, `asset ${file} is missing`)
-        const name = storeWithoutOverwrite(bundle, sanitiseFileName(path.basename(file)), data)
+        const wanted = sanitiseFileName(path.basename(file))
+        // The agent's SVG is sanitised before it enters the bundle, exactly as a pasted one.
+        let safe: Uint8Array
+        try {
+          safe = safeAssetBytes(wanted, data).data
+        } catch (error) {
+          if (error instanceof UnsafeSvgError) throw new HttpError(409, error.message)
+          throw error
+        }
+        const name = storeWithoutOverwrite(bundle, wanted, safe)
         entry.file.promoted[file] = name
         assetMap[file] = name
       }

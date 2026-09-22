@@ -416,11 +416,41 @@ codex exec --json --skip-git-repo-check --ephemeral
   value, so settings can always repair it.
 - **A failed save retries by itself after three seconds** and its notice is sticky; leaving the
   tab saves at once, and the unload guard also covers a dirty document.
-- **A pasted SVG image is stored and exported unchanged.** It is served with `nosniff` and
-  `content-security-policy: default-src 'none'` (`fileResponse` in `src/server/http.ts`), and both
-  the editor and the exported page reference it only as an `<img>`, which runs no script. Script
-  in it could run only if the writer opened the file itself in a browser. Sanitising or refusing
-  SVG changes what the writer can paste, so it is a follow-up, not a fix.
+- **An SVG is sanitised by a strict allow-list before it is stored or served** (`src/server/svg.ts`,
+  issue #11). This replaces "a pasted SVG image is stored and exported unchanged": `nosniff`, the
+  `default-src 'none'` CSP and `<img>`-only rendering stay, but they only hold while the file is
+  shown by this server; the same bytes go into the writer's Hugo site and the export zip, where
+  opening the file runs whatever script it carries. The sanitiser is a small, linear XML tokenizer
+  that writes back only allow-listed elements and attributes, not a denylist:
+  - **Removed, and named in the upload's `removed` list** (the editor shows them in a notice):
+    `<script>`, `<foreignObject>`, `<iframe>`/`<embed>`/`<object>`, animation elements (they can
+    set `href`), `<a>` (unwrapped: its content stays), every other element off the list with its
+    content, every attribute off the list (so every `on*`), prefixed names except `xlink:href` and
+    `xml:*`, processing instructions (`<?xml-stylesheet?>`), `href`s other than `#fragment` (on
+    `<image>`, also a base64 PNG/JPEG/GIF/WebP/AVIF `data:` URL), `url()` other than `url(#…)` in
+    attributes and CSS, `@import`, and a style sheet or declaration that still holds a CSS escape,
+    `expression(`, `image-set(` and the like. Comments and the DOCTYPE go without mention.
+  - **Refused with a 400 and the reason** (the paste notice reads "Could not add the image:
+    x.svg was refused as an unsafe SVG: …"): not UTF-8, not well-formed, a root other than
+    `<svg>` in the SVG namespace, a DOCTYPE with an internal subset (entities: XXE, billion
+    laughs), any entity other than the five predefined and numeric ones, nesting deeper than 256.
+    Removing these would mean guessing what the file meant, and an entity can hide anything.
+  - **Why not a dependency:** DOMPurify needs a DOM (jsdom, which AGENTS.md rules out);
+    `sanitize-html` is an HTML sanitiser with postcss and htmlparser2 behind it and no SVG
+    allow-list. 600 lines (half of them the two allow-lists) with 44 tests in `svg.test.ts` are
+    smaller than either. **Why not refuse
+    everything off the list:** Inkscape, Illustrator and draw.io files always carry editor
+    metadata, so a strict refusal would refuse most real drawings.
+  - **Where it runs:** the paste/drop route (sanitised bytes are stored), a job's result check
+    (an SVG it would refuse sends the agent to repair, like a malformed `result.json`), accepting
+    a job's asset into the bundle (sanitised copy; one that changed since the check is a 409),
+    and `fileResponse`, so a job preview and a file the writer copied into a bundle by hand are
+    served clean too (unreadable → 415). The export zip copies the bundle as is: everything that
+    entered it through openwrite is already clean, and "exact bytes" stays the export's promise.
+  - **What the writer loses:** `<foreignObject>` HTML labels (draw.io, mermaid with
+    `htmlLabels`) — a `<switch>` fallback `<text>` stays; animation; links; external fonts and
+    images. Mermaid diagrams are not affected: they are rendered in the browser to inline SVG and
+    sanitised by DOMPurify there, never stored as an asset.
 - **An acceptance the client could not apply is withdrawn, not kept.** The server records
   "accepted" (and copies assets) before the client applies the op to the live document, which only
   the client knows. If the block vanished during that round trip, the client calls

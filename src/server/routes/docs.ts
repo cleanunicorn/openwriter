@@ -9,8 +9,10 @@ import {
 import {
   extensionForImage,
   MAX_ASSET_BYTES,
+  safeAssetBytes,
   sanitiseFileName,
   storeWithoutOverwrite,
+  UnsafeSvgError,
 } from '../assets.ts'
 import type { ServerContext } from '../context.ts'
 import { fileResponse, HttpError, parseBody, pathTail } from '../http.ts'
@@ -84,8 +86,17 @@ export function mountDocRoutes(app: Hono, { workspace, watcher }: ServerContext)
     }
     // Sanitise, then force the extension the content type declares.
     const fileName = sanitiseFileName(requestedName).replace(/\.[a-z0-9]+$/, '') + extension
-    const name = storeWithoutOverwrite(workspace.bundleDir(c.req.param('slug')), fileName, data)
-    return c.json({ name }, 201)
+    // An SVG is sanitised before it is stored (svg.ts); one that cannot be read safely is refused.
+    let safe: ReturnType<typeof safeAssetBytes>
+    try {
+      safe = safeAssetBytes(fileName, data)
+    } catch (error) {
+      if (error instanceof UnsafeSvgError) throw new HttpError(400, error.message)
+      throw error
+    }
+    const bundle = workspace.bundleDir(c.req.param('slug'))
+    const name = storeWithoutOverwrite(bundle, fileName, safe.data)
+    return c.json({ name, removed: safe.removed }, 201)
   })
 
   app.get('/api/docs/article/:slug/assets/*', (c) => {

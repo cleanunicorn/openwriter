@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDoc, createIdMinter } from '../../shared/blocks/index.ts'
 import type { ServerEvent } from '../../shared/events.ts'
 import type { Job, JobRequest } from '../../shared/jobs/job-types.ts'
-import { createFakeAdapter, FakeGate } from '../adapters/fake.ts'
+import { createFakeAdapter, FAKE_SVG, FakeGate } from '../adapters/fake.ts'
 import { createProcessAdapter } from '../adapters/process-adapter.ts'
 import { AdapterRegistry } from '../adapters/registry.ts'
 import { alive } from '../adapters/test-helpers.ts'
@@ -245,6 +245,20 @@ describe('lifecycle', () => {
       'not quite json',
     )
     expect(readFileSync(path.join(jobDir(job.id), 'repair.md'), 'utf8')).toContain('not valid JSON')
+  })
+
+  it('asks the agent to repair an SVG asset that cannot be read safely, then fails', async () => {
+    const job = await start(request('fake:svg-unsafe', byText('## Why blocks')))
+    for (const _attempt of [1, 2]) {
+      await atCheckpoint(job.id)
+      t.gate.release(job.id)
+      await expect.poll(() => t.gate.waitingIds()).not.toContain(job.id)
+    }
+    await until(job.id, 'failed')
+    expect(readFileSync(path.join(jobDir(job.id), 'repair.md'), 'utf8')).toContain(
+      'asset "assets/drawing.svg" is not a safe SVG: it declares entities in a DOCTYPE',
+    )
+    expect(t.jobs.get(job.id).reason).toBe('invalid-result')
   })
 
   it('fails with the raw output after one repair attempt', async () => {
@@ -519,6 +533,39 @@ describe('review decisions', () => {
     expect(body.assetMap).toEqual({})
     expect(body.job.state).toBe('settled')
     expect(existsSync(path.join(bundle(), 'fake-diagram.png'))).toBe(false)
+  })
+
+  it('sanitises an agent SVG in its preview and when it is copied into the bundle', async () => {
+    const job = await readyJob('fake:svg-asset')
+    // The job directory keeps what the agent wrote; the preview is already clean.
+    expect(readFileSync(path.join(jobDir(job.id), 'assets', 'drawing.svg'), 'utf8')).toContain(
+      '<script>',
+    )
+    const preview = await t.get(`/api/jobs/${job.id}/assets/drawing.svg`)
+    expect(preview.status).toBe(200)
+    expect(preview.headers.get('content-type')).toBe('image/svg+xml')
+    const served = await preview.text()
+    expect(served).toContain('<rect width="8" height="8" fill="#3b6ea5"/>')
+    expect(served).not.toMatch(/script|onload/)
+
+    const body = await json(
+      t.send('POST', `/api/jobs/${job.id}/decisions`, { accepted: [0], rejected: [] }),
+    )
+    expect(body.assetMap).toEqual({ 'assets/drawing.svg': 'drawing.svg' })
+    expect(readFileSync(path.join(bundle(), 'drawing.svg'), 'utf8')).toBe(served)
+  })
+
+  it('refuses to copy an SVG that became unsafe after validation', async () => {
+    const job = await readyJob('fake:svg-asset')
+    writeFileSync(path.join(jobDir(job.id), 'assets', 'drawing.svg'), FAKE_SVG['svg-unsafe'] ?? '')
+    const res = await t.send('POST', `/api/jobs/${job.id}/decisions`, {
+      accepted: [0],
+      rejected: [],
+    })
+    expect(res.status).toBe(409)
+    expect((await json(res)).error).toContain('drawing.svg was refused as an unsafe SVG')
+    expect(existsSync(path.join(bundle(), 'drawing.svg'))).toBe(false)
+    expect((await t.get(`/api/jobs/${job.id}/assets/drawing.svg`)).status).toBe(415)
   })
 
   it('stays ready until every op is decided', async () => {
