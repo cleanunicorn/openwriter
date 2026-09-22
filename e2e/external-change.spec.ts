@@ -310,3 +310,38 @@ test('an open new-block slot stays under the block it was opened after', async (
     expect(file).toContain('stays plain markdown!\n\nTyped into the slot.\n\n- Blocks are slices')
   })
 })
+
+test('an editor rescued into a fence stays on the fence, not on an earlier block saying the same', async ({
+  page,
+  app,
+}) => {
+  await openArticle(page)
+  await page.getByText('Results arrive as ghost diffs').click()
+  // What the writer typed is also said, word for word, by a paragraph near the top.
+  await page.keyboard.press(`${mod}+a`)
+  const saved = page.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.status() === 200,
+  )
+  await page.keyboard.type('is a block')
+  await saved
+
+  // Another program removes that paragraph and opens a fence above it that it never closes, so
+  // the text put back is swallowed by the fence.
+  writeFileSync(
+    app.articlePath(),
+    app
+      .readArticle()
+      .replace(/^Select some text, type.*\n\nis a block\n/m, '```text\nnever closed\n'),
+  )
+  await expect(notice(page)).toContainText('was kept')
+  // The editor follows the text into the fence…
+  await expect(editor(page)).toContainText('never closed')
+  await expect(editor(page)).not.toContainText('Every paragraph, list')
+  // …and the one paragraph that was always there is untouched.
+  await page.keyboard.press('Escape')
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain('Every paragraph, list, and code fence is a block.')
+    // The fence runs to the end of the file, so the text put back is its last line.
+    expect(file).toMatch(/```text\nnever closed\n[^`]*\n\nis a block\n$/)
+  })
+})

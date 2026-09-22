@@ -150,6 +150,29 @@ function reanchor(previous: Doc, next: Doc, pending: PendingNew | null): Pending
   return { afterId: next.blocks[at - 1]?.id ?? null }
 }
 
+/**
+ * The block that took in text inserted at `at` when the insert fused into a block already there
+ * (an unclosed fence above it swallows it): the block holding the text nearest to the insertion
+ * point, the one before it first. Not the first match anywhere — an article can already say the
+ * same thing elsewhere, and the editor would reopen on that block instead. Failing a match, the
+ * block where the insert went; `at` is an index into the document before the insert, so it is
+ * clamped.
+ */
+function fusedHolder(doc: Doc, at: number, text: string): Block | undefined {
+  // `splitText` moves a block's trailing whitespace into the gap after it, so the text to look
+  // for is the trimmed one.
+  const needle = text.trimEnd()
+  const distance = (index: number) => (index < at ? at - 1 - index : index - at)
+  let holder: { block: Block; distance: number } | undefined
+  doc.blocks.forEach((block, index) => {
+    if (!block.raw.includes(needle)) return
+    // Strictly nearer only: on a tie the earlier block, which is the side a fusing fence is on.
+    if (holder === undefined || distance(index) < holder.distance)
+      holder = { block, distance: distance(index) }
+  })
+  return holder?.block ?? doc.blocks[Math.min(at, doc.blocks.length - 1)]
+}
+
 /** Both paths that put a focused block back after a reload say this; an e2e asserts it. */
 const BLOCK_KEPT = 'The file changed on disk. The block you are editing was kept.'
 
@@ -188,13 +211,7 @@ function keepFocusedBlock(
       id: draft.id,
     }
   }
-  // `splitText` moves a block's trailing whitespace into the gap after it, so the text to look
-  // for is the trimmed one. Failing that, the block where the insert went — `at` is an index
-  // into `disk`, so it has to be clamped — and never some unrelated block elsewhere.
-  const needle = text.trimEnd()
-  const holder =
-    inserted.blocks.find((block) => block.raw.includes(needle)) ??
-    inserted.blocks[Math.min(at, inserted.blocks.length - 1)]
+  const holder = fusedHolder(inserted, at, text)
   // `holder` is always defined here: `fresh === undefined` means `disk` had blocks of its own.
   return { doc: inserted, id: holder?.id ?? draft.id }
 }
@@ -377,10 +394,7 @@ function foldDraft(state: DocState, draft: Draft): Folded | null {
   }
   // The slot became blocks of its own — unless an unclosed fence above it swallowed the text,
   // and then the block that took it in is the one the editor holds, whole.
-  const heldId =
-    fresh[0] ??
-    doc.blocks.find((block) => block.raw.includes(draft.text.trimEnd()))?.id ??
-    doc.blocks[Math.min(at, doc.blocks.length - 1)]?.id
+  const heldId = fresh[0] ?? fusedHolder(doc, at, draft.text)?.id
   if (heldId === undefined) return null
   const block = doc.blocks[indexOf(doc, heldId)]
   if (block === undefined) return null

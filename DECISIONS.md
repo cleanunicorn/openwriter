@@ -511,6 +511,13 @@ codex exec --json --skip-git-repo-check --ephemeral
   under its ID *with its text*; the one before wins, then the one after. When both changed, the
   region was rewritten and nothing says where in it the position went, so the nearest block still
   answering to its ID is kept as the guess (the old rule).
+- **When text fuses into a block that was already there, the editor follows it to the nearest
+  block holding it, not the first.** An unclosed fence swallows what is put back after it, so the
+  editor has to find the block that took the text in. An article can say the same thing twice —
+  or contain the few words just typed — and the first match anywhere reopened the editor on that
+  block. The holder is the match nearest the insertion point, the block before it first (the side
+  a fusing fence is on). Backspace into a heading, which cannot fuse, stays on its own block by ID
+  for the same reason.
 - **Test-only server routes** (`/api/__fake/release`, `/waiting`, `/drop-events`) exist only with
   `--fake-control`; a unit test asserts 404 without it.
 
