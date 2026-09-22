@@ -826,6 +826,40 @@ codex exec --json --skip-git-repo-check --ephemeral
 
   Each is a cheap change.
 
+## Type and spacing scales (issue #9)
+
+- **One type scale and one spacing scale, on `:root` in `theme.css`.** Every component rule
+  refers to a token; `src/client/theme-scale.test.ts` fails on a raw px/rem size, a bare
+  line-height, weight or letter-spacing, or a px/rem inline style outside the token block.
+  Inventory before the change (all client CSS lives in `theme.css`; no inline style set a size):
+  font-size 14 distinct values, line-height 8, letter-spacing 3, font-weight 1, font families 4
+  stacks, spacing (margin/padding/gap/offsets) 18 distinct px values.
+- **Interface text, px:** `--text-xs` 12, `--text-sm` 13, `--text-md` 14, `--text-lg` 15,
+  `--text-xl` 16, `--text-prose` 18. `0.75rem` and `0.875rem` were 12px and 14px already; the
+  composer's skill errors (`0.85em` of 14px, 11.9px) became `--text-xs`. The 12–15 steps stay one
+  pixel apart on purpose: each is a distinct role (label / meta / panel / palette and source).
+- **The article's scale stays in em** (`--prose-h1` 2em, `--prose-h2` 1.4em, `--prose-h3` 1.15em,
+  `--prose-table` 0.9em, `--prose-code` 0.85em, `--prose-tag` 0.75em, `--prose-flow` 1.1em), so
+  it follows `--text-prose`; its values are unchanged, and em spacing is allowed only under
+  `.rendered`, where it is the article's rhythm.
+- **Leading:** `--leading-none` 1, `-tight` 1.2, `-snug` 1.3, `-ui` 1.4, `-normal` 1.5,
+  `-source` 1.65, `-prose` 1.7. The front matter's lone 1.6 merged into 1.5.
+- **Weight and tracking:** `--weight-strong` 600; the uppercase labels' 0.04/0.06/0.08em became
+  one `--tracking-caps` 0.06em (three labels that play one role should not differ by 0.02em).
+- **Spacing:** `--space-1` … `--space-11` = 2, 4, 6, 8, 12, 16, 20, 24, 48, 72, 96px: a 4px grid
+  with 2 and 6 for tight controls, and 48/72/96 for page-level gaps. Merges: 5→6 (settings
+  inputs), 10→12 (palette items and labels, composer input, panel item gap, research note),
+  14→12 (palette input, code block padding, link gaps, research note margin), 18→16 (settings
+  save), 22→24 (panel sections), 28→24 (under the front matter), 80→96 (a panel's bottom padding).
+  Accepted visual differences: code blocks are 4px shorter and the article starts ~5px higher
+  under the front matter line; the column width and every size and line height of the article's
+  text are unchanged. The standalone export (`src/server/export.ts`) keeps its own CSS (14px
+  code-block padding); it is a separate document, not a client component.
+- **Not tokenised, by rule:** borders, outlines and radii (hairlines), shadows, and widths and
+  heights (the 680px column, panel widths, the 24×48 handle). One commented allow-list entry: the
+  drag gutter's `left: -44px`, which follows the gutter's 40px width, not the scale; and the
+  export stage's off-screen `left:-10000px` in `render/export-html.ts`.
+
 ## Runtime dependencies
 
 | Package | Reason |

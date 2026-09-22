@@ -17,6 +17,49 @@
   /* Edge panel widths; src/client/shell/layout.test.ts checks they match layout.ts. */
   --left-panel: 280px;
   --right-panel: 380px;
+
+  /* ── type scale (DECISIONS.md, "Type and spacing scales") ──────────────────
+     One scale for every component; theme-scale.test.ts fails on a raw size outside this block. */
+  --font-prose: Charter, "Iowan Old Style", Georgia, serif;
+  --font-ui: system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Interface text, in px: labels, chrome, panels, the editor's source. */
+  --text-xs: 12px; /* uppercase labels, chips, hints */
+  --text-sm: 13px; /* ghost and tray meta, front matter, research header */
+  --text-md: 14px; /* panels, notices, the prompt pill, settings */
+  --text-lg: 15px; /* the palette, a block's markdown source, research notes */
+  --text-xl: 16px; /* the settings heading */
+  --text-prose: 18px; /* the article (and the edge handles' glyph, drawn at the text's size) */
+  /* The article's own scale, in em of --text-prose, so it follows the body size. */
+  --prose-h1: 2em;
+  --prose-h2: 1.4em;
+  --prose-h3: 1.15em;
+  --prose-table: 0.9em;
+  --prose-code: 0.85em;
+  --prose-tag: 0.75em; /* an inline Hugo shortcode */
+  --prose-flow: 1.1em; /* the gap between two blocks */
+  --leading-none: 1;
+  --leading-tight: 1.2; /* h1 */
+  --leading-snug: 1.3; /* h2 */
+  --leading-ui: 1.4; /* one-line controls: palette, pill, drag handle */
+  --leading-normal: 1.5; /* interface text, code blocks */
+  --leading-source: 1.65; /* a block's markdown source and the ghost diff */
+  --leading-prose: 1.7; /* the article */
+  --weight-strong: 600;
+  --tracking-caps: 0.06em; /* uppercase labels */
+
+  /* ── spacing scale: margin, padding, gap, and offsets used as spacing ───── */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 48px;
+  --space-10: 72px;
+  --space-11: 96px;
   color-scheme: light;
 }
 
@@ -62,23 +105,19 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font:
-    18px / 1.7 Charter,
-    "Iowan Old Style",
-    Georgia,
-    serif;
+  font: var(--text-prose) / var(--leading-prose) var(--font-prose);
   -webkit-font-smoothing: antialiased;
 }
 
 .column {
   width: var(--column-width);
   margin: 0 auto;
-  padding: 72px 0 40vh;
+  padding: var(--space-10) 0 40vh;
 }
 
 .quiet {
   color: var(--quiet);
-  font-size: 14px;
+  font-size: var(--text-md);
 }
 
 .link {
@@ -96,15 +135,13 @@ body {
   top: 0;
   z-index: 5;
   margin-top: 0;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-4);
   background: var(--bg);
-  font:
-    14px / 1.5 system-ui,
-    sans-serif;
+  font: var(--text-md) / var(--leading-normal) var(--font-ui);
   color: var(--quiet);
   border-left: 2px solid var(--accent);
-  padding-left: 12px;
+  padding-left: var(--space-5);
 }
 
 .notice p {
@@ -120,8 +157,8 @@ body {
 .notice .notice-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
-  margin-top: 4px;
+  gap: var(--space-2) var(--space-6);
+  margin-top: var(--space-2);
 }
 
 .link.warn {
@@ -129,10 +166,10 @@ body {
 }
 
 .doc-label {
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-ui);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
+  letter-spacing: var(--tracking-caps);
+  font-size: var(--text-xs);
 }
 
 /* ── blocks ─────────────────────────────────────────────────────────────── */
@@ -156,12 +193,13 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
+  /* Geometry, not spacing: the 40px gutter plus a 4px gap, inside the column's 48px margin. */
   left: -44px;
   width: 40px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 4px;
+  padding-top: var(--space-2);
 }
 
 .drag-handle {
@@ -170,9 +208,9 @@ body {
   background: none;
   color: var(--quiet);
   cursor: grab;
-  font-size: 14px;
-  line-height: 1.4;
-  padding: 2px 6px;
+  font-size: var(--text-md);
+  line-height: var(--leading-ui);
+  padding: var(--space-1) var(--space-3);
   border-radius: 4px;
   touch-action: none;
 }
@@ -190,16 +228,14 @@ body {
 }
 
 .block-body {
-  min-height: 1.7em;
+  min-height: calc(var(--leading-prose) * 1em);
   cursor: text;
 }
 
 .front-matter {
   color: var(--quiet);
-  font:
-    13px / 1.6 system-ui,
-    sans-serif;
-  margin: 0 0 28px;
+  font: var(--text-sm) / var(--leading-normal) var(--font-ui);
+  margin: 0 0 var(--space-8);
 }
 
 .rendered > :first-child {
@@ -214,23 +250,23 @@ body {
 .block + .ghost,
 .ghost + .block,
 .ghost + .ghost {
-  margin-top: 1.1em;
+  margin-top: var(--prose-flow);
 }
 
 .rendered h1 {
-  font-size: 2em;
-  line-height: 1.2;
+  font-size: var(--prose-h1);
+  line-height: var(--leading-tight);
   margin: 0.4em 0 0.2em;
 }
 
 .rendered h2 {
-  font-size: 1.4em;
-  line-height: 1.3;
+  font-size: var(--prose-h2);
+  line-height: var(--leading-snug);
   margin: 1.2em 0 0;
 }
 
 .rendered h3 {
-  font-size: 1.15em;
+  font-size: var(--prose-h3);
   margin: 1em 0 0;
 }
 
@@ -259,17 +295,17 @@ body {
 
 .rendered blockquote {
   border-left: 3px solid var(--line);
-  padding-left: 16px;
+  padding-left: var(--space-6);
   color: var(--quiet);
 }
 
 .rendered code,
 .cm-editor .cm-content {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .rendered code {
-  font-size: 0.85em;
+  font-size: var(--prose-code);
   background: var(--code-bg);
   padding: 0.1em 0.3em;
   border-radius: 3px;
@@ -277,10 +313,10 @@ body {
 
 .rendered pre {
   background: var(--code-bg);
-  padding: 14px 16px;
+  padding: var(--space-5) var(--space-6);
   border-radius: 6px;
   overflow-x: auto;
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 .rendered pre code {
@@ -290,13 +326,13 @@ body {
 
 .rendered table {
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: var(--prose-table);
 }
 
 .rendered th,
 .rendered td {
   border-bottom: 1px solid var(--line);
-  padding: 6px 12px;
+  padding: var(--space-3) var(--space-5);
   text-align: left;
 }
 
@@ -307,13 +343,11 @@ body {
 }
 
 .shortcode {
-  font:
-    0.75em ui-monospace,
-    monospace;
+  font: var(--prose-tag) var(--font-mono);
   color: var(--quiet);
   background: var(--code-bg);
   border-radius: 10px;
-  padding: 2px 8px;
+  padding: var(--space-1) var(--space-4);
   white-space: nowrap;
 }
 
@@ -327,9 +361,7 @@ body {
 
 .mermaid-error {
   color: var(--quiet);
-  font:
-    13px system-ui,
-    sans-serif;
+  font: var(--text-sm) var(--font-ui);
 }
 
 .hljs-keyword,
@@ -371,8 +403,8 @@ body {
 }
 
 .block-editor .cm-content {
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: var(--text-lg);
+  line-height: var(--leading-source);
   padding: 0;
   caret-color: var(--fg);
 }
@@ -405,9 +437,7 @@ body {
   border-radius: 10px;
   box-shadow: 0 18px 50px rgb(0 0 0 / 18%);
   overflow: hidden;
-  font:
-    15px / 1.4 system-ui,
-    sans-serif;
+  font: var(--text-lg) / var(--leading-ui) var(--font-ui);
 }
 
 .palette-input {
@@ -417,7 +447,7 @@ body {
   background: none;
   color: var(--fg);
   font: inherit;
-  padding: 14px 16px;
+  padding: var(--space-5) var(--space-6);
   outline: none;
 }
 
@@ -428,23 +458,23 @@ body {
 
 .palette-warning {
   margin: 0;
-  padding: 10px 16px 12px;
+  padding: var(--space-5) var(--space-6);
   color: var(--warn);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 
 .palette-list {
   max-height: 320px;
   overflow-y: auto;
-  padding: 6px;
+  padding: var(--space-3);
 }
 
 .palette-item {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 8px 10px;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border-radius: 6px;
   cursor: pointer;
 }
@@ -465,13 +495,13 @@ body {
 }
 
 .palette-group + .palette-group {
-  margin-top: 4px;
+  margin-top: var(--space-2);
 }
 
 .palette-group-label {
-  padding: 6px 10px 2px;
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
+  padding: var(--space-3) var(--space-5) var(--space-1);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
 }
 
@@ -492,11 +522,9 @@ body[data-right="docked"] {
   bottom: 0;
   z-index: 12;
   overflow-y: auto;
-  padding: 24px 20px 80px;
+  padding: var(--space-8) var(--space-7) var(--space-11);
   background: var(--surface);
-  font:
-    14px / 1.5 system-ui,
-    sans-serif;
+  font: var(--text-md) / var(--leading-normal) var(--font-ui);
 }
 
 .shell-panel:focus {
@@ -534,7 +562,7 @@ body[data-right="docked"] {
   position: static;
   width: var(--column-width);
   margin: 0 auto;
-  padding: 24px 0 96px;
+  padding: var(--space-8) 0 var(--space-11);
   overflow: visible;
   border-left: 0;
   border-top: 1px solid var(--line);
@@ -542,7 +570,7 @@ body[data-right="docked"] {
 }
 
 body[data-right="stacked"] .column {
-  padding-bottom: 48px;
+  padding-bottom: var(--space-9);
 }
 
 .edge-handle {
@@ -556,9 +584,7 @@ body[data-right="stacked"] .column {
   border: 0;
   background: transparent;
   color: var(--quiet);
-  font:
-    18px / 1 system-ui,
-    sans-serif;
+  font: var(--text-prose) / var(--leading-none) var(--font-ui);
   cursor: pointer;
   transform: translateY(-50%);
 }
@@ -596,7 +622,7 @@ body[data-right="docked"] .edge-handle-right {
 @media (max-width: 775px) {
   .edge-handle-left {
     position: absolute;
-    top: 24px;
+    top: var(--space-8);
     transform: none;
   }
 }
@@ -623,20 +649,20 @@ body[data-right="docked"] .edge-handle-right {
 }
 
 .panel-section + .panel-section {
-  margin-top: 22px;
+  margin-top: var(--space-8);
 }
 
 .panel-heading {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-3);
   color: var(--quiet);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
 }
 
 .panel-current {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-2);
 }
 
 .panel-list {
@@ -646,16 +672,16 @@ body[data-right="docked"] .edge-handle-right {
 }
 
 .panel-list + .panel-list {
-  margin-top: 8px;
+  margin-top: var(--space-4);
 }
 
 .panel-item {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  padding: 4px 8px;
-  margin: 0 -8px;
-  width: calc(100% + 16px);
+  gap: var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  margin: 0 calc(-1 * var(--space-4));
+  width: calc(100% + 2 * var(--space-4));
   border: 0;
   border-radius: 6px;
   background: none;
@@ -683,11 +709,11 @@ body[data-right="docked"] .edge-handle-right {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .panel-switch > summary {
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   color: var(--accent);
   cursor: pointer;
 }
@@ -702,16 +728,14 @@ body[data-right="docked"] .edge-handle-right {
   position: absolute;
   z-index: 10;
   display: flex;
-  gap: 6px;
+  gap: var(--space-3);
   width: min(420px, 100%);
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 999px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 14%);
-  font:
-    14px / 1.4 system-ui,
-    sans-serif;
+  font: var(--text-md) / var(--leading-ui) var(--font-ui);
 }
 
 .pill-input {
@@ -722,7 +746,7 @@ body[data-right="docked"] .edge-handle-right {
   background: none;
   color: var(--fg);
   font: inherit;
-  padding: 4px 8px;
+  padding: var(--space-2) var(--space-4);
 }
 
 .pill-scope {
@@ -736,9 +760,9 @@ body[data-right="docked"] .edge-handle-right {
 .block.is-queued::before {
   content: "";
   position: absolute;
-  left: -14px;
-  top: 4px;
-  bottom: 4px;
+  left: calc(-1 * var(--space-5));
+  top: var(--space-2);
+  bottom: var(--space-2);
   width: 2px;
   border-radius: 2px;
   background: var(--accent);
@@ -793,12 +817,7 @@ body[data-right="docked"] .edge-handle-right {
 }
 
 .ghost-diff {
-  font:
-    15px / 1.65 ui-monospace,
-    "SF Mono",
-    Menlo,
-    Consolas,
-    monospace;
+  font: var(--text-lg) / var(--leading-source) var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -818,16 +837,14 @@ body[data-right="docked"] .edge-handle-right {
 .ghost-actions,
 .ghost-flag {
   display: flex;
-  gap: 14px;
+  gap: var(--space-5);
   align-items: baseline;
-  font:
-    13px / 1.5 system-ui,
-    sans-serif;
+  font: var(--text-sm) / var(--leading-normal) var(--font-ui);
   color: var(--quiet);
 }
 
 .ghost-job {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-3);
 }
 
 .ghost-summary {
@@ -835,27 +852,25 @@ body[data-right="docked"] .edge-handle-right {
 }
 
 .ghost-actions {
-  margin-top: 6px;
+  margin-top: var(--space-3);
   justify-content: flex-end;
 }
 
 .ghost-flag {
   color: var(--warn);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 
 .tray {
   position: fixed;
-  right: 20px;
-  bottom: 16px;
+  right: var(--space-7);
+  bottom: var(--space-6);
   z-index: 15;
   display: flex;
   flex-direction: column-reverse;
   align-items: flex-end;
-  gap: 8px;
-  font:
-    13px / 1.5 system-ui,
-    sans-serif;
+  gap: var(--space-4);
+  font: var(--text-sm) / var(--leading-normal) var(--font-ui);
 }
 
 .tray-toggle {
@@ -863,7 +878,7 @@ body[data-right="docked"] .edge-handle-right {
   background: var(--surface);
   color: var(--quiet);
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: var(--space-2) var(--space-5);
   font: inherit;
   cursor: pointer;
 }
@@ -871,7 +886,7 @@ body[data-right="docked"] .edge-handle-right {
 /* The transcript's turns (the list lives only in the agent panel). */
 .tray-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: var(--space-4) 0 0;
   padding: 0;
 }
 
@@ -879,23 +894,23 @@ body[data-right="docked"] .edge-handle-right {
 .tray.transcript {
   position: static;
   display: block;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-6);
 }
 
 .turn-chips {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .chip {
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   background: none;
   color: var(--quiet);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
@@ -917,19 +932,19 @@ button.chip:focus-visible {
 }
 
 .composer-start {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-5);
 }
 
 .composer-form {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .composer-input {
   width: 100%;
   resize: vertical;
-  padding: 8px 10px;
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg);
@@ -946,7 +961,7 @@ button.chip:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .composer-row select {
@@ -959,20 +974,20 @@ button.chip:focus-visible {
 
 .composer-thread {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .composer-skills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .composer-skill-errors {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 0.85em;
+  font-size: var(--text-xs);
   color: var(--warn);
 }
 
@@ -981,7 +996,7 @@ button.chip:focus-visible {
 }
 
 .tray-job {
-  padding: 8px;
+  padding: var(--space-4);
   border-radius: 6px;
 }
 
@@ -992,7 +1007,7 @@ button.chip:focus-visible {
 .tray-line {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 .tray-instruction {
@@ -1021,7 +1036,7 @@ button.chip:focus-visible {
   max-height: 200px;
   overflow: auto;
   background: var(--code-bg);
-  padding: 8px;
+  padding: var(--space-4);
   border-radius: 6px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1029,39 +1044,35 @@ button.chip:focus-visible {
 
 .tray-actions {
   display: flex;
-  gap: 14px;
+  gap: var(--space-5);
   justify-content: flex-end;
 }
 
 .research {
-  margin-bottom: 20px;
-  padding-bottom: 12px;
+  margin-bottom: var(--space-7);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--line);
-  font-size: 15px;
+  font-size: var(--text-lg);
 }
 
 .research-header,
 .research-footer {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  font:
-    13px / 1.5 system-ui,
-    sans-serif;
+  gap: var(--space-5);
+  font: var(--text-sm) / var(--leading-normal) var(--font-ui);
 }
 
 .research-note {
-  margin: 14px 0;
-  padding-bottom: 10px;
+  margin: var(--space-5) 0;
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--line);
-  font-size: 15px;
+  font-size: var(--text-lg);
 }
 
 .research-note .link,
 .research-footer .link {
-  font:
-    13px system-ui,
-    sans-serif;
+  font: var(--text-sm) var(--font-ui);
 }
 
 /* ── settings ───────────────────────────────────────────────────────────── */
@@ -1070,22 +1081,20 @@ button.chip:focus-visible {
   width: min(520px, 100% - 32px);
   max-height: 76vh;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: var(--space-7) var(--space-8);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 18px 50px rgb(0 0 0 / 18%);
-  font:
-    14px / 1.5 system-ui,
-    sans-serif;
+  font: var(--text-md) / var(--leading-normal) var(--font-ui);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-5);
 }
 
 .settings h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-xl);
 }
 
 .settings-header,
@@ -1099,14 +1108,14 @@ button.chip:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-6);
   color: var(--quiet);
 }
 
 .settings input,
 .settings select {
   width: 58%;
-  padding: 5px 8px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--bg);
@@ -1119,11 +1128,11 @@ button.chip:focus-visible {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 
 .settings-save {
-  padding: 6px 18px;
+  padding: var(--space-3) var(--space-6);
   border-radius: 6px;
   border: 1px solid var(--accent);
   background: var(--accent);
@@ -1134,5 +1143,5 @@ button.chip:focus-visible {
 
 /* Markdown with several blocks in one container (ghost inserts, research notes, shortcodes). */
 .rendered > * + * {
-  margin-top: 1.1em;
+  margin-top: var(--prose-flow);
 }

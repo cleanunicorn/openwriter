@@ -284,7 +284,7 @@ src/client/           Vite + React
   settings/             Settings, commands
   workspaces/           switch (the switch: save first, adopt once, the `moved` wait), commands,
                         WorkspaceStatus (the switch under way; another tab moved the workspace)
-  export.ts  use-restore-focus.ts  theme.css (tokens; theme-contrast.test.ts checks them)
+  export.ts  use-restore-focus.ts  theme.css (tokens: colours, type and spacing scales; theme-contrast.test.ts and theme-scale.test.ts check them)
 skills/               prompt templates: diagram, terminal-recording, image, video (stub), draft-brief, draft-article
                       (a workspace adds its own in <workspace>/.zen/skills/; a shipped name wins)
 sample-workspace/     sample article, strategy.md, brief.md; `npm start` opens a gitignored copy of it
