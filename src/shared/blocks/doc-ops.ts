@@ -124,7 +124,14 @@ export function mergeWithPrevious(doc: Doc, index: number, mintId: MintId): Merg
   if (joined?.raw.startsWith(previous.raw + eol)) {
     return { doc: merged, focusId: joined.id, cursor: previous.raw.length + eol.length }
   }
-  // The two blocks cannot fuse (a heading stays a heading): stay where we were.
-  const still = merged.blocks.find((block) => block.raw === current.raw) ?? merged.blocks[index]
+  // The two blocks cannot fuse (a heading stays a heading): stay where we were. That is this
+  // block, found by its ID while it still says the same, then the same text nearest to where it
+  // was — never simply the first block saying it, which can be an identical one elsewhere.
+  const own = merged.blocks.find((block) => block.id === current.id)
+  const nearest = merged.blocks
+    .map((block, at) => ({ block, distance: Math.abs(at - index) }))
+    .filter(({ block }) => block.raw === current.raw)
+    .sort((a, b) => a.distance - b.distance)[0]?.block
+  const still = own?.raw === current.raw ? own : (nearest ?? merged.blocks[index])
   return still === undefined ? null : { doc: merged, focusId: still.id, cursor: 0 }
 }

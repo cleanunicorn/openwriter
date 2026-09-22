@@ -273,6 +273,22 @@ describe('a reload that carries the editor’s own text', () => {
   const reload = (state: DocState, disk: string): DocState =>
     docReducer(state, { type: 'external', text: disk, hash: 'h1', exists: true })
 
+  it('holds the fence that took in the slot’s text, not an earlier block saying it too', () => {
+    // The slot's text fuses into the unclosed fence above it, so the editor follows it into the
+    // fence. Looking for the text anywhere found the paragraph above, which also says "note".
+    const open = run(
+      loaded('A note on this.\n\n```js\nx\n'),
+      { type: 'append' },
+      { type: 'draft', id: NEW_BLOCK_ID, text: 'note' },
+    )
+    const state = reload(open, liveText(open))
+    expect(liveText(state)).toBe(liveText(open))
+    expect(state.focusedId).toBe('b2')
+    expect(state.draft?.id).toBe('b2')
+    expect(state.draft?.text).toContain('note')
+    expect(occurrences(text(docReducer(state, { type: 'blur' })), 'note')).toBe(2)
+  })
+
   it('does not duplicate the new block the autosave already wrote', () => {
     const open = typedAfter(loaded('One\n\nTwo\n'), 'b2', 'Two', 'Three')
     const state = reload(open, liveText(open))
@@ -776,6 +792,25 @@ describe('an open editor never loses its block', () => {
       'Four',
     ])
     expect(state.focusedId).toBe('b3')
+    expect(dangling(state)).toBe(false)
+  })
+
+  it('follows its text into the fence that took it, not into an earlier block saying it too', () => {
+    // A fence from disk swallows the rescued text, so the editor has to find the block that now
+    // holds it. The first block *anywhere* containing the text is not that: here the article
+    // already says "note" above the fence, and the editor reopened on that paragraph.
+    const state = run(
+      loaded('A note on this.\n\n```js\nx\n```\n\nB\n'),
+      { type: 'focus', id: 'b3', cursor: 0 },
+      { type: 'draft', id: 'b3', text: 'note' },
+      { type: 'external', text: 'A note on this.\n\n```js\nx\n', hash: 'h1', exists: true },
+    )
+    expect(state.doc.blocks.map((block) => block.raw)).toEqual([
+      'A note on this.',
+      '```js\nx\n\nnote',
+    ])
+    expect(state.focusedId).toBe(state.doc.blocks[1]?.id)
+    expect(state.draft).toEqual({ id: state.doc.blocks[1]?.id, text: '```js\nx\n\nnote' })
     expect(dangling(state)).toBe(false)
   })
 

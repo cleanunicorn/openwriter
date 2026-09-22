@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { expect, test } from './fixtures.ts'
 import {
   blockEnd,
@@ -110,6 +111,38 @@ test('Enter inside an open code fence does not split the block', async ({ page }
   await page.keyboard.press('Enter')
   await expect(editor(page)).toContainText('```')
   await expect(editor(page)).toContainText('## Why blocks')
+})
+
+test('Backspace under a heading keeps the cursor on its block when an earlier one says the same', async ({
+  page,
+  app,
+}) => {
+  // The paragraph under "What is next" repeats one near the top, word for word.
+  const repeated =
+    'Every paragraph, list, and code fence is a block. Blocks can be dragged by the handle in the left margin, and the file on disk stays plain markdown.'
+  writeFileSync(
+    app.articlePath(),
+    app
+      .readArticle()
+      .replace(
+        'Select some text, type an instruction, and keep writing while the agent works.',
+        repeated,
+      ),
+  )
+  await openArticle(page)
+  await page.getByText('Every paragraph, list').nth(1).click()
+  await page.keyboard.press(blockStart)
+  // A paragraph cannot fuse into a heading, so the editor stays where it was…
+  await page.keyboard.press('Backspace')
+  await page.keyboard.type('¦')
+  await page.keyboard.press('Escape')
+  // …on the second copy, not the first one the same text is found in.
+  await expectFile(app.articlePath(), (file) => {
+    expect(file).toContain(`## Why blocks\n\n${repeated}`)
+    // (The join leaves one line break where the blank line was, whatever the re-split decides.)
+    expect(file).toMatch(/## What is next\n+¦Every paragraph, list/)
+    expect(occurrences(file, '¦')).toBe(1)
+  })
 })
 
 test('Backspace at the start of a block merges it into the previous one', async ({ page, app }) => {

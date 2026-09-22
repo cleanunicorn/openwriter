@@ -123,6 +123,16 @@ describe('mergeWithPrevious', () => {
     expect(result?.cursor).toBe(0)
   })
 
+  it('stays on its own block when an earlier one says the same thing', () => {
+    // The first block with the same text is not necessarily this one: a repeated line is
+    // ordinary, and the cursor jumped to the top of the article.
+    const { doc, mint } = setup('Same\n\n# Heading\n\nSame\n')
+    const result = mergeWithPrevious(doc, 2, mint)
+    expect(raws(result?.doc ?? doc)).toEqual(['Same', '# Heading', 'Same'])
+    expect(result?.focusId).toBe('b3')
+    expect(result?.cursor).toBe(0)
+  })
+
   it('does nothing at the top or below the front matter', () => {
     const { doc, mint } = setup('---\nt: 1\n---\n\nA\n')
     expect(mergeWithPrevious(doc, 0, mint)).toBeNull()
